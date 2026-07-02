@@ -4,7 +4,12 @@ import { type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import { TopBar } from '@/components/top-bar'
 import { TopNav } from '@/components/top-nav'
+import { OnboardingOverlay } from '@/components/onboarding/onboarding-overlay'
 import { useSession } from '@/lib/session-context'
+
+// Developers launched on the shared bootstrap tenant get their own org
+// provisioned automatically before the console is usable.
+const BOOTSTRAP_TENANT_ID = 1
 
 // The /auth route renders bare (no console chrome) — it handles the 1health
 // launch-payload exchange itself.
@@ -12,7 +17,7 @@ const BARE_ROUTES = new Set(['/auth'])
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const { isLoading, error } = useSession()
+  const { isLoading, error, user, refresh } = useSession()
 
   if (BARE_ROUTES.has(pathname)) {
     return <>{children}</>
@@ -58,6 +63,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
     )
+  }
+
+  // First-run provisioning: a developer whose session is still on the shared
+  // bootstrap tenant gets their own org + API key created automatically before
+  // the console is shown. Dismissing the key panel refreshes the session, which
+  // moves them onto their new tenant and unmounts this overlay.
+  if (user && user.tenantContext?.id === BOOTSTRAP_TENANT_ID) {
+    return <OnboardingOverlay user={user} onDone={() => void refresh()} />
   }
 
   return (
