@@ -101,6 +101,15 @@ export function getOneHealthBaseUrl(): string {
 }
 
 /**
+ * Returns true when a 1health session base URL is present. Use this to detect
+ * the "not authenticated yet" state without triggering the thrown error above,
+ * so unauthenticated loads stay quiet instead of surfacing as runtime errors.
+ */
+export function hasOneHealthSession(): boolean {
+  return getCookie("onehealth_base_url") !== null
+}
+
+/**
  * Gets the user's organization ID from cookies
  */
 export function getOrganizationId(): number | null {

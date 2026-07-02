@@ -6,7 +6,7 @@ import { Suspense, useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { AlertCircle, CheckCircle2, ExternalLink } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -254,16 +254,22 @@ function AuthContent() {
                 {"Prefer to log in via 1health directly?"}
               </p>
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" className="flex-1" asChild>
-                  <a href={ENV_URLS.demo} target="_blank" rel="noopener noreferrer">
-                    Go to Demo <ExternalLink className="ml-1 h-3 w-3" />
-                  </a>
-                </Button>
-                <Button variant="ghost" size="sm" className="flex-1" asChild>
-                  <a href={ENV_URLS.prod} target="_blank" rel="noopener noreferrer">
-                    Go to Production <ExternalLink className="ml-1 h-3 w-3" />
-                  </a>
-                </Button>
+                <a
+                  href={ENV_URLS.demo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'flex-1' })}
+                >
+                  Go to Demo <ExternalLink className="ml-1 h-3 w-3" />
+                </a>
+                <a
+                  href={ENV_URLS.prod}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'flex-1' })}
+                >
+                  Go to Production <ExternalLink className="ml-1 h-3 w-3" />
+                </a>
               </div>
             </CardContent>
           </Card>
@@ -332,12 +338,15 @@ function AuthContent() {
                 Switch Environment
               </Button>
               {returnUrl && (
-                <Button asChild>
-                  <a href={returnUrl} target="_blank" rel="noopener noreferrer">
-                    Go to 1health ({environment === "demo" ? "Demo" : "Production"})
-                    <ExternalLink className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
+                <a
+                  href={returnUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={buttonVariants()}
+                >
+                  Go to 1health ({environment === "demo" ? "Demo" : "Production"})
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
               )}
             </div>
           </div>
@@ -397,12 +406,15 @@ function AuthContent() {
 
               <div className="flex flex-col gap-2">
                 {returnUrl && (
-                  <Button variant="outline" asChild>
-                    <a href={returnUrl} target="_blank" rel="noopener noreferrer">
-                      Go to 1health ({environment === "demo" ? "Demo" : "Production"})
-                      <ExternalLink className="ml-2 h-4 w-4" />
-                    </a>
-                  </Button>
+                  <a
+                    href={returnUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={buttonVariants({ variant: 'outline' })}
+                  >
+                    Go to 1health ({environment === "demo" ? "Demo" : "Production"})
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </a>
                 )}
                 <Button
                   variant="ghost"

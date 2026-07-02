@@ -4,7 +4,7 @@
  * Replaces: app/actions/user-actions.ts
  */
 
-import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
+import { authFetch, getOneHealthBaseUrl, hasOneHealthSession } from "@/lib/auth-client"
 
 export interface UserInfo {
   id: number
@@ -24,6 +24,12 @@ export interface MyselfResult {
 }
 
 export async function fetchMyself(): Promise<MyselfResult> {
+  // No session yet (e.g. app opened outside 1health) — this is an expected
+  // state that the UI handles with a "Session required" gate, so return
+  // quietly instead of throwing/logging a runtime error.
+  if (!hasOneHealthSession()) {
+    return { success: false, error: "NO_SESSION" }
+  }
   try {
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/user/myself`
