@@ -1,35 +1,14 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
-:root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --card: #f8fafc;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #4a5568;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #e2e8f0;
-  --accent-foreground: #0f172a;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #4a5568;
-  --chart-1: #4a5568;
-  --chart-2: #22c55e;
-  --chart-3: #eab308;
-  --chart-4: #a855f7;
-  --chart-5: #ec4899;
-  --radius: 0.625rem;
-  --link: #2563eb;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-inter), 'Inter Fallback', system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono Fallback', monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -49,141 +28,144 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-link: var(--link);
+
+  /* 1health brand + status tokens */
+  --color-trust-blue: var(--trust-blue);
+  --color-teal: var(--teal);
+  --color-aqua: var(--aqua);
+  --color-mint: var(--mint);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+
+  /* sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+
+  /* radius scale per 1health spec */
+  --radius-tag: 6px;
+  --radius-input: 6px;
+  --radius-button: 10px;
+  --radius-card: 16px;
+  --radius-container: 24px;
+
+  /* motion */
+  --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Custom animations for auth flow */
-@keyframes pulse-subtle {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.02); opacity: 0.9; }
+/* DARK is the default theme (Graphite ground / Charcoal cards / Cloud text) */
+:root,
+.dark {
+  color-scheme: dark;
+
+  --background: #202833; /* Graphite */
+  --foreground: #e6ebf0; /* Cloud */
+  --card: #313b47; /* Charcoal */
+  --card-foreground: #e6ebf0;
+  --popover: #313b47;
+  --popover-foreground: #e6ebf0;
+
+  --primary: #246b8f; /* Trust Blue */
+  --primary-foreground: #e6ebf0;
+  --secondary: #313b47; /* Charcoal */
+  --secondary-foreground: #e6ebf0;
+  --muted: #2a323d;
+  --muted-foreground: #aeb8c4; /* Mist */
+  --accent: #1f9a9b; /* Network Teal */
+  --accent-foreground: #202833;
+
+  --destructive: #d84f45; /* Pulse */
+  --destructive-foreground: #e6ebf0;
+
+  --border: #3c4654;
+  --input: #3c4654;
+  --ring: #8fd8e6; /* Signal Aqua */
+
+  --trust-blue: #246b8f;
+  --teal: #1f9a9b;
+  --aqua: #8fd8e6;
+  --mint: #5fc7b2; /* Care Mint */
+  --success: #3baa78;
+  --info: #2f80a8;
+  --warning: #d6a83a;
+
+  --sidebar: #313b47; /* Charcoal */
+  --sidebar-foreground: #e6ebf0;
+  --sidebar-accent: #2a323d;
+  --sidebar-accent-foreground: #e6ebf0;
+  --sidebar-border: #3c4654;
 }
 
-@keyframes shrink-out {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(0); opacity: 0; }
+/* LIGHT theme (Cloud/white ground / white cards / Graphite text) */
+.light {
+  color-scheme: light;
+
+  --background: #eef2f6;
+  --foreground: #202833; /* Graphite */
+  --card: #ffffff;
+  --card-foreground: #202833;
+  --popover: #ffffff;
+  --popover-foreground: #202833;
+
+  --primary: #246b8f; /* Trust Blue */
+  --primary-foreground: #ffffff;
+  --secondary: #e6ebf0; /* Cloud */
+  --secondary-foreground: #202833;
+  --muted: #e6ebf0;
+  --muted-foreground: #566373; /* Slate */
+  --accent: #1f9a9b; /* Network Teal */
+  --accent-foreground: #ffffff;
+
+  --destructive: #d84f45;
+  --destructive-foreground: #ffffff;
+
+  --border: #d4dce4;
+  --input: #d4dce4;
+  --ring: #8fd8e6; /* Signal Aqua */
+
+  --trust-blue: #246b8f;
+  --teal: #1f9a9b;
+  --aqua: #8fd8e6;
+  --mint: #5fc7b2;
+  --success: #3baa78;
+  --info: #2f80a8;
+  --warning: #d6a83a;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #202833;
+  --sidebar-accent: #eef2f6;
+  --sidebar-accent-foreground: #202833;
+  --sidebar-border: #d4dce4;
 }
-
-@keyframes pop-in {
-  0% { transform: scale(0); opacity: 0; }
-  50% { transform: scale(1.2); }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-.animate-pulse-subtle {
-  animation: pulse-subtle 2s ease-in-out infinite;
-}
-
-.animate-shrink-out {
-  animation: shrink-out 0.3s ease-in forwards;
-}
-
-.animate-pop-in {
-  animation: pop-in 0.4s ease-out forwards;
-}
-
-/* Animation keyframes for shadcn components */
-@keyframes enter {
-  from {
-    opacity: var(--tw-enter-opacity, 1);
-    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
-      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1))
-      rotate(var(--tw-enter-rotate, 0));
-  }
-}
-
-@keyframes exit {
-  to {
-    opacity: var(--tw-exit-opacity, 1);
-    transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0)
-      scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1))
-      rotate(var(--tw-exit-rotate, 0));
-  }
-}
-
-/* Animation utility classes */
-.animate-in {
-  animation-name: enter;
-  animation-duration: 150ms;
-  --tw-enter-opacity: initial;
-  --tw-enter-scale: initial;
-  --tw-enter-rotate: initial;
-  --tw-enter-translate-x: initial;
-  --tw-enter-translate-y: initial;
-}
-
-.animate-out {
-  animation-name: exit;
-  animation-duration: 150ms;
-  --tw-exit-opacity: initial;
-  --tw-exit-scale: initial;
-  --tw-exit-rotate: initial;
-  --tw-exit-translate-x: initial;
-  --tw-exit-translate-y: initial;
-}
-
-.fade-in { --tw-enter-opacity: 0; }
-.fade-in-0 { --tw-enter-opacity: 0; }
-.fade-in-50 { --tw-enter-opacity: 0.5; }
-.fade-in-80 { --tw-enter-opacity: 0.8; }
-.fade-out { --tw-exit-opacity: 0; }
-.fade-out-0 { --tw-exit-opacity: 0; }
-.fade-out-50 { --tw-exit-opacity: 0.5; }
-.fade-out-80 { --tw-exit-opacity: 0.8; }
-
-.zoom-in { --tw-enter-scale: 0; }
-.zoom-in-0 { --tw-enter-scale: 0; }
-.zoom-in-50 { --tw-enter-scale: 0.5; }
-.zoom-in-75 { --tw-enter-scale: 0.75; }
-.zoom-in-90 { --tw-enter-scale: 0.9; }
-.zoom-in-95 { --tw-enter-scale: 0.95; }
-.zoom-out { --tw-exit-scale: 0; }
-.zoom-out-0 { --tw-exit-scale: 0; }
-.zoom-out-50 { --tw-exit-scale: 0.5; }
-.zoom-out-75 { --tw-exit-scale: 0.75; }
-.zoom-out-90 { --tw-exit-scale: 0.9; }
-.zoom-out-95 { --tw-exit-scale: 0.95; }
-
-.slide-in-from-top { --tw-enter-translate-y: -100%; }
-.slide-in-from-top-2 { --tw-enter-translate-y: -0.5rem; }
-.slide-in-from-top-4 { --tw-enter-translate-y: -1rem; }
-.slide-in-from-bottom { --tw-enter-translate-y: 100%; }
-.slide-in-from-bottom-2 { --tw-enter-translate-y: 0.5rem; }
-.slide-in-from-bottom-4 { --tw-enter-translate-y: 1rem; }
-.slide-in-from-left { --tw-enter-translate-x: -100%; }
-.slide-in-from-left-2 { --tw-enter-translate-x: -0.5rem; }
-.slide-in-from-left-4 { --tw-enter-translate-x: -1rem; }
-.slide-in-from-right { --tw-enter-translate-x: 100%; }
-.slide-in-from-right-2 { --tw-enter-translate-x: 0.5rem; }
-.slide-in-from-right-4 { --tw-enter-translate-x: 1rem; }
-
-.slide-out-to-top { --tw-exit-translate-y: -100%; }
-.slide-out-to-top-2 { --tw-exit-translate-y: -0.5rem; }
-.slide-out-to-bottom { --tw-exit-translate-y: 100%; }
-.slide-out-to-bottom-2 { --tw-exit-translate-y: 0.5rem; }
-.slide-out-to-left { --tw-exit-translate-x: -100%; }
-.slide-out-to-left-2 { --tw-exit-translate-x: -0.5rem; }
-.slide-out-to-right { --tw-exit-translate-x: 100%; }
-.slide-out-to-right-2 { --tw-exit-translate-x: 0.5rem; }
-
-.duration-150 { animation-duration: 150ms; }
-.duration-200 { animation-duration: 200ms; }
-.duration-300 { animation-duration: 300ms; }
-.duration-500 { animation-duration: 500ms; }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans bg-background;
+  }
+
+  /* Focus: 2px Signal Aqua outline, 2px offset, interactive elements only */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

@@ -1,0 +1,12 @@
+{
+  "section": "Documentation",
+  "description": "Patient Vault v3 API reference",
+  "nav": [
+    { "slug": "patient",    "title": "Patient",         "file": "patient-vault.md",                 "status": "live",        "summary": "Core demographic records — list, create, find, get, update, delete." },
+    { "slug": "address",    "title": "Address",         "file": "patient-vault-address.md",         "status": "live",        "summary": "Patient physical addresses with validation." },
+    { "slug": "contact",    "title": "Contact",         "file": "patient-vault-contact.md",         "status": "live",        "summary": "Contact points — email, phone, fax (append-only)." },
+    { "slug": "alias",      "title": "Alias",           "file": "patient-vault-alias.md",           "status": "coming_soon", "summary": "Alternate name records (maiden, nickname, legal change)." },
+    { "slug": "deceased",   "title": "Deceased Record", "file": "patient-vault-deceased-record.md", "status": "coming_soon", "summary": "Structured death record; reversal via DELETE." },
+    { "slug": "identifier", "title": "Identifier",      "file": "patient-vault-identifier.md",      "status": "coming_soon", "summary": "External identifiers linking patients to outside systems." }
+  ]
+}

@@ -1,18 +1,37 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { Suspense } from "react"
-import "./globals.css"
-import { ToasterWrapper } from "@/components/toaster-wrapper"
-import { NavigationProvider } from "@/contexts/navigation-context"
+import { Analytics } from '@vercel/analytics/next'
+import type { Metadata, Viewport } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Suspense } from 'react'
+import './globals.css'
+import { ThemeProvider } from '@/components/theme-provider'
+import { SessionProvider } from '@/lib/session-context'
+import { CustomFieldsProvider } from '@/lib/custom-fields-context'
+import { ApiInspectorProvider } from '@/lib/api-inspector'
+import { DcpGateProvider } from '@/lib/dcp-context'
+import { AppShell } from '@/components/app-shell'
+
+const inter = Inter({ variable: '--font-inter', subsets: ['latin'] })
+const jetbrainsMono = JetBrains_Mono({
+  variable: '--font-jetbrains-mono',
+  subsets: ['latin'],
+})
 
 export const metadata: Metadata = {
-  title: "1health App Starter",
-  description: "Greenfield starter template for building 1health platform applications",
-  icons: {
-    icon: "/favicon.png",
-  },
-  generator: "v0.app",
+  title: 'Patient Vault — 1health',
+  description:
+    'The developer console for 1health — manage a vault of patient records through a bounded, agent-accessible healthcare data API.',
+  generator: 'v0.app',
 }
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: '#202833',
+}
+
+// Set the theme class before hydration to avoid a flash. Dark is the default.
+const themeScript = `(function(){try{var t=localStorage.getItem('pv-theme');var c=t==='light'?'light':'dark';document.documentElement.classList.add(c);}catch(e){document.documentElement.classList.add('dark');}})();`
 
 export default function RootLayout({
   children,
@@ -20,14 +39,29 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${jetbrainsMono.variable} bg-background`}
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="font-sans antialiased">
-        <NavigationProvider>
-          <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-            {children}
+        <ThemeProvider>
+          <Suspense fallback={null}>
+            <SessionProvider>
+              <CustomFieldsProvider>
+                <ApiInspectorProvider>
+                  <DcpGateProvider>
+                    <AppShell>{children}</AppShell>
+                  </DcpGateProvider>
+                </ApiInspectorProvider>
+              </CustomFieldsProvider>
+            </SessionProvider>
           </Suspense>
-          <ToasterWrapper />
-        </NavigationProvider>
+        </ThemeProvider>
+        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )
