@@ -191,7 +191,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     user ? 'patients:list' : null,
     async () => {
       const page = await fetchPatientGrid({ page: 0, size: 200 })
-      return page.content.map(gridRowToPatient)
+      return (page.data ?? []).map(gridRowToPatient)
     },
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   )

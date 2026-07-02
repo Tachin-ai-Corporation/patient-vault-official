@@ -99,16 +99,18 @@ export interface AddressInput {
   primary?: boolean
 }
 
-/** A single row from POST /v3/health/grid/patient. */
+/** A single row from POST /v3/health/grid/patient (PersonGridResponseDTO).
+ *  Note: race, ethnicity, and biologicalGender come back as scalar strings
+ *  (e.g. "White", "Female"), NOT arrays. */
 export interface PatientGridRow {
   id: number
   firstName: string
   lastName: string
   middleName?: string | null
   dateOfBirth?: string | null
-  race?: string[] | null
-  ethnicity?: string[] | null
-  biologicalGender?: string[] | null
+  race?: string | null
+  ethnicity?: string | null
+  biologicalGender?: string | null
   genderIdentity?: string | null
   socialSecurityNumber?: string | null
   email?: string | null
@@ -117,17 +119,23 @@ export interface PatientGridRow {
   locationAddressStreet?: string | null
   locationPostalCode?: string | null
   locationCounty?: string | null
-  locationCountry?: string[] | null
+  locationCountry?: string | null
   created?: string | null
   updated?: string | null
 }
 
+/** The 1health grid pagination envelope (PagePersonGridResponseDTO).
+ *  Rows live under `data` (not `content`). */
 export interface Page<T> {
-  content: T[]
+  data: T[]
   totalElements: number
   totalPages: number
-  number: number
-  size: number
+  pageNumber: number
+  pageSize: number
+  numberOfElements: number
+  firstPage: boolean
+  lastPage: boolean
+  emptyPage: boolean
 }
 
 export interface FindCandidate {
@@ -147,9 +155,113 @@ export interface FindCandidate {
 // Mappers: view model <-> DTO
 // ============================================================================
 
-function toCoded(value?: string | null): Coded {
-  const v = (value || "unknown").toString()
-  return { code: v, label: prettifyCode(v) }
+// ---- enum normalization: app codes <-> API validated value sets ------------
+//
+// The v3 patient API validates gender/sexAtBirth/race/ethnicity against exact,
+// space-and-capitalized display strings (e.g. "Male", "Black or African
+// American", "Not Hispanic or Latino"). The app's internal view model uses
+// lowercase snake_case codes. These maps translate app codes -> API values on
+// write, and API values -> app codes on read.
+
+/** Outgoing: administrative gender. API enum: Male, Female, Other, Unknown, Asked but not answered. */
+const GENDER_TO_API: Record<string, string> = {
+  male: "Male",
+  female: "Female",
+  other: "Other",
+  unknown: "Unknown",
+  "asked but not answered": "Asked but not answered",
+}
+
+/** Outgoing: sex at birth. API enum: Male, Female, Intersex, Unknown. */
+const SEX_TO_API: Record<string, string> = {
+  male: "Male",
+  female: "Female",
+  intersex: "Intersex",
+  unknown: "Unknown",
+}
+
+/** Outgoing: race. API OMB categories. */
+const RACE_TO_API: Record<string, string> = {
+  white: "White",
+  black_or_african_american: "Black or African American",
+  "black or african american": "Black or African American",
+  asian: "Asian",
+  american_indian_or_alaska_native: "American Indian or Alaska Native",
+  "american indian or alaska native": "American Indian or Alaska Native",
+  native_hawaiian_or_other_pacific_islander: "Native Hawaiian or other Pacific Islander",
+  "native hawaiian or other pacific islander": "Native Hawaiian or other Pacific Islander",
+  middle_eastern_or_north_african: "Middle Eastern or North African",
+  hispanic_or_latino: "Hispanic or Latino",
+  other: "Other Race",
+  other_race: "Other Race",
+  "other race": "Other Race",
+  unknown: "Unknown",
+}
+
+/** Outgoing: ethnicity. API enum: Hispanic or Latino, Not Hispanic or Latino, Unknown. */
+const ETHNICITY_TO_API: Record<string, string> = {
+  hispanic: "Hispanic or Latino",
+  "hispanic or latino": "Hispanic or Latino",
+  not_hispanic: "Not Hispanic or Latino",
+  "not hispanic or latino": "Not Hispanic or Latino",
+  unknown: "Unknown",
+}
+
+/** Incoming: API race display value -> app code (aligned to RACE_OPTIONS). */
+const RACE_FROM_API: Record<string, string> = {
+  white: "white",
+  "black or african american": "black_or_african_american",
+  asian: "asian",
+  "american indian or alaska native": "american_indian_or_alaska_native",
+  "native hawaiian or other pacific islander": "native_hawaiian_or_other_pacific_islander",
+  "other race": "other",
+  other: "other",
+  unknown: "unknown",
+}
+
+/** Incoming: API ethnicity display value -> app code (aligned to ETHNICITY_OPTIONS). */
+const ETHNICITY_FROM_API: Record<string, string> = {
+  "hispanic or latino": "hispanic",
+  "not hispanic or latino": "not_hispanic",
+  unknown: "unknown",
+}
+
+/** Map an app value to the API's validated string, tolerating either casing.
+ *  Falls back to the original value so already-correct inputs pass through. */
+function mapToApi(map: Record<string, string>, value?: string | null): string | undefined {
+  if (value == null) return undefined
+  const raw = value.toString().trim()
+  if (!raw) return undefined
+  return map[raw.toLowerCase()] ?? raw
+}
+
+/** Build the v3 request body from a create/patch input, normalizing every
+ *  value-list field to the API's validated strings. */
+function toApiPatientBody(
+  input: Partial<PatientCreateInput>,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { ...input }
+  if (input.gender !== undefined) body.gender = mapToApi(GENDER_TO_API, input.gender)
+  if (input.sexAtBirth !== undefined) body.sexAtBirth = mapToApi(SEX_TO_API, input.sexAtBirth)
+  if (input.race !== undefined) body.race = mapToApi(RACE_TO_API, input.race)
+  if (input.ethnicity !== undefined) body.ethnicity = mapToApi(ETHNICITY_TO_API, input.ethnicity)
+  return body
+}
+
+/** Incoming race: turn an API display value into a coded {code,label} pair. */
+function toRaceCoded(value?: string | null): Coded {
+  const raw = (value ?? "").toString().trim()
+  if (!raw) return { code: "unknown", label: "Unknown" }
+  const code = RACE_FROM_API[raw.toLowerCase()] ?? raw.toLowerCase().replace(/\s+/g, "_")
+  return { code, label: raw }
+}
+
+/** Incoming ethnicity: turn an API display value into a coded {code,label} pair. */
+function toEthnicityCoded(value?: string | null): Coded {
+  const raw = (value ?? "").toString().trim()
+  if (!raw) return { code: "unknown", label: "Unknown" }
+  const code = ETHNICITY_FROM_API[raw.toLowerCase()] ?? raw.toLowerCase().replace(/\s+/g, "_")
+  return { code, label: raw }
 }
 
 function normalizeSex(value?: string | null): SexAtBirth {
@@ -172,8 +284,8 @@ export function dtoToPatient(
     date_of_birth: dto.dob,
     sex_at_birth: normalizeSex(dto.sexAtBirth),
     gender_identity: dto.genderIdentity ?? "",
-    race: toCoded(dto.race),
-    ethnicity: toCoded(dto.ethnicity),
+    race: toRaceCoded(dto.race),
+    ethnicity: toEthnicityCoded(dto.ethnicity),
     preferred_language: dto.preferredLanguage ?? "",
     last4_ssn: dto.last4Ssn ?? "",
     deceased: Boolean(dto.deceased),
@@ -233,21 +345,20 @@ export function gridRowToPatient(row: PatientGridRow): Patient {
       city: row.locationAddressCity ?? "",
       state: "",
       postal_code: row.locationPostalCode ?? "",
-      country: (row.locationCountry && row.locationCountry[0]) ?? "United States",
+      country: row.locationCountry ?? "United States",
       primary: true,
     })
   }
-  const firstOf = (arr?: string[] | null) => (arr && arr.length ? arr[0] : undefined)
   return {
     id: String(row.id),
     given_name: row.firstName,
     family_name: row.lastName,
     middle_name: row.middleName ?? "",
     date_of_birth: row.dateOfBirth ?? "",
-    sex_at_birth: normalizeSex(firstOf(row.biologicalGender)),
+    sex_at_birth: normalizeSex(row.biologicalGender),
     gender_identity: row.genderIdentity ?? "",
-    race: toCoded(firstOf(row.race)),
-    ethnicity: toCoded(firstOf(row.ethnicity)),
+    race: toRaceCoded(row.race),
+    ethnicity: toEthnicityCoded(row.ethnicity),
     preferred_language: "",
     last4_ssn: row.socialSecurityNumber ?? "",
     deceased: false,
@@ -336,11 +447,12 @@ export async function findPatients(criteria: {
   if (criteria.dob) params.set("dob", criteria.dob)
   if (criteria.sexAtBirth) params.set("sexAtBirth", criteria.sexAtBirth)
   if (criteria.exact) params.set("exact", "true")
-  const data = await request<{ candidates: FindCandidate[] }>(
+  // Docs: PatientFindResponseDTO -> { patients: [{ id, matchedOn, score }] }.
+  const data = await request<{ patients: FindCandidate[] }>(
     `/v3/patient/find?${params.toString()}`,
     { method: "GET" },
   )
-  return data?.candidates ?? []
+  return data?.patients ?? []
 }
 
 // ============================================================================
@@ -359,7 +471,7 @@ export async function fetchPatient(id: string): Promise<Patient> {
 export async function createPatient(input: PatientCreateInput): Promise<PatientDTO> {
   return request<PatientDTO>(`/v3/patient`, {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify(toApiPatientBody(input)),
   })
 }
 
@@ -369,7 +481,7 @@ export async function patchPatient(
 ): Promise<PatientDTO> {
   return request<PatientDTO>(`/v3/patient/${id}`, {
     method: "PATCH",
-    body: JSON.stringify(patch),
+    body: JSON.stringify(toApiPatientBody(patch)),
   })
 }
 
