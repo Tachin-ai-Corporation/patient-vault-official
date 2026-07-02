@@ -1,8 +1,7 @@
 'use client'
 
-import { Users, FileText, Activity } from 'lucide-react'
+import { Users, Contact, Activity } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
-import { collectAttachments } from '@/lib/patient-data'
 
 function Stat({
   icon: Icon,
@@ -37,7 +36,7 @@ function Stat({
 // service rather than the in-memory store.
 export function AnalyticsSummary() {
   const { session, currentProject, patients } = useSession()
-  const documentCount = collectAttachments(patients).length
+  const contactCount = patients.reduce((n, p) => n + p.contacts.length, 0)
   const pct = Math.min(
     100,
     Math.round((currentProject.patientCount / session.freeCeiling) * 100),
@@ -52,9 +51,9 @@ export function AnalyticsSummary() {
         sub={`${pct}% of ${session.freeCeiling.toLocaleString()} ceiling`}
       />
       <Stat
-        icon={FileText}
-        label="documents"
-        value={documentCount.toLocaleString()}
+        icon={Contact}
+        label="contacts"
+        value={contactCount.toLocaleString()}
         sub="across all patients in this vault"
       />
       <Stat

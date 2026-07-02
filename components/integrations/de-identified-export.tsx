@@ -29,8 +29,6 @@ type DeidRecord = {
   ethnicity: string // coded
   preferred_language: string
   deceased: boolean
-  attachment_count: number
-  attachment_types: string[] // content types only — no filenames
 }
 
 // Strip the 18-identifier "direct identifier" set this mock can reach:
@@ -46,10 +44,6 @@ function deidentify(p: Patient): DeidRecord {
     ethnicity: p.ethnicity.code,
     preferred_language: p.preferred_language,
     deceased: p.deceased,
-    attachment_count: p.attachment_count,
-    attachment_types: Array.from(
-      new Set(p.attachments.map((a) => a.content_type)),
-    ),
   }
 }
 

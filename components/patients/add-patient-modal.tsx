@@ -6,83 +6,86 @@ import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Field, FieldGroup, Select, TextInput } from '@/components/ui/field'
 import {
-  useCustomFields,
-  validateJsonValue,
-} from '@/lib/custom-fields-context'
-import { CustomFieldInputs } from '@/components/patients/custom-field-inputs'
-import {
   ADDRESS_USE_OPTIONS,
-  CONTACT_SYSTEM_OPTIONS,
-  CONTACT_USE_OPTIONS,
+  CONTACT_TYPE_OPTIONS,
   ETHNICITY_OPTIONS,
   GENDER_IDENTITY_OPTIONS,
   LANGUAGE_OPTIONS,
-  PRONOUN_OPTIONS,
   RACE_OPTIONS,
   SEX_AT_BIRTH_OPTIONS,
-  generatePatientId,
-  type Address,
-  type Coded,
-  type Contact,
-  type Patient,
-  type Provider,
+  prettifyCode,
+  type AddressUse,
+  type ContactType,
   type SexAtBirth,
 } from '@/lib/patient-data'
+import type {
+  PatientCreateInput,
+  ContactInput,
+  AddressInput,
+} from '@/lib/api/patient'
+
+export type NewPatientDraft = {
+  patient: PatientCreateInput
+  contact?: ContactInput
+  address?: AddressInput
+}
 
 type AddPatientModalProps = {
   open: boolean
   onClose: () => void
-  onAdd: (patient: Patient) => void
+  // Persists the new patient (and optional contact/address) via the API.
+  onAdd: (draft: NewPatientDraft) => Promise<void> | void
 }
 
-const emptyAddress: Address = {
+type ContactState = { type: ContactType; value: string }
+type AddressState = {
+  use: AddressUse
+  line1: string
+  city: string
+  state: string
+  postal_code: string
+  country: string
+}
+
+const emptyContact: ContactState = { type: 'mobile', value: '' }
+const emptyAddress: AddressState = {
   use: 'home',
   line1: '',
-  line2: '',
   city: '',
   state: '',
   postal_code: '',
-  country: 'US',
+  country: 'United States',
 }
-const emptyContact: Contact = { system: 'phone', value: '', use: 'mobile' }
-const emptyProvider: Provider = { name: '', role: '', npi: '' }
 
 export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) {
-  const { fields, setValuesForPatient } = useCustomFields()
-  const [customValues, setCustomValues] = useState<Record<string, string>>({})
-  const [customErrors, setCustomErrors] = useState<Record<string, string>>({})
-
   const [given, setGiven] = useState('')
+  const [middle, setMiddle] = useState('')
   const [family, setFamily] = useState('')
   const [dob, setDob] = useState('')
-  const [sex, setSex] = useState<SexAtBirth>('Unknown')
-  const [gender, setGender] = useState(GENDER_IDENTITY_OPTIONS[0])
-  const [pronouns, setPronouns] = useState(PRONOUN_OPTIONS[0])
+  const [sex, setSex] = useState<SexAtBirth>('unknown')
+  const [gender, setGender] = useState('')
   const [raceCode, setRaceCode] = useState(RACE_OPTIONS[0].code)
   const [ethnicityCode, setEthnicityCode] = useState(ETHNICITY_OPTIONS[0].code)
-  const [language, setLanguage] = useState(LANGUAGE_OPTIONS[0].code)
+  const [language, setLanguage] = useState('')
 
-  const [address, setAddress] = useState<Address | null>(null)
-  const [contact, setContact] = useState<Contact | null>(null)
-  const [provider, setProvider] = useState<Provider | null>(null)
+  const [address, setAddress] = useState<AddressState | null>(null)
+  const [contact, setContact] = useState<ContactState | null>(null)
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
 
   function reset() {
     setGiven('')
+    setMiddle('')
     setFamily('')
     setDob('')
-    setSex('Unknown')
-    setGender(GENDER_IDENTITY_OPTIONS[0])
-    setPronouns(PRONOUN_OPTIONS[0])
+    setSex('unknown')
+    setGender('')
     setRaceCode(RACE_OPTIONS[0].code)
     setEthnicityCode(ETHNICITY_OPTIONS[0].code)
-    setLanguage(LANGUAGE_OPTIONS[0].code)
+    setLanguage('')
     setAddress(null)
     setContact(null)
-    setProvider(null)
-    setCustomValues({})
-    setCustomErrors({})
     setErrors({})
   }
 
@@ -91,57 +94,52 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
     onClose()
   }
 
-  function findCoded(options: Coded[], code: string): Coded {
-    return options.find((o) => o.code === code) ?? options[0]
-  }
-
-  function handleSubmit() {
+  async function handleSubmit() {
     const nextErrors: Record<string, string> = {}
     if (!given.trim()) nextErrors.given = 'Given name is required.'
     if (!family.trim()) nextErrors.family = 'Family name is required.'
     if (!dob) nextErrors.dob = 'Date of birth is required.'
-
-    // Validate JSON-type custom fields against their optional schema.
-    const nextCustomErrors: Record<string, string> = {}
-    for (const f of fields) {
-      if (f.type !== 'json') continue
-      const msg = validateJsonValue(customValues[f.id], f.schema)
-      if (msg) nextCustomErrors[f.id] = msg
-    }
-    setCustomErrors(nextCustomErrors)
     setErrors(nextErrors)
-    if (
-      Object.keys(nextErrors).length > 0 ||
-      Object.keys(nextCustomErrors).length > 0
-    )
-      return
+    if (Object.keys(nextErrors).length > 0) return
 
-    const patient: Patient = {
-      id: generatePatientId(),
-      given_name: given.trim(),
-      family_name: family.trim(),
-      date_of_birth: dob,
-      sex_at_birth: sex,
-      gender_identity: gender,
-      pronouns,
-      race: findCoded(RACE_OPTIONS, raceCode),
-      ethnicity: findCoded(ETHNICITY_OPTIONS, ethnicityCode),
-      preferred_language: language,
-      deceased: false,
-      addresses: address ? [address] : [],
-      contacts: contact ? [contact] : [],
-      providers: provider ? [provider] : [],
-      attachments: [],
-      attachment_count: 0,
-      created_at: new Date().toISOString(),
+    const draft: NewPatientDraft = {
+      patient: {
+        firstName: given.trim(),
+        lastName: family.trim(),
+        middleName: middle.trim() || undefined,
+        dob,
+        sexAtBirth: sex,
+        genderIdentity: gender || undefined,
+        race: raceCode,
+        ethnicity: ethnicityCode,
+        preferredLanguage: language || undefined,
+      },
+      contact:
+        contact && contact.value.trim()
+          ? { type: contact.type, value: contact.value.trim(), isPrimary: true }
+          : undefined,
+      address:
+        address && address.line1.trim()
+          ? {
+              line1: address.line1.trim(),
+              city: address.city.trim(),
+              state: address.state.trim(),
+              postalCode: address.postal_code.trim(),
+              country: address.country.trim() || undefined,
+              use: address.use,
+              primary: true,
+            }
+          : undefined,
     }
-    // Persist any custom field values against the new patient id (mock/local).
-    if (fields.length > 0) {
-      setValuesForPatient(patient.id, customValues)
+
+    setSubmitting(true)
+    try {
+      await onAdd(draft)
+      reset()
+      onClose()
+    } finally {
+      setSubmitting(false)
     }
-    onAdd(patient)
-    reset()
-    onClose()
   }
 
   return (
@@ -149,7 +147,7 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
       open={open}
       onClose={handleClose}
       title="Add patient"
-      description="Create a single record. Coded fields store both a human label and the standard code."
+      description="Create a single record. Race and ethnicity are stored as the API's validated codes."
       className="max-w-2xl"
       footer={
         <>
@@ -158,10 +156,11 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
           </Button>
           <Button
             onClick={handleSubmit}
+            disabled={submitting}
             className="bg-primary text-primary-foreground"
           >
             <Plus className="h-4 w-4" data-icon="inline-start" />
-            Add patient
+            {submitting ? 'Adding…' : 'Add patient'}
           </Button>
         </>
       }
@@ -176,6 +175,14 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
               invalid={!!errors.given}
               onChange={(e) => setGiven(e.target.value)}
               placeholder="Maria"
+            />
+          </Field>
+          <Field label="Middle name" htmlFor="middle">
+            <TextInput
+              id="middle"
+              value={middle}
+              onChange={(e) => setMiddle(e.target.value)}
+              placeholder="Elena"
             />
           </Field>
           <Field label="Family name" htmlFor="family" error={errors.family}>
@@ -204,7 +211,7 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
             >
               {SEX_AT_BIRTH_OPTIONS.map((o) => (
                 <option key={o} value={o}>
-                  {o}
+                  {prettifyCode(o)}
                 </option>
               ))}
             </Select>
@@ -215,20 +222,8 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
               value={gender}
               onChange={(e) => setGender(e.target.value)}
             >
+              <option value="">—</option>
               {GENDER_IDENTITY_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Pronouns" htmlFor="pronouns">
-            <Select
-              id="pronouns"
-              value={pronouns}
-              onChange={(e) => setPronouns(e.target.value)}
-            >
-              {PRONOUN_OPTIONS.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
@@ -247,7 +242,7 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
             >
               {RACE_OPTIONS.map((o) => (
                 <option key={o.code} value={o.code}>
-                  {o.label} ({o.code})
+                  {o.label}
                 </option>
               ))}
             </Select>
@@ -260,20 +255,25 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
             >
               {ETHNICITY_OPTIONS.map((o) => (
                 <option key={o.code} value={o.code}>
-                  {o.label} ({o.code})
+                  {o.label}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Preferred language" htmlFor="language" className="col-span-2">
+          <Field
+            label="Preferred language"
+            htmlFor="language"
+            className="col-span-2"
+          >
             <Select
               id="language"
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
             >
+              <option value="">—</option>
               {LANGUAGE_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.label} ({o.code})
+                <option key={o} value={o}>
+                  {o}
                 </option>
               ))}
             </Select>
@@ -281,6 +281,47 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
         </FieldGroup>
 
         {/* Optional related records */}
+        <OptionalSection
+          title="Contact"
+          added={!!contact}
+          onAdd={() => setContact({ ...emptyContact })}
+          onRemove={() => setContact(null)}
+        >
+          {contact && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Type" htmlFor="c-type">
+                <Select
+                  id="c-type"
+                  value={contact.type}
+                  onChange={(e) =>
+                    setContact({ ...contact, type: e.target.value as ContactType })
+                  }
+                >
+                  {CONTACT_TYPE_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Value" htmlFor="c-value">
+                <TextInput
+                  id="c-value"
+                  value={contact.value}
+                  onChange={(e) =>
+                    setContact({ ...contact, value: e.target.value })
+                  }
+                  placeholder={
+                    contact.type === 'email'
+                      ? 'name@example.com'
+                      : '+15555551234'
+                  }
+                />
+              </Field>
+            </div>
+          )}
+        </OptionalSection>
+
         <OptionalSection
           title="Address"
           added={!!address}
@@ -294,7 +335,7 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
                   id="addr-use"
                   value={address.use}
                   onChange={(e) =>
-                    setAddress({ ...address, use: e.target.value as Address['use'] })
+                    setAddress({ ...address, use: e.target.value as AddressUse })
                   }
                 >
                   {ADDRESS_USE_OPTIONS.map((o) => (
@@ -353,120 +394,6 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
             </div>
           )}
         </OptionalSection>
-
-        <OptionalSection
-          title="Contact"
-          added={!!contact}
-          onAdd={() => setContact({ ...emptyContact })}
-          onRemove={() => setContact(null)}
-        >
-          {contact && (
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="System" htmlFor="c-system">
-                <Select
-                  id="c-system"
-                  value={contact.system}
-                  onChange={(e) =>
-                    setContact({
-                      ...contact,
-                      system: e.target.value as Contact['system'],
-                    })
-                  }
-                >
-                  {CONTACT_SYSTEM_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Value" htmlFor="c-value">
-                <TextInput
-                  id="c-value"
-                  value={contact.value}
-                  onChange={(e) =>
-                    setContact({ ...contact, value: e.target.value })
-                  }
-                  placeholder={contact.system === 'email' ? 'name@example.com' : '+15555551234'}
-                />
-              </Field>
-              <Field label="Use" htmlFor="c-use">
-                <Select
-                  id="c-use"
-                  value={contact.use}
-                  onChange={(e) =>
-                    setContact({ ...contact, use: e.target.value as Contact['use'] })
-                  }
-                >
-                  {CONTACT_USE_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-          )}
-        </OptionalSection>
-
-        <OptionalSection
-          title="Provider"
-          added={!!provider}
-          onAdd={() => setProvider({ ...emptyProvider })}
-          onRemove={() => setProvider(null)}
-        >
-          {provider && (
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Name" htmlFor="p-name">
-                <TextInput
-                  id="p-name"
-                  value={provider.name}
-                  onChange={(e) =>
-                    setProvider({ ...provider, name: e.target.value })
-                  }
-                  placeholder="Dr. Anita Rao"
-                />
-              </Field>
-              <Field label="Role" htmlFor="p-role">
-                <TextInput
-                  id="p-role"
-                  value={provider.role}
-                  onChange={(e) =>
-                    setProvider({ ...provider, role: e.target.value })
-                  }
-                  placeholder="Primary Care Physician"
-                />
-              </Field>
-              <Field label="NPI" htmlFor="p-npi">
-                <TextInput
-                  id="p-npi"
-                  value={provider.npi}
-                  onChange={(e) =>
-                    setProvider({ ...provider, npi: e.target.value })
-                  }
-                  className="font-mono"
-                  placeholder="1234567890"
-                />
-              </Field>
-            </div>
-          )}
-        </OptionalSection>
-
-        {/* Developer-defined custom fields (from the field builder). */}
-        <CustomFieldInputs
-          fields={fields}
-          values={customValues}
-          errors={customErrors}
-          onChange={(fieldId, value) => {
-            setCustomValues((prev) => ({ ...prev, [fieldId]: value }))
-            setCustomErrors((prev) => {
-              if (!prev[fieldId]) return prev
-              const { [fieldId]: _removed, ...rest } = prev
-              return rest
-            })
-          }}
-          idPrefix="add-cf"
-        />
       </div>
     </Modal>
   )

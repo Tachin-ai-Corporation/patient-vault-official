@@ -1,23 +1,13 @@
 'use client'
 
-import { patientFullName, type Patient } from '@/lib/patient-data'
-import {
-  formatCustomValue,
-  useCustomFields,
-  type CustomFieldDef,
-} from '@/lib/custom-fields-context'
-import {
-  BASE_GRID_COLUMNS,
-  customFieldColumnKey,
-  type GridColumn,
-} from '@/lib/grid-columns'
+import { patientFullName, prettifyCode, type Patient } from '@/lib/patient-data'
+import { BASE_GRID_COLUMNS, type GridColumn } from '@/lib/grid-columns'
 
 type PatientsGridProps = {
   patients: Patient[]
   onSelect: (patient: Patient) => void
   loading?: boolean
-  // Returns whether a column key should be rendered. Defaults to all-visible
-  // when not provided (e.g. during the seeding stream).
+  // Returns whether a column key should be rendered. Defaults to all-visible.
   isVisible?: (key: string) => boolean
 }
 
@@ -38,8 +28,15 @@ function HeaderCell({
   )
 }
 
-function firstContact(p: Patient, system: 'email' | 'phone'): string | null {
-  return p.contacts.find((c) => c.system === system)?.value ?? null
+function emailValue(p: Patient): string | null {
+  return p.contacts.find((c) => c.type === 'email')?.value ?? null
+}
+
+function phoneValue(p: Patient): string | null {
+  const phone = p.contacts.find(
+    (c) => c.type === 'mobile' || c.type === 'home' || c.type === 'work',
+  )
+  return phone?.value ?? null
 }
 
 function cityState(p: Patient): string | null {
@@ -62,11 +59,7 @@ function formatCreated(iso?: string): string | null {
 const EmDash = () => <span className="text-muted-foreground">—</span>
 
 // Render a single cell's content for a given column + patient.
-function renderCell(
-  col: GridColumn & { field?: CustomFieldDef },
-  p: Patient,
-  getValues: (id: string) => Record<string, string>,
-) {
+function renderCell(col: GridColumn, p: Patient) {
   switch (col.key) {
     case 'name':
       return (
@@ -81,7 +74,11 @@ function renderCell(
         </span>
       )
     case 'sex_at_birth':
-      return <span className="text-muted-foreground">{p.sex_at_birth}</span>
+      return (
+        <span className="text-muted-foreground">
+          {prettifyCode(p.sex_at_birth)}
+        </span>
+      )
     case 'gender_identity':
       return (
         <span className="text-muted-foreground">
@@ -91,7 +88,7 @@ function renderCell(
     case 'id':
       return <span className="font-mono text-[13px] text-accent">{p.id}</span>
     case 'email': {
-      const v = firstContact(p, 'email')
+      const v = emailValue(p)
       return v ? (
         <span className="font-mono text-[13px] text-muted-foreground">{v}</span>
       ) : (
@@ -99,7 +96,7 @@ function renderCell(
       )
     }
     case 'phone': {
-      const v = firstContact(p, 'phone')
+      const v = phoneValue(p)
       return v ? (
         <span className="font-mono text-[13px] text-muted-foreground">{v}</span>
       ) : (
@@ -108,11 +105,7 @@ function renderCell(
     }
     case 'city_state': {
       const v = cityState(p)
-      return v ? (
-        <span className="text-muted-foreground">{v}</span>
-      ) : (
-        <EmDash />
-      )
+      return v ? <span className="text-muted-foreground">{v}</span> : <EmDash />
     }
     case 'created': {
       const v = formatCreated(p.created_at)
@@ -123,14 +116,6 @@ function renderCell(
       )
     }
     default:
-      // Custom field column.
-      if (col.field) {
-        return (
-          <span className="text-muted-foreground">
-            {formatCustomValue(col.field.type, getValues(p.id)[col.field.id])}
-          </span>
-        )
-      }
       return <EmDash />
   }
 }
@@ -141,17 +126,7 @@ export function PatientsGrid({
   loading,
   isVisible,
 }: PatientsGridProps) {
-  const { fields, getValues } = useCustomFields()
-
-  // Build the full ordered column list: fixed base columns then custom fields.
-  const customColumns: (GridColumn & { field: CustomFieldDef })[] = fields.map(
-    (f) => ({ key: customFieldColumnKey(f.id), label: f.name, field: f }),
-  )
-  const allColumns: (GridColumn & { field?: CustomFieldDef })[] = [
-    ...BASE_GRID_COLUMNS,
-    ...customColumns,
-  ]
-  const visibleColumns = allColumns.filter(
+  const visibleColumns = BASE_GRID_COLUMNS.filter(
     (c) => !isVisible || isVisible(c.key),
   )
   const columnCount = visibleColumns.length
@@ -200,7 +175,7 @@ export function PatientsGrid({
                   >
                     {visibleColumns.map((c) => (
                       <td key={c.key} className="h-12 px-4">
-                        {renderCell(c, p, getValues)}
+                        {renderCell(c, p)}
                       </td>
                     ))}
                   </tr>

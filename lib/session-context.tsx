@@ -107,6 +107,17 @@ type SessionContextValue = {
   isProductionActivated: boolean
   currentEnv: ApiEnv
   setCurrentEnv: (env: ApiEnv) => void
+  // Developer-platform shims. These back the static Console/Settings screens.
+  // The 1health API surface used here (myself + tenant + patients) has no
+  // project-management or key-provisioning endpoints, so these are local-only
+  // and never persist to the tenant.
+  updateUserName: (first: string, last: string) => void
+  createProject: (name: string) => void
+  renameCurrentProject: (name: string) => void
+  deleteProject: (id: string) => void
+  projectReferenceCount: (id: string) => number
+  activateProductionForProject: (maskedKey: string) => void
+  productionMaskedKey: string | null
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -304,6 +315,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // --- static-screen shims ---
   const setCurrentProjectId = useCallback(() => {}, [])
   const [currentEnv, setCurrentEnv] = useState<ApiEnv>('staging')
+  const [productionMaskedKey, setProductionMaskedKey] = useState<string | null>(
+    null,
+  )
+  const [isProductionActivated, setIsProductionActivated] = useState(false)
+
+  // Locally override the displayed developer name (no user-write endpoint is
+  // used here — this only updates the in-memory SWR cache for the session).
+  const updateUserName = useCallback(
+    (first: string, last: string) => {
+      mutateUser(
+        (prev) =>
+          prev ? { ...prev, firstName: first, lastName: last } : prev,
+        { revalidate: false },
+      )
+    },
+    [mutateUser],
+  )
+
+  const createProject = useCallback(() => {}, [])
+  const renameCurrentProject = useCallback(() => {}, [])
+  const deleteProject = useCallback(() => {}, [])
+  const projectReferenceCount = useCallback(() => 0, [])
+  const activateProductionForProject = useCallback((maskedKey: string) => {
+    setProductionMaskedKey(maskedKey)
+    setIsProductionActivated(true)
+  }, [])
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -330,9 +367,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       partner,
       freeCeiling,
       claimPartner,
-      isProductionActivated: false,
+      isProductionActivated,
       currentEnv,
       setCurrentEnv,
+      updateUserName,
+      createProject,
+      renameCurrentProject,
+      deleteProject,
+      projectReferenceCount,
+      activateProductionForProject,
+      productionMaskedKey,
     }),
     [
       session,
@@ -359,6 +403,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       freeCeiling,
       claimPartner,
       currentEnv,
+      isProductionActivated,
+      updateUserName,
+      createProject,
+      renameCurrentProject,
+      deleteProject,
+      projectReferenceCount,
+      activateProductionForProject,
+      productionMaskedKey,
     ],
   )
 

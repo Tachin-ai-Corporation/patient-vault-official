@@ -5,6 +5,8 @@ import { Suspense } from 'react'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SessionProvider } from '@/lib/session-context'
+import { ApiInspectorProvider } from '@/lib/api-inspector'
+import { DcpGateProvider } from '@/lib/dcp-context'
 import { AppShell } from '@/components/app-shell'
 
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'] })
@@ -48,7 +50,11 @@ export default function RootLayout({
         <ThemeProvider>
           <Suspense fallback={null}>
             <SessionProvider>
-              <AppShell>{children}</AppShell>
+              <ApiInspectorProvider>
+                <DcpGateProvider>
+                  <AppShell>{children}</AppShell>
+                </DcpGateProvider>
+              </ApiInspectorProvider>
             </SessionProvider>
           </Suspense>
         </ThemeProvider>
