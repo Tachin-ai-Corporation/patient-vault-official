@@ -274,8 +274,16 @@ function normalizeSex(value?: string | null): SexAtBirth {
  *  attached separately (they come from sub-resource endpoints). */
 export function dtoToPatient(
   dto: PatientDTO,
-  extra?: { contacts?: ContactDTO[]; addresses?: AddressDTO[] },
+  extra?: {
+    contacts?: ContactDTO[]
+    addresses?: AddressDTO[]
+    deceased?: DeceasedRecord | null
+  },
 ): Patient {
+  // A patient is deceased if either the DTO flag says so or a deceased record
+  // was returned from the dedicated endpoint (the latter is authoritative).
+  const deceasedRecord = extra?.deceased ?? null
+  const isDeceased = Boolean(dto.deceased) || deceasedRecord != null
   return {
     id: String(dto.id),
     given_name: dto.firstName,
@@ -288,7 +296,16 @@ export function dtoToPatient(
     ethnicity: toEthnicityCoded(dto.ethnicity),
     preferred_language: dto.preferredLanguage ?? "",
     last4_ssn: dto.last4Ssn ?? "",
-    deceased: Boolean(dto.deceased),
+    deceased: isDeceased,
+    deceased_detail: deceasedRecord
+      ? {
+          deceasedDate: deceasedRecord.deceasedDate ?? undefined,
+          deceasedTime: deceasedRecord.deceasedTime ?? undefined,
+          manner: deceasedRecord.manner ?? undefined,
+          cause: deceasedRecord.cause ?? undefined,
+          placeOfDeath: deceasedRecord.placeOfDeath ?? undefined,
+        }
+      : undefined,
     contacts: (extra?.contacts ?? []).map(contactDtoToView),
     addresses: (extra?.addresses ?? []).map(addressDtoToView),
   }
@@ -460,12 +477,15 @@ export async function findPatients(criteria: {
 // ============================================================================
 
 export async function fetchPatient(id: string): Promise<Patient> {
-  const [dto, contacts, addresses] = await Promise.all([
+  const [dto, contacts, addresses, deceased] = await Promise.all([
     request<PatientDTO>(`/v3/patient/${id}`, { method: "GET" }),
     listContacts(id).catch(() => []),
     listAddresses(id).catch(() => []),
+    // Deceased state is authoritative from its own endpoint (the patient DTO
+    // does not reliably include it), so fetch it here to drive the indicator.
+    fetchDeceased(id).catch(() => null),
   ])
-  return dtoToPatient(dto, { contacts, addresses })
+  return dtoToPatient(dto, { contacts, addresses, deceased })
 }
 
 export async function createPatient(input: PatientCreateInput): Promise<PatientDTO> {
@@ -566,16 +586,75 @@ export async function deleteAddress(patientId: string, addressId: string): Promi
 // Deceased
 // ============================================================================
 
-export async function setDeceased(
+/** Structured death record (PatientDeceasedResponseDTO). */
+export interface DeceasedRecord {
+  id?: number
+  patientId?: number
+  cause?: string | null
+  certifierId?: number | string | null
+  deceasedDate?: string | null
+  deceasedTime?: string | null
+  manner?: string | null
+  notes?: string | null
+  placeOfDeath?: string | null
+  createdAt?: string | null
+}
+
+/** POST/PUT/PATCH body (PatientDeceasedRequestDTO). deceasedDate is required
+ *  by the API for POST/PUT and cannot be in the future or before the DOB. */
+export interface DeceasedInput {
+  deceasedDate: string
+  deceasedTime?: string
+  manner?: string
+  cause?: string
+  notes?: string
+  placeOfDeath?: string
+}
+
+/** GET the deceased record. Returns null when the patient is not marked
+ *  deceased (the API answers 404 in that case, which is not an error here). */
+export async function fetchDeceased(patientId: string): Promise<DeceasedRecord | null> {
+  try {
+    return await request<DeceasedRecord>(`/v3/patient/${patientId}/deceased`, { method: "GET" })
+  } catch (e) {
+    if (e instanceof Error && /\b404\b/.test(e.message)) return null
+    throw e
+  }
+}
+
+/** Mark a patient deceased. POST is not idempotent — if the patient is already
+ *  marked deceased the API returns 409, so we transparently fall back to PATCH
+ *  to correct the existing record instead of failing. */
+export async function setDeceased(patientId: string, body: DeceasedInput): Promise<void> {
+  try {
+    await request<unknown>(`/v3/patient/${patientId}/deceased`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    })
+  } catch (e) {
+    if (e instanceof Error && /\b409\b/.test(e.message)) {
+      await request<unknown>(`/v3/patient/${patientId}/deceased`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      })
+      return
+    }
+    throw e
+  }
+}
+
+/** Correct an existing deceased record (PATCH — only provided fields change). */
+export async function updateDeceased(
   patientId: string,
-  body?: { deceasedDate?: string },
+  body: Partial<DeceasedInput>,
 ): Promise<void> {
   await request<unknown>(`/v3/patient/${patientId}/deceased`, {
-    method: "POST",
-    body: JSON.stringify(body ?? {}),
+    method: "PATCH",
+    body: JSON.stringify(body),
   })
 }
 
+/** Reverse a deceased record (DELETE). */
 export async function clearDeceased(patientId: string): Promise<void> {
   await request<unknown>(`/v3/patient/${patientId}/deceased`, { method: "DELETE" })
 }
@@ -622,7 +701,8 @@ export async function seedPatients(
     }
     if (entry.deceased) {
       onProgress?.({ index: i, total: batch.length, label: `Marking ${name} deceased`, createdId: patient.id })
-      await setDeceased(pid, entry.deceased).catch(() => undefined)
+      const deceasedDate = entry.deceased.deceasedDate ?? new Date().toISOString().slice(0, 10)
+      await setDeceased(pid, { deceasedDate }).catch(() => undefined)
     }
   }
   onProgress?.({ index: batch.length, total: batch.length, label: "Done" })

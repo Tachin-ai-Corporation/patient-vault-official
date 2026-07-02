@@ -296,8 +296,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const setPatientDeceased = useCallback(
     async (id: string, deceased: boolean, date?: string) => {
-      if (deceased) await setDeceased(id, date ? { deceasedDate: date } : {})
-      else await clearDeceased(id)
+      if (deceased) {
+        // deceasedDate is required by the API; default to today when the caller
+        // does not supply one. setDeceased handles the already-deceased (409)
+        // case by falling back to PATCH.
+        const deceasedDate = date ?? new Date().toISOString().slice(0, 10)
+        await setDeceased(id, { deceasedDate })
+      } else {
+        await clearDeceased(id)
+      }
       await mutatePatients()
     },
     [mutatePatients],

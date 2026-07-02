@@ -52,6 +52,15 @@ export type Patient = {
   preferred_language: string
   last4_ssn: string
   deceased: boolean
+  // Structured death record (from GET /v3/patient/{id}/deceased). Present only
+  // when `deceased` is true; drives the on-screen deceased indicator details.
+  deceased_detail?: {
+    deceasedDate?: string
+    deceasedTime?: string
+    manner?: string
+    cause?: string
+    placeOfDeath?: string
+  }
   contacts: Contact[]
   addresses: Address[]
   // When the record was created in the vault (ISO datetime), when the API

@@ -229,7 +229,8 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
               {name}
             </h1>
             {patient.deceased && (
-              <span className="inline-flex items-center rounded-tag border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              <span className="inline-flex items-center gap-1 rounded-tag border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                <HeartPulse className="h-3 w-3" />
                 Deceased
               </span>
             )}
@@ -264,6 +265,22 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
           </Button>
         </div>
       </div>
+
+      {/* Deceased indicator banner */}
+      {patient.deceased && (
+        <div
+          role="status"
+          className="flex items-center gap-2.5 rounded-input border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive"
+        >
+          <HeartPulse className="h-4 w-4 shrink-0" />
+          <span className="font-medium">This patient is marked deceased.</span>
+          {patient.deceased_detail?.deceasedDate && (
+            <span className="font-mono text-[13px]">
+              Date of death: {patient.deceased_detail.deceasedDate}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Confirmation notice */}
       {notice && (
