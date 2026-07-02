@@ -88,47 +88,84 @@ function uuid(): string {
 // Step 1 — Create the developer's organization/tenant
 // ============================================================================
 
+/** Random 6-digit suffix (100000–999999) used to disambiguate a taken name. */
+function randomSuffix(): string {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
+
+/** True when a 400 response body indicates the org name is already taken. */
+function isNameTakenError(status: number, body: string): boolean {
+  return status === 400 && /already exists/i.test(body)
+}
+
+/** Single POST /v2/tenant attempt for a specific name. */
+async function postTenant(
+  name: string,
+  primaryCorporateEmail: string,
+): Promise<{ ok: true; data: unknown } | { ok: false; status: number; body: string }> {
+  const baseUrl = getOneHealthBaseUrl()
+  const url = `${baseUrl}/api/v2/tenant`
+
+  const dto = {
+    name,
+    organizationNpiId: null,
+    primaryCorporateEmail,
+    shortOrganizationName: name,
+    types: ["Health Provider", "Go To Market"],
+    headquartersAddress: {
+      ...DEFAULT_HQ_ADDRESS,
+      name: `${name}-(${uuid()})`,
+    },
+  }
+
+  // multipart/form-data with a single "dto" JSON part. authFetch detects the
+  // FormData body and lets the browser set the multipart boundary itself.
+  const form = new FormData()
+  form.append("dto", JSON.stringify(dto))
+
+  const response = await authFetch(url, { method: "POST", body: form })
+  if (!response.ok) {
+    return { ok: false, status: response.status, body: await response.text() }
+  }
+  return { ok: true, data: await response.json() }
+}
+
 export async function createTenant(input: CreateTenantInput): Promise<CreateTenantResult> {
   try {
-    const baseUrl = getOneHealthBaseUrl()
-    const url = `${baseUrl}/api/v2/tenant`
+    // The 1health tenant name is globally unique, so a returning developer (or a
+    // duplicate common name) collides with a 400 "already exists". When that
+    // happens, retry with a random 6-digit suffix, e.g. "Chris Hill's Patient
+    // Vault 409839", until we land a free name.
+    const MAX_ATTEMPTS = 5
+    let name = input.name
 
-    const dto = {
-      name: input.name,
-      organizationNpiId: null,
-      primaryCorporateEmail: input.primaryCorporateEmail,
-      shortOrganizationName: input.name,
-      types: ["Health Provider", "Go To Market"],
-      headquartersAddress: {
-        ...DEFAULT_HQ_ADDRESS,
-        name: `${input.name}-(${uuid()})`,
-      },
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const result = await postTenant(name, input.primaryCorporateEmail)
+
+      if (result.ok) {
+        const data = result.data as Record<string, any>
+        // Response shape: { tenant: { id, name }, organization: { id, name } }.
+        // Fall back through a couple of shapes defensively.
+        const tenantId = data?.tenant?.id ?? data?.tenantId ?? data?.id
+        const organizationId = data?.organization?.id ?? data?.organizationId
+
+        if (!tenantId) {
+          return { success: false, error: "Organization created but no tenant id was returned" }
+        }
+        return { success: true, tenantId: Number(tenantId), organizationId }
+      }
+
+      // Name collision: append a fresh random suffix and try again.
+      if (isNameTakenError(result.status, result.body) && attempt < MAX_ATTEMPTS) {
+        name = `${input.name} ${randomSuffix()}`
+        continue
+      }
+
+      console.error("[1health API] createTenant error:", result.status, result.body)
+      return { success: false, error: `Failed to create organization: ${result.status}` }
     }
 
-    // multipart/form-data with a single "dto" JSON part. authFetch detects the
-    // FormData body and lets the browser set the multipart boundary itself.
-    const form = new FormData()
-    form.append("dto", JSON.stringify(dto))
-
-    const response = await authFetch(url, { method: "POST", body: form })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("[1health API] createTenant error:", response.status, errorText)
-      return { success: false, error: `Failed to create organization: ${response.status}` }
-    }
-
-    const data = await response.json()
-    // Response shape: { tenant: { id, name }, organization: { id, name } }.
-    // Fall back through a couple of shapes defensively.
-    const tenantId = data?.tenant?.id ?? data?.tenantId ?? data?.id
-    const organizationId = data?.organization?.id ?? data?.organizationId
-
-    if (!tenantId) {
-      return { success: false, error: "Organization created but no tenant id was returned" }
-    }
-
-    return { success: true, tenantId: Number(tenantId), organizationId }
+    return { success: false, error: "Could not find an available organization name" }
   } catch (error) {
     console.error("[1health API] createTenant exception:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
