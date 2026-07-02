@@ -1,46 +1,63 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { type ReactNode } from 'react'
+import { usePathname } from 'next/navigation'
 import { TopBar } from '@/components/top-bar'
 import { TopNav } from '@/components/top-nav'
-import { ProjectOnboarding } from '@/components/project-onboarding'
-import { ApiInspectorPanel } from '@/components/api-inspector/api-inspector-panel'
 import { useSession } from '@/lib/session-context'
 
-// Routes that render bare (no console chrome) and never require auth.
-const AUTH_ROUTES = new Set(['/login', '/register'])
+// The /auth route renders bare (no console chrome) — it handles the 1health
+// launch-payload exchange itself.
+const BARE_ROUTES = new Set(['/auth'])
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const { isAuthenticated, authHydrated, session } = useSession()
+  const { isLoading, error } = useSession()
 
-  const isAuthRoute = AUTH_ROUTES.has(pathname)
-
-  // Auth gate: send unauthenticated users on app routes to /login. Wait for
-  // hydration so we don't redirect before the persisted session is read.
-  useEffect(() => {
-    if (authHydrated && !isAuthenticated && !isAuthRoute) {
-      router.replace('/login')
-    }
-  }, [authHydrated, isAuthenticated, isAuthRoute, router])
-
-  // Login / register: full-screen branded pages, no sidebar or top bar.
-  if (isAuthRoute) {
+  if (BARE_ROUTES.has(pathname)) {
     return <>{children}</>
   }
 
-  // Avoid flashing the console (or a premature redirect) before we know auth.
-  if (!authHydrated || !isAuthenticated) {
-    return null
+  // Session bootstrapping: identity is established by the 1health launch
+  // (cookies set at /auth). While myself/tenant load, show a light splash.
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-tag bg-teal font-mono text-sm font-semibold text-[#202833]">
+            1h
+          </span>
+          <p className="text-sm text-muted-foreground">Loading your vault…</p>
+        </div>
+      </div>
+    )
   }
 
-  // Safe state: no projects (e.g. just deleted the last one). Render the
-  // onboarding screen instead of console chrome so nothing reads a dangling
-  // currentProjectId.
-  if (session.projects.length === 0) {
-    return <ProjectOnboarding />
+  // No valid session (missing/expired token). Point the developer back to the
+  // 1health launch instead of a mock login screen.
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-md text-center">
+          <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-tag bg-teal font-mono text-sm font-semibold text-[#202833]">
+            1h
+          </span>
+          <h1 className="mt-4 text-lg font-semibold tracking-tight text-foreground">
+            Session required
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
+            Your 1health session could not be loaded. Please relaunch this app
+            from 1health to continue.
+          </p>
+          <a
+            href="/auth"
+            className="mt-6 inline-flex h-9 items-center justify-center rounded-button bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
+          >
+            Go to sign in
+          </a>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -50,8 +67,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopNav />
         <main className="flex-1 px-6 py-8">{children}</main>
       </div>
-      {/* Global API Inspector — present across all authenticated pages. */}
-      <ApiInspectorPanel />
     </div>
   )
 }

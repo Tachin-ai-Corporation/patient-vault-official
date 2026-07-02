@@ -6,16 +6,17 @@ import { useSession } from '@/lib/session-context'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
-  const { session, logout } = useSession()
+  const { session } = useSession()
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   function handleSelect(label: string) {
     setOpen(false)
-    if (label === 'Logout') {
-      logout()
-      router.replace('/login')
+    if (label === 'Sign out') {
+      // Sessions are established by the 1health launch; sign-out returns to the
+      // launch/auth entry point.
+      router.replace('/auth')
     }
   }
 
@@ -64,7 +65,7 @@ export function UserMenu() {
             </p>
           </div>
           <div className="h-px bg-border" />
-          {['Account', 'Logout'].map((label) => (
+          {['Account', 'Sign out'].map((label) => (
             <button
               key={label}
               type="button"
@@ -72,7 +73,7 @@ export function UserMenu() {
               onClick={() => handleSelect(label)}
               className={cn(
                 'flex w-full items-center rounded-input px-3 py-2 text-left text-sm transition-colors duration-150 hover:bg-accent/15',
-                label === 'Logout'
+                label === 'Sign out'
                   ? 'text-destructive'
                   : 'text-muted-foreground hover:text-popover-foreground',
               )}

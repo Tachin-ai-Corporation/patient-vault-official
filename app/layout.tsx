@@ -5,9 +5,6 @@ import { Suspense } from 'react'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SessionProvider } from '@/lib/session-context'
-import { CustomFieldsProvider } from '@/lib/custom-fields-context'
-import { ApiInspectorProvider } from '@/lib/api-inspector'
-import { DcpGateProvider } from '@/lib/dcp-context'
 import { AppShell } from '@/components/app-shell'
 
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'] })
@@ -19,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Patient Vault — 1health',
   description:
-    'The developer console for 1health — manage a vault of patient records through a bounded, agent-accessible healthcare data API.',
+    'Manage a vault of patient records through the 1health healthcare data API.',
   generator: 'v0.app',
 }
 
@@ -51,13 +48,7 @@ export default function RootLayout({
         <ThemeProvider>
           <Suspense fallback={null}>
             <SessionProvider>
-              <CustomFieldsProvider>
-                <ApiInspectorProvider>
-                  <DcpGateProvider>
-                    <AppShell>{children}</AppShell>
-                  </DcpGateProvider>
-                </ApiInspectorProvider>
-              </CustomFieldsProvider>
+              <AppShell>{children}</AppShell>
             </SessionProvider>
           </Suspense>
         </ThemeProvider>
