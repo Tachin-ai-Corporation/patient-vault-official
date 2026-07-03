@@ -33,7 +33,11 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
     updatePatient,
     deletePatient,
     addPatientContact,
+    updatePatientContact,
+    deletePatientContact,
     addPatientAddress,
+    updatePatientAddress,
+    deletePatientAddress,
     setPatientDeceased,
   } = useSession()
 
@@ -52,9 +56,57 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
 
   const [editDemoOpen, setEditDemoOpen] = useState(false)
   const [related, setRelated] = useState<RelatedKind | null>(null)
+  // When set, the related-record modal is editing an existing sub-resource
+  // (PATCH) rather than adding a new one (POST).
+  const [relatedEditId, setRelatedEditId] = useState<string | null>(null)
+  const [relatedInitial, setRelatedInitial] = useState<RelatedValue | null>(null)
+  // Pending contact/address deletion awaiting confirmation.
+  const [deleteRelated, setDeleteRelated] = useState<{
+    kind: RelatedKind
+    id: string
+    label: string
+  } | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+
+  function openAddRelated(kind: RelatedKind) {
+    setRelatedEditId(null)
+    setRelatedInitial(null)
+    setRelated(kind)
+  }
+
+  function openEditContact(c: Patient['contacts'][number]) {
+    setRelatedEditId(c.id)
+    setRelatedInitial({
+      type: c.type,
+      value: c.value,
+      label: c.label,
+      isPrimary: c.isPrimary,
+    } as ContactDraft)
+    setRelated('contact')
+  }
+
+  function openEditAddress(a: Patient['addresses'][number]) {
+    setRelatedEditId(a.id)
+    setRelatedInitial({
+      use: a.use,
+      line1: a.line1,
+      line2: a.line2,
+      city: a.city,
+      state: a.state,
+      postal_code: a.postal_code,
+      country: a.country,
+      primary: a.primary,
+    } as AddressDraft)
+    setRelated('address')
+  }
+
+  function closeRelated() {
+    setRelated(null)
+    setRelatedEditId(null)
+    setRelatedInitial(null)
+  }
 
   function showNotice(text: string) {
     setNotice(text)
@@ -130,22 +182,28 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
     }
   }
 
-  // ---- Add contact / address (POST sub-resource) ----------------------------
+  // ---- Add / edit contact / address (POST or PATCH sub-resource) ------------
   async function handleSaveRelated(value: RelatedValue) {
     if (!patient || !related) return
+    const editId = relatedEditId
     setBusy(true)
     try {
       if (related === 'contact') {
         const c = value as ContactDraft
-        await addPatientContact(patient.id, {
+        const input = {
           type: c.type,
           value: c.value,
           label: c.label || undefined,
           isPrimary: c.isPrimary,
-        })
+        }
+        if (editId) {
+          await updatePatientContact(patient.id, editId, input)
+        } else {
+          await addPatientContact(patient.id, input)
+        }
       } else {
         const a = value as AddressDraft
-        await addPatientAddress(patient.id, {
+        const input = {
           line1: a.line1,
           line2: a.line2 || undefined,
           city: a.city,
@@ -154,12 +212,40 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
           country: a.country || undefined,
           use: a.use,
           primary: a.primary,
-        })
+        }
+        if (editId) {
+          await updatePatientAddress(patient.id, editId, input)
+        } else {
+          await addPatientAddress(patient.id, input)
+        }
       }
       await mutate()
-      showNotice(related === 'contact' ? 'Added contact' : 'Added address')
+      showNotice(
+        `${editId ? 'Updated' : 'Added'} ${related === 'contact' ? 'contact' : 'address'}`,
+      )
     } catch (e) {
-      showNotice((e as Error).message || 'Failed to add record')
+      showNotice((e as Error).message || 'Failed to save record')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ---- Delete contact / address (DELETE sub-resource) -----------------------
+  async function handleDeleteRelated() {
+    if (!patient || !deleteRelated) return
+    const { kind, id } = deleteRelated
+    setBusy(true)
+    try {
+      if (kind === 'contact') {
+        await deletePatientContact(patient.id, id)
+      } else {
+        await deletePatientAddress(patient.id, id)
+      }
+      await mutate()
+      setDeleteRelated(null)
+      showNotice(kind === 'contact' ? 'Deleted contact' : 'Deleted address')
+    } catch (e) {
+      showNotice((e as Error).message || 'Failed to delete record')
     } finally {
       setBusy(false)
     }
@@ -349,7 +435,7 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setRelated('contact')}
+              onClick={() => openAddRelated('contact')}
             >
               <Plus className="h-3.5 w-3.5" data-icon="inline-start" />
               Add contact
@@ -365,24 +451,49 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
                   key={c.id}
                   className="flex items-center justify-between gap-3 py-2"
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     <span className="rounded-tag bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
                       {c.type}
                     </span>
-                    <span className="font-mono text-[13px] text-foreground">
+                    <span className="truncate font-mono text-[13px] text-foreground">
                       {c.value}
                     </span>
                     {c.label && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="truncate text-xs text-muted-foreground">
                         {c.label}
                       </span>
                     )}
                   </span>
-                  {c.isPrimary && (
-                    <span className="rounded-tag border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Primary
-                    </span>
-                  )}
+                  <span className="flex shrink-0 items-center gap-1">
+                    {c.isPrimary && (
+                      <span className="rounded-tag border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Primary
+                      </span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Edit contact ${c.value}`}
+                      onClick={() => openEditContact(c)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete contact ${c.value}`}
+                      onClick={() =>
+                        setDeleteRelated({
+                          kind: 'contact',
+                          id: c.id,
+                          label: `${c.type} · ${c.value}`,
+                        })
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </span>
                 </div>
               ))}
             </div>
@@ -397,7 +508,7 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setRelated('address')}
+              onClick={() => openAddRelated('address')}
             >
               <Plus className="h-3.5 w-3.5" data-icon="inline-start" />
               Add address
@@ -413,7 +524,7 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
                   key={a.id}
                   className="flex items-start justify-between gap-3 rounded-input border border-border bg-muted/30 p-3"
                 >
-                  <div className="text-sm text-foreground">
+                  <div className="min-w-0 text-sm text-foreground">
                     <span className="mb-1 inline-block rounded-tag bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
                       {a.use}
                     </span>
@@ -423,11 +534,36 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
                       {a.city}, {a.state} {a.postal_code} · {a.country}
                     </div>
                   </div>
-                  {a.primary && (
-                    <span className="rounded-tag border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Primary
-                    </span>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {a.primary && (
+                      <span className="rounded-tag border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Primary
+                      </span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Edit ${a.use} address`}
+                      onClick={() => openEditAddress(a)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete ${a.use} address`}
+                      onClick={() =>
+                        setDeleteRelated({
+                          kind: 'address',
+                          id: a.id,
+                          label: `${a.line1}, ${a.city}`,
+                        })
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -445,9 +581,39 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
       <RelatedRecordModal
         open={related != null}
         kind={related ?? 'contact'}
-        onClose={() => setRelated(null)}
+        initial={relatedInitial}
+        onClose={closeRelated}
         onSave={handleSaveRelated}
       />
+      <Modal
+        open={deleteRelated != null}
+        onClose={() => setDeleteRelated(null)}
+        title={`Delete ${deleteRelated?.kind ?? 'record'}`}
+        description={`This removes the ${deleteRelated?.kind ?? 'record'} from ${name}. This cannot be undone.`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeleteRelated(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteRelated}
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete {deleteRelated?.kind ?? 'record'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {deleteRelated?.label && (
+            <span className="font-mono text-foreground">
+              {deleteRelated.label}
+            </span>
+          )}{' '}
+          will be permanently removed.
+        </p>
+      </Modal>
       <Modal
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}

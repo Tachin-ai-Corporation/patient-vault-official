@@ -57,6 +57,9 @@ type RelatedRecordModalProps = {
   kind: RelatedKind
   onClose: () => void
   onSave: (value: RelatedValue) => void
+  // When provided, the modal opens in edit mode: fields are pre-filled with the
+  // existing record and the submit action reads as "Save" instead of "Add".
+  initial?: RelatedValue | null
 }
 
 export function RelatedRecordModal({
@@ -64,22 +67,28 @@ export function RelatedRecordModal({
   kind,
   onClose,
   onSave,
+  initial = null,
 }: RelatedRecordModalProps) {
+  const isEdit = initial != null
   const [contact, setContact] = useState<ContactDraft>(EMPTY_CONTACT)
   const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS)
 
   useEffect(() => {
     if (!open) return
-    setContact(EMPTY_CONTACT)
-    setAddress(EMPTY_ADDRESS)
-  }, [open, kind])
+    // Seed from the record being edited, or reset to blank for a new one.
+    if (kind === 'contact') {
+      setContact(initial ? (initial as ContactDraft) : EMPTY_CONTACT)
+    } else {
+      setAddress(initial ? (initial as AddressDraft) : EMPTY_ADDRESS)
+    }
+  }, [open, kind, initial])
 
   function handleSubmit() {
     onSave(kind === 'contact' ? contact : address)
     onClose()
   }
 
-  const title = `Add ${kind}`
+  const title = `${isEdit ? 'Edit' : 'Add'} ${kind}`
 
   return (
     <Modal
@@ -97,7 +106,7 @@ export function RelatedRecordModal({
             className="bg-primary text-primary-foreground"
           >
             <Check className="h-4 w-4" data-icon="inline-start" />
-            Add {kind}
+            {isEdit ? 'Save' : 'Add'} {kind}
           </Button>
         </>
       }

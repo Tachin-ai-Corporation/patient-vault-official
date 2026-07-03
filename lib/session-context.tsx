@@ -34,7 +34,11 @@ import {
   patchPatient,
   deletePatient as apiDeletePatient,
   addContact,
+  updateContact,
+  deleteContact,
   addAddress,
+  updateAddress,
+  deleteAddress,
   setDeceased,
   clearDeceased,
   gridRowToPatient,
@@ -95,7 +99,19 @@ type SessionContextValue = {
   updatePatient: (id: string, patch: Partial<Patient>) => Promise<void>
   deletePatient: (id: string) => Promise<void>
   addPatientContact: (id: string, input: Parameters<typeof addContact>[1]) => Promise<void>
+  updatePatientContact: (
+    id: string,
+    contactId: string,
+    input: Parameters<typeof updateContact>[2],
+  ) => Promise<void>
+  deletePatientContact: (id: string, contactId: string) => Promise<void>
   addPatientAddress: (id: string, input: Parameters<typeof addAddress>[1]) => Promise<void>
+  updatePatientAddress: (
+    id: string,
+    addressId: string,
+    input: Parameters<typeof updateAddress>[2],
+  ) => Promise<void>
+  deletePatientAddress: (id: string, addressId: string) => Promise<void>
   setPatientDeceased: (id: string, deceased: boolean, date?: string) => Promise<void>
   seedSampleData: (batch: SeedPatient[], onProgress?: (p: SeedProgress) => void) => Promise<number>
   reloadPatients: () => Promise<void>
@@ -291,9 +307,45 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const updatePatientContact = useCallback(
+    async (
+      id: string,
+      contactId: string,
+      input: Parameters<typeof updateContact>[2],
+    ) => {
+      await updateContact(id, contactId, input)
+    },
+    [],
+  )
+
+  const deletePatientContact = useCallback(
+    async (id: string, contactId: string) => {
+      await deleteContact(id, contactId)
+    },
+    [],
+  )
+
   const addPatientAddress = useCallback(
     async (id: string, input: Parameters<typeof addAddress>[1]) => {
       await addAddress(id, input)
+    },
+    [],
+  )
+
+  const updatePatientAddress = useCallback(
+    async (
+      id: string,
+      addressId: string,
+      input: Parameters<typeof updateAddress>[2],
+    ) => {
+      await updateAddress(id, addressId, input)
+    },
+    [],
+  )
+
+  const deletePatientAddress = useCallback(
+    async (id: string, addressId: string) => {
+      await deleteAddress(id, addressId)
     },
     [],
   )
@@ -370,7 +422,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       updatePatient,
       deletePatient,
       addPatientContact,
+      updatePatientContact,
+      deletePatientContact,
       addPatientAddress,
+      updatePatientAddress,
+      deletePatientAddress,
       setPatientDeceased,
       seedSampleData,
       reloadPatients,
@@ -405,7 +461,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       updatePatient,
       deletePatient,
       addPatientContact,
+      updatePatientContact,
+      deletePatientContact,
       addPatientAddress,
+      updatePatientAddress,
+      deletePatientAddress,
       setPatientDeceased,
       seedSampleData,
       reloadPatients,
