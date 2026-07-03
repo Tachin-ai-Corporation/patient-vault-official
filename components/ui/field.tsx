@@ -57,6 +57,11 @@ export function Select({
       className={cn(
         baseControl,
         'appearance-none bg-[length:16px] bg-[right_0.5rem_center] bg-no-repeat pr-8',
+        // The native option list is painted by the OS/browser, not by our theme
+        // tokens. Forcing a dark color-scheme makes the browser render that
+        // popup with a dark background + light, readable option text in dark
+        // mode (fixes the faint gray-on-white options).
+        '[color-scheme:dark]',
         invalid && 'border-destructive',
         className,
       )}
