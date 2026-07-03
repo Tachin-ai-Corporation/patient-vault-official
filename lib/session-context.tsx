@@ -202,7 +202,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     await mutateUser()
     await mutateTenant()
-  }, [mutateUser, mutateTenant])
+    // Also revalidate the patient list so that when onboarding finishes and the
+    // app calls refresh(), the grid re-fetches under the new org-scoped token
+    // instead of showing the bootstrap-tenant cache.
+    await mutatePatients()
+  }, [mutateUser, mutateTenant, mutatePatients])
 
   const reloadPatients = useCallback(async () => {
     await mutatePatients()

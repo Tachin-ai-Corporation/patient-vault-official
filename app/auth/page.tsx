@@ -3,7 +3,7 @@
 import type React from "react"
 import Image from "next/image"
 import { Suspense, useEffect, useState } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { AlertCircle, CheckCircle2, ExternalLink } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -102,7 +102,6 @@ function AuthContent() {
   const [manualLpl, setManualLpl] = useState("")
   const [environment, setEnvironment] = useState<Environment | null>(null)
   const searchParams = useSearchParams()
-  const router = useRouter()
 
   const lpl = (searchParams.get("lpl") || "").replace(/ /g, "+")
 
@@ -173,7 +172,12 @@ function AuthContent() {
       const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/"
 
       setTimeout(() => {
-        router.push(redirectRoute)
+        // Hard navigation (not router.push): a full-page load discards any
+        // in-memory SWR caches from a previous session so identity, tenant, and
+        // the patient list all re-bootstrap from the freshly written cookies.
+        // This fixes stale previous-user patients and makes the onboarding gate
+        // evaluate immediately without a manual hard refresh.
+        window.location.assign(redirectRoute)
       }, 1200) // Allow time for success animation
     } catch {
       setAuthState("error")

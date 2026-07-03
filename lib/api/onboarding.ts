@@ -12,7 +12,8 @@
  * through authFetch() and each function returns a { success, ... } result.
  */
 
-import { authFetch, getOneHealthBaseUrl, setCookie } from "@/lib/auth-client"
+import { authFetch, getOneHealthBaseUrl, refreshToken, setCookie } from "@/lib/auth-client"
+import { fetchMyself } from "@/lib/api/user"
 
 // ============================================================================
 // Types
@@ -176,11 +177,38 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
 // Step 2 — Switch the active tenant and persist the new scoped token
 // ============================================================================
 
+/** Persist an access token (and optional refresh token) to cookies. */
+function persistTokens(accessToken: string, refreshTok: string | null, expiresIn: number): void {
+  setCookie("access_token", accessToken, expiresIn)
+  if (refreshTok) setCookie("refresh_token", refreshTok, expiresIn * 2)
+
+  const now = Math.floor(Date.now() / 1000)
+  setCookie("token_expires_at", String(now + expiresIn), expiresIn)
+  setCookie("refresh_token_expires_at", String(now + expiresIn * 2), expiresIn * 2)
+}
+
+/**
+ * Switch the active tenant to the developer's newly-created org.
+ *
+ * IMPORTANT — cross-origin token delivery:
+ * `GET /api/v2/user/switch-tenant/{id}` performs the switch server-side and, on
+ * the real (same-origin) 1health SPA, hands back the new org-scoped tokens via a
+ * Set-Cookie header on the 1health domain. This app is a *cross-origin* SPA, so
+ * we can neither read that Set-Cookie nor (usually) a token in the body. Instead
+ * we:
+ *   1. Require only a 200 from the switch call.
+ *   2. Opportunistically adopt a token if the DTO happens to return one.
+ *   3. Otherwise mint a fresh token via the OAuth refresh grant — after the
+ *      switch, the user's active-tenant context is the new org, so the refreshed
+ *      token comes back scoped to it.
+ *   4. Verify with `fetchMyself()` that `tenantContext.id === tenantId`, retrying
+ *      the refresh once if the new context hasn't propagated yet.
+ */
 export async function switchTenant(tenantId: number): Promise<SwitchTenantResult> {
   try {
     const baseUrl = getOneHealthBaseUrl()
-    // revokeToken=false keeps the launch token valid as a safety net while we
-    // adopt the new, org-scoped token returned below.
+    // revokeToken=false keeps our current (launch/refresh) token valid so we can
+    // still run the refresh grant below to obtain the org-scoped token.
     const url = `${baseUrl}/api/v2/user/switch-tenant/${tenantId}?revokeToken=false`
 
     const response = await authFetch(url, { method: "GET" })
@@ -191,32 +219,40 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
       return { success: false, error: `Failed to switch organization: ${response.status}` }
     }
 
+    // Step 2 — opportunistically adopt a token from the body if present. Most
+    // deployments return no content here, so this is best-effort only.
     const data = await response.json().catch(() => null)
-
-    // The response DTO carries a new access token scoped to the target tenant.
-    // Field naming varies, so read defensively.
-    const accessToken =
+    const bodyToken =
       data?.access_token ?? data?.accessToken ?? data?.token?.access_token ?? data?.token?.tokenValue
-    const refreshTok = data?.refresh_token ?? data?.refreshToken ?? data?.token?.refresh_token
-    const expiresIn = Number(data?.expires_in ?? data?.expiresIn ?? 3600)
+    if (bodyToken) {
+      const refreshTok = data?.refresh_token ?? data?.refreshToken ?? data?.token?.refresh_token ?? null
+      const expiresIn = Number(data?.expires_in ?? data?.expiresIn ?? 3600)
+      persistTokens(bodyToken, refreshTok, expiresIn)
+    }
 
-    if (!accessToken) {
-      return {
-        success: false,
-        error: "Switched organization but no access token was returned",
+    // Steps 3 & 4 — mint an org-scoped token via the refresh grant, then verify
+    // the active tenant actually changed. Retry the refresh once if needed.
+    const MAX_ATTEMPTS = 2
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      // On the first pass, only refresh if the body didn't already give us a
+      // token; on subsequent passes always refresh to try to advance the context.
+      if (attempt > 1 || !bodyToken) {
+        const refreshed = await refreshToken()
+        if (!refreshed && !bodyToken) {
+          return { success: false, error: "Could not obtain an org-scoped token after switching" }
+        }
+      }
+
+      const me = await fetchMyself()
+      if (me.success && me.data?.tenantContext?.id === tenantId) {
+        return { success: true }
       }
     }
 
-    // Persist the new token so every subsequent authFetch is org-scoped, and
-    // so a page refresh keeps the developer in their new org.
-    setCookie("access_token", accessToken, expiresIn)
-    if (refreshTok) setCookie("refresh_token", refreshTok, expiresIn * 2)
-
-    const now = Math.floor(Date.now() / 1000)
-    setCookie("token_expires_at", String(now + expiresIn), expiresIn)
-    setCookie("refresh_token_expires_at", String(now + expiresIn * 2), expiresIn * 2)
-
-    return { success: true }
+    return {
+      success: false,
+      error: "Switched organization, but the active tenant did not update. Please try again.",
+    }
   } catch (error) {
     console.error("[1health API] switchTenant exception:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
