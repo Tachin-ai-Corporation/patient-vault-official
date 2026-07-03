@@ -1,22 +1,25 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
+import { getPatientVaultHomeUrl, signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
   const { session } = useSession()
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   function handleSelect(label: string) {
     setOpen(false)
     if (label === 'Sign out') {
-      // Sessions are established by the 1health launch; sign-out returns to the
-      // launch/auth entry point.
-      router.replace('/auth')
+      // Resolve the 1health Patient Vault homepage BEFORE clearing cookies
+      // (it reads onehealth_base_url), then wipe every session cookie so the
+      // user is truly logged out — a soft route change alone left the cookies
+      // in place, so the session survived. Finally, hard-navigate to 1health.
+      const homeUrl = getPatientVaultHomeUrl()
+      signOut()
+      window.location.assign(homeUrl)
     }
   }
 

@@ -71,6 +71,43 @@ export function deleteCookie(name: string): void {
   document.cookie = `${name}=; path=/; max-age=0`
 }
 
+/**
+ * All cookies written during the 1health launch/auth flow. Kept in one place so
+ * sign-out can fully clear the session.
+ */
+const SESSION_COOKIES = [
+  "access_token",
+  "refresh_token",
+  "token_expires_at",
+  "refresh_token_expires_at",
+  "onehealth_base_url",
+  "onehealth_environment",
+  "user_org_id",
+  "user_id",
+] as const
+
+/**
+ * Resolves the 1health Patient Vault homepage for the active environment. Read
+ * this BEFORE clearing cookies, since it depends on `onehealth_base_url`.
+ * Falls back to the demo host if no session cookie is present.
+ */
+export function getPatientVaultHomeUrl(): string {
+  const baseUrl = getCookie("onehealth_base_url") ?? "https://demo.1health.io"
+  return `${baseUrl}/patient-vault`
+}
+
+/**
+ * Clears every session cookie so the user is fully logged out of this app.
+ * Note: this only clears cookies on OUR origin. The 1health session itself
+ * lives on the 1health domain; returning the user there is handled by the
+ * caller via a redirect to the Patient Vault homepage.
+ */
+export function signOut(): void {
+  for (const name of SESSION_COOKIES) {
+    deleteCookie(name)
+  }
+}
+
 // ============================================================================
 // TOKEN ACCESSORS
 // ============================================================================
