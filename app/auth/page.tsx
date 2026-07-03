@@ -354,8 +354,6 @@ function AuthContent() {
               {returnUrl && (
                 <a
                   href={returnUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className={buttonVariants()}
                 >
                   Go to 1health ({environment === "demo" ? "Demo" : "Production"})
@@ -422,8 +420,6 @@ function AuthContent() {
                 {returnUrl && (
                   <a
                     href={returnUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className={buttonVariants({ variant: 'outline' })}
                   >
                     Go to 1health ({environment === "demo" ? "Demo" : "Production"})
