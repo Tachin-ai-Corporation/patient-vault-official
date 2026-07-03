@@ -51,10 +51,13 @@ export function Modal({
     // whole overlay scrolls, so the top of the dialog always stays reachable.
     // `min-h-full` keeps it centered when the content is short. This avoids the
     // flexbox centering + overflow bug that clips the top off-screen.
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    // Outside-click closes the dialog. The click handler lives on the
+    // scroll/centering container (which covers the whole overlay and sits above
+    // the decorative backdrop), and the dialog itself stops propagation — so
+    // any click that isn't inside the dialog bubbles up here and closes it.
+    <div className="fixed inset-0 z-50 overflow-y-auto" onClick={onClose}>
       <div
         className="fixed inset-0 bg-[#10151c]/70 backdrop-blur-sm"
-        onClick={onClose}
         aria-hidden="true"
       />
       <div className="relative flex min-h-full items-center justify-center p-4">
@@ -62,6 +65,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           'relative z-10 flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-card border border-border bg-card shadow-2xl',
           'duration-200 ease-[var(--ease-fluid)] animate-in fade-in-0 zoom-in-95',
