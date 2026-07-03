@@ -22,9 +22,9 @@ export interface SeedPatient {
 export const SEED_PATIENTS: SeedPatient[] = [
   {
     patient: {
-      firstName: "Maria",
-      lastName: "Santos",
-      middleName: "Elena",
+      firstName: "Nasir",
+      lastName: "J",
+      middleName: "Jones",
       dob: "1988-04-12",
       gender: "female",
       race: "white",
@@ -52,8 +52,8 @@ export const SEED_PATIENTS: SeedPatient[] = [
   },
   {
     patient: {
-      firstName: "James",
-      lastName: "Okafor",
+      firstName: "Nadine",
+      lastName: "Dosanjh",
       dob: "1975-09-03",
       gender: "male",
       race: "black_or_african_american",
@@ -82,8 +82,8 @@ export const SEED_PATIENTS: SeedPatient[] = [
   },
   {
     patient: {
-      firstName: "Wei",
-      lastName: "Chen",
+      firstName: "Calvin",
+      lastName: "Broadus",
       middleName: "Ming",
       dob: "1992-01-27",
       gender: "female",
@@ -149,8 +149,8 @@ export const SEED_PATIENTS: SeedPatient[] = [
   },
   {
     patient: {
-      firstName: "Diego",
-      lastName: "Martinez",
+      firstName: "Reggie",
+      lastName: "Noble",
       middleName: "Luis",
       dob: "1969-11-30",
       gender: "male",
@@ -177,8 +177,8 @@ export const SEED_PATIENTS: SeedPatient[] = [
   },
   {
     patient: {
-      firstName: "Aisha",
-      lastName: "Hassan",
+      firstName: "Kawhi",
+      lastName: "Leonardo",
       dob: "1995-03-08",
       gender: "female",
       race: "black_or_african_american",
@@ -205,8 +205,8 @@ export const SEED_PATIENTS: SeedPatient[] = [
   },
   {
     patient: {
-      firstName: "Robert",
-      lastName: "Nguyen",
+      firstName: "Lily",
+      lastName: "Singho",
       dob: "1958-07-22",
       gender: "male",
       race: "asian",
@@ -235,8 +235,8 @@ export const SEED_PATIENTS: SeedPatient[] = [
   },
   {
     patient: {
-      firstName: "Grace",
-      lastName: "Williams",
+      firstName: "Rark",
+      lastName: "Mober",
       middleName: "Rose",
       dob: "2001-10-14",
       gender: "female",
