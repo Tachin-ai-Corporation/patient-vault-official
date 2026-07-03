@@ -22,9 +22,9 @@ export interface SeedPatient {
 export const SEED_PATIENTS: SeedPatient[] = [
   {
     patient: {
-      firstName: "Nasir",
-      lastName: "J",
-      middleName: "Jones",
+      firstName: "Cito",
+      lastName: "",
+      middleName: "Gaston",
       dob: "1988-04-12",
       gender: "female",
       race: "white",
