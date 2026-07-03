@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Sparkles, Trash2, Search, X } from 'lucide-react'
+import { Plus, Sparkles, Trash2, Search, X, List } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
 import { type Patient } from '@/lib/patient-data'
 import { runFind, type FindQuery } from '@/lib/find-search'
@@ -28,6 +28,7 @@ export function PatientsView() {
     deletePatient,
     seedSampleData,
     reloadPatients,
+    listAllPatients,
   } = useSession()
   const router = useRouter()
 
@@ -165,6 +166,22 @@ export function PatientsView() {
     }
   }
 
+  // Exercise the plain GET /v3/patient list endpoint (distinct from the
+  // grid-backed list the table uses). Purpose is to surface the request in the
+  // API Inspector; results are reported as a notice.
+  const [listing, setListing] = useState(false)
+  async function handleListGet() {
+    setListing(true)
+    try {
+      const total = await listAllPatients(0, 25)
+      showNotice(`GET /v3/patient -> ${total.toLocaleString()} total`)
+    } catch (e) {
+      showNotice((e as Error).message || 'GET /v3/patient failed')
+    } finally {
+      setListing(false)
+    }
+  }
+
   // Clear = delete every loaded patient one-by-one (no bulk endpoint exists).
   async function handleClear() {
     setClearing(true)
@@ -215,6 +232,15 @@ export function PatientsView() {
               <Button variant="outline" onClick={handleSeedSample}>
                 <Sparkles className="h-4 w-4" data-icon="inline-start" />
                 Seed sample data
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleListGet}
+                disabled={listing}
+                title="Exercise GET /v3/patient (see the API Inspector)"
+              >
+                <List className="h-4 w-4" data-icon="inline-start" />
+                {listing ? 'Listing…' : 'GET /v3/patient'}
               </Button>
               <Button variant="destructive" onClick={() => setClearOpen(true)}>
                 <Trash2 className="h-4 w-4" data-icon="inline-start" />

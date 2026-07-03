@@ -304,6 +304,7 @@ export function dtoToPatient(
           manner: deceasedRecord.manner ?? undefined,
           cause: deceasedRecord.cause ?? undefined,
           placeOfDeath: deceasedRecord.placeOfDeath ?? undefined,
+          notes: deceasedRecord.notes ?? undefined,
         }
       : undefined,
     contacts: (extra?.contacts ?? []).map(contactDtoToView),
@@ -470,6 +471,19 @@ export async function findPatients(criteria: {
     { method: "GET" },
   )
   return data?.patients ?? []
+}
+
+/**
+ * Plain paginated list via GET /v3/patient?page&size (PatientResponseDTO page).
+ *
+ * The patients grid is driven by the richer POST /v3/health/grid/patient
+ * endpoint, so this simpler GET is otherwise unused. It's exposed so the app
+ * can exercise (and surface in the API Inspector) the vanilla list endpoint.
+ */
+export async function listPatients(page = 0, size = 25): Promise<Page<PatientDTO>> {
+  return request<Page<PatientDTO>>(`/v3/patient?page=${page}&size=${size}`, {
+    method: "GET",
+  })
 }
 
 // ============================================================================

@@ -24,6 +24,8 @@ import {
   type ContactDraft,
   type AddressDraft,
 } from '@/components/patients/related-record-modal'
+import { DeceasedModal } from '@/components/patients/deceased-modal'
+import type { DeceasedInput } from '@/lib/api/patient'
 
 export function PatientRecordView({ patientId }: { patientId: string }) {
   const router = useRouter()
@@ -38,7 +40,9 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
     addPatientAddress,
     updatePatientAddress,
     deletePatientAddress,
-    setPatientDeceased,
+    markPatientDeceased,
+    updatePatientDeceased,
+    clearPatientDeceased,
   } = useSession()
 
   // The full record (with contacts + addresses + deceased) is loaded directly
@@ -67,6 +71,8 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
     label: string
   } | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  // Deceased record modal (POST when marking, PATCH when editing an existing).
+  const [deceasedOpen, setDeceasedOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -251,14 +257,33 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
     }
   }
 
-  // ---- Deceased toggle ------------------------------------------------------
-  async function handleToggleDeceased() {
+  // ---- Deceased record ------------------------------------------------------
+  // Save from the modal: PATCH when already deceased, POST otherwise.
+  async function handleSaveDeceased(body: DeceasedInput) {
     if (!patient) return
     setBusy(true)
     try {
-      await setPatientDeceased(patient.id, !patient.deceased)
+      if (patient.deceased) {
+        await updatePatientDeceased(patient.id, body)
+      } else {
+        await markPatientDeceased(patient.id, body)
+      }
       await mutate()
-      showNotice(patient.deceased ? 'Cleared deceased status' : 'Marked deceased')
+      showNotice(patient.deceased ? 'Updated death record' : 'Marked deceased')
+    } catch (e) {
+      showNotice((e as Error).message || 'Failed to update status')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleClearDeceased() {
+    if (!patient) return
+    setBusy(true)
+    try {
+      await clearPatientDeceased(patient.id)
+      await mutate()
+      showNotice('Cleared deceased status')
     } catch (e) {
       showNotice((e as Error).message || 'Failed to update status')
     } finally {
@@ -334,10 +359,24 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
             <ArrowLeft className="h-4 w-4" data-icon="inline-start" />
             Back
           </Button>
-          <Button variant="outline" onClick={handleToggleDeceased} disabled={busy}>
+          <Button
+            variant="outline"
+            onClick={() => setDeceasedOpen(true)}
+            disabled={busy}
+          >
             <HeartPulse className="h-4 w-4" data-icon="inline-start" />
-            {patient.deceased ? 'Clear deceased' : 'Mark deceased'}
+            {patient.deceased ? 'Edit death record' : 'Mark deceased'}
           </Button>
+          {patient.deceased && (
+            <Button
+              variant="outline"
+              onClick={handleClearDeceased}
+              disabled={busy}
+            >
+              <HeartPulse className="h-4 w-4" data-icon="inline-start" />
+              Clear deceased
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setDeleteOpen(true)}>
             <Trash2 className="h-4 w-4" data-icon="inline-start" />
             Delete
@@ -584,6 +623,13 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         initial={relatedInitial}
         onClose={closeRelated}
         onSave={handleSaveRelated}
+      />
+      <DeceasedModal
+        open={deceasedOpen}
+        // In edit mode, pre-fill from the loaded death record.
+        initial={patient.deceased ? (patient.deceased_detail ?? {}) : null}
+        onClose={() => setDeceasedOpen(false)}
+        onSave={handleSaveDeceased}
       />
       <Modal
         open={deleteRelated != null}

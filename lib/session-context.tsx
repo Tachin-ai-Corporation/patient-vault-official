@@ -40,10 +40,13 @@ import {
   updateAddress,
   deleteAddress,
   setDeceased,
+  updateDeceased,
   clearDeceased,
+  listPatients,
   gridRowToPatient,
   seedPatients as apiSeedPatients,
   type SeedProgress,
+  type DeceasedInput,
 } from '@/lib/api/patient'
 import type { SeedPatient } from '@/lib/seed-data'
 import {
@@ -113,6 +116,12 @@ type SessionContextValue = {
   ) => Promise<void>
   deletePatientAddress: (id: string, addressId: string) => Promise<void>
   setPatientDeceased: (id: string, deceased: boolean, date?: string) => Promise<void>
+  // Full-body deceased record operations (POST with all fields / PATCH corrections).
+  markPatientDeceased: (id: string, body: DeceasedInput) => Promise<void>
+  updatePatientDeceased: (id: string, body: Partial<DeceasedInput>) => Promise<void>
+  clearPatientDeceased: (id: string) => Promise<void>
+  // Plain paginated list via GET /v3/patient (exercises the vanilla endpoint).
+  listAllPatients: (page?: number, size?: number) => Promise<number>
   seedSampleData: (batch: SeedPatient[], onProgress?: (p: SeedProgress) => void) => Promise<number>
   reloadPatients: () => Promise<void>
   // Static-screen shims (single-tenant): kept so demo chrome compiles.
@@ -366,6 +375,39 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [mutatePatients],
   )
 
+  const markPatientDeceased = useCallback(
+    async (id: string, body: DeceasedInput) => {
+      // POST the full record; setDeceased falls back to PATCH on 409 (already
+      // marked), so this doubles as a safe "set or correct" operation.
+      await setDeceased(id, body)
+      await mutatePatients()
+    },
+    [mutatePatients],
+  )
+
+  const updatePatientDeceased = useCallback(
+    async (id: string, body: Partial<DeceasedInput>) => {
+      await updateDeceased(id, body)
+      await mutatePatients()
+    },
+    [mutatePatients],
+  )
+
+  const clearPatientDeceased = useCallback(
+    async (id: string) => {
+      await clearDeceased(id)
+      await mutatePatients()
+    },
+    [mutatePatients],
+  )
+
+  const listAllPatients = useCallback(async (page = 0, size = 25) => {
+    const result = await listPatients(page, size)
+    // Report the total row count; the call itself is what surfaces in the
+    // Inspector. Fall back to the page length if totalElements is absent.
+    return result?.totalElements ?? result?.data?.length ?? 0
+  }, [])
+
   const seedSampleData = useCallback(
     async (batch: SeedPatient[], onProgress?: (p: SeedProgress) => void) => {
       const created = await apiSeedPatients(batch, onProgress)
@@ -428,6 +470,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       updatePatientAddress,
       deletePatientAddress,
       setPatientDeceased,
+      markPatientDeceased,
+      updatePatientDeceased,
+      clearPatientDeceased,
+      listAllPatients,
       seedSampleData,
       reloadPatients,
       setCurrentProjectId,
@@ -467,6 +513,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       updatePatientAddress,
       deletePatientAddress,
       setPatientDeceased,
+      markPatientDeceased,
+      updatePatientDeceased,
+      clearPatientDeceased,
+      listAllPatients,
       seedSampleData,
       reloadPatients,
       setCurrentProjectId,

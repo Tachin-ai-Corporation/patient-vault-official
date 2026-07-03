@@ -22,7 +22,27 @@ SWR. There is no local/mock persistence.
 | List addresses | GET | `/v3/patient/{patientId}/address` |
 | Add address | POST | `/v3/patient/{patientId}/address` |
 | Update / delete address | PATCH/DELETE | `/v3/patient/{patientId}/address/{addressId}` |
-| Set / clear deceased | POST/DELETE | `/v3/patient/{patientId}/deceased` |
+| Mark deceased | POST | `/v3/patient/{patientId}/deceased` |
+| Correct deceased record | PATCH | `/v3/patient/{patientId}/deceased` |
+| Clear deceased | DELETE | `/v3/patient/{patientId}/deceased` |
+
+## UI coverage (which screen exercises each endpoint)
+
+Every endpoint above is reachable from the UI so it shows up in the API
+Inspector:
+
+- **Grid list** — patients grid (loads the table).
+- **Simple list (`GET /v3/patient`)** — "GET /v3/patient" button in the
+  patients toolbar (exists only to exercise this otherwise-redundant endpoint).
+- **Find** — the Find box in the patients grid; typing filters locally, pressing
+  Enter runs the real `GET /v3/patient/find`.
+- **Get / Create / Update / Delete patient** — record view + add-patient modal +
+  edit-demographics modal + delete action.
+- **Contacts / Addresses (list/add/update/delete)** — the contact & address
+  cards in the record view (add / edit / delete).
+- **Deceased (POST/PATCH/DELETE)** — the death-record modal in the record view:
+  "Mark deceased" (POST full body), "Edit death record" (PATCH), "Clear
+  deceased" (DELETE).
 
 ## PatientResponseDTO
 

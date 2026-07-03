@@ -60,6 +60,7 @@ export type Patient = {
     manner?: string
     cause?: string
     placeOfDeath?: string
+    notes?: string
   }
   contacts: Contact[]
   addresses: Address[]
