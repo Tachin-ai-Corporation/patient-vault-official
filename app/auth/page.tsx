@@ -19,9 +19,19 @@ interface AuthError {
   message: string
 }
 
+// API host per environment — written to the `onehealth_base_url` cookie and used
+// for all API calls. Do NOT repurpose these for the outbound "log in via 1health"
+// links; those point at the Patient Vault login page (see LOGIN_URLS).
 const ENV_URLS: Record<Environment, string> = {
   demo: "https://demo.1health.io",
   prod: "https://app.1health.io",
+}
+
+// User-facing 1health login pages that deep-link straight into the Patient Vault
+// app. Used only for the "Go to 1health" / "Go to Demo/Production" buttons.
+const LOGIN_URLS: Record<Environment, string> = {
+  demo: "https://1health.demo.1health.io/login?openApp=Patient%20Vault",
+  prod: "https://1health.app.1health.io/login?openApp=Patient%20Vault",
 }
 
 function detectEnvironmentFromReferrer(): Environment | null {
@@ -195,7 +205,7 @@ function AuthContent() {
     }
   }
 
-  const returnUrl = environment ? ENV_URLS[environment] : null
+  const returnUrl = environment ? LOGIN_URLS[environment] : null
 
   // Environment selection screen
   if (!environment && authState !== "loading" && authState !== "success") {
@@ -259,7 +269,7 @@ function AuthContent() {
               </p>
               <div className="flex gap-2">
                 <a
-                  href={ENV_URLS.demo}
+                  href={LOGIN_URLS.demo}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'flex-1' })}
@@ -267,7 +277,7 @@ function AuthContent() {
                   Go to Demo <ExternalLink className="ml-1 h-3 w-3" />
                 </a>
                 <a
-                  href={ENV_URLS.prod}
+                  href={LOGIN_URLS.prod}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'flex-1' })}
