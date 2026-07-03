@@ -10,8 +10,10 @@
 // in [0,1]. Fuzzy mode returns ranked candidates; exact mode returns only
 // rows matching the provided fields, each at score 1.00.
 //
-// SWAP POINT: replace runFind() with a fetch to POST /find. The request body
-// shape and the scored result shape are already what the server returns.
+// runFind() powers the INSTANT, as-you-type local filter in the patients grid.
+// The real server find (GET /v3/patient/find) is wired via findPatients() in
+// lib/api/patient.ts and is invoked when the user submits the Find box (Enter);
+// that call flows through authFetch and therefore shows up in the API Inspector.
 //
 // Find is also the dedupe / patient-matching primitive: the same ranked,
 // scored lookup is what powers "is this incoming record already in the vault?"

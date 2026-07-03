@@ -8,7 +8,7 @@ import { type Patient } from '@/lib/patient-data'
 import { runFind, type FindQuery } from '@/lib/find-search'
 import { useColumnVisibility } from '@/lib/grid-columns'
 import { SEED_PATIENTS } from '@/lib/seed-data'
-import type { SeedProgress } from '@/lib/api/patient'
+import { findPatients, type SeedProgress } from '@/lib/api/patient'
 import { Button } from '@/components/ui/button'
 import { PatientsGrid } from '@/components/patients/patients-grid'
 import { ColumnsMenu } from '@/components/patients/columns-menu'
@@ -48,11 +48,19 @@ export function PatientsView() {
   const { allColumns, isVisible, toggle, selectAll, reset } =
     useColumnVisibility([])
   const [find, setFind] = useState('')
+  // Result of the last real `GET /v3/patient/find` call (shows in the API
+  // Inspector). Null until the user submits a server find; scoped to the exact
+  // query string it was run for so editing the box falls back to local filter.
+  const [serverFind, setServerFind] = useState<{
+    query: string
+    patients: Patient[]
+  } | null>(null)
+  const [finding, setFinding] = useState(false)
 
   const count = patients.length
 
-  // Client-side Find over the loaded page of patients.
-  const visible = useMemo<Patient[]>(() => {
+  // Instant, client-side Find over the loaded page (runs as you type).
+  const localVisible = useMemo<Patient[]>(() => {
     const q = find.trim()
     if (!q) return patients
     const query: FindQuery = {
@@ -64,6 +72,56 @@ export function PatientsView() {
     }
     return runFind(patients, query).map((r) => r.patient)
   }, [patients, find])
+
+  // When the current text matches a completed server find, show those results
+  // (server-ranked); otherwise fall back to the instant local filter.
+  const usingServerFind = serverFind != null && serverFind.query === find.trim()
+  const visible = usingServerFind ? serverFind!.patients : localVisible
+
+  // Map the single free-text box onto the fields the /find endpoint supports.
+  // A date-looking value is treated as DOB; two+ tokens as first + last name;
+  // a single token as a (fuzzy) last-name match — matching the grid's search
+  // convention. `exact` stays false so the server returns ranked candidates.
+  function parseFindCriteria(q: string) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(q)) return { dob: q, exact: false }
+    const tokens = q.split(/\s+/).filter(Boolean)
+    if (tokens.length >= 2) {
+      return {
+        firstName: tokens[0],
+        lastName: tokens.slice(1).join(' '),
+        exact: false,
+      }
+    }
+    return { lastName: q, exact: false }
+  }
+
+  // Run a real server-side find. Candidate ids are reconciled against the
+  // loaded patients so the grid can render full rows in the server's ranked
+  // order. This is the call that surfaces in the API Inspector.
+  async function handleFindSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const q = find.trim()
+    if (!q) {
+      setServerFind(null)
+      return
+    }
+    setFinding(true)
+    try {
+      const candidates = await findPatients(parseFindCriteria(q))
+      const byId = new Map(patients.map((p) => [p.id, p]))
+      const ranked = candidates
+        .map((c) => byId.get(String(c.id)))
+        .filter((p): p is Patient => p != null)
+      setServerFind({ query: q, patients: ranked })
+      showNotice(
+        `Found ${ranked.length} match${ranked.length === 1 ? '' : 'es'} via /v3/patient/find`,
+      )
+    } catch (err) {
+      showNotice((err as Error).message || 'Find failed')
+    } finally {
+      setFinding(false)
+    }
+  }
 
   function showNotice(text: string) {
     setNotice(text)
@@ -195,7 +253,7 @@ export function PatientsView() {
           {/* In-grid Find */}
           <form
             role="search"
-            onSubmit={(e) => e.preventDefault()}
+            onSubmit={handleFindSubmit}
             className="flex items-center gap-2"
           >
             <div className="relative flex-1">
@@ -204,14 +262,17 @@ export function PatientsView() {
                 type="search"
                 value={find}
                 onChange={(e) => setFind(e.target.value)}
-                placeholder="Find patients by name, date of birth, or id"
+                placeholder="Find patients by name or date of birth — Enter to search the vault"
                 aria-label="Find patients"
                 className="w-full rounded-input border border-border bg-card py-2 pl-9 pr-9 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
               />
               {find && (
                 <button
                   type="button"
-                  onClick={() => setFind('')}
+                  onClick={() => {
+                    setFind('')
+                    setServerFind(null)
+                  }}
                   aria-label="Clear search"
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
                 >
@@ -219,6 +280,10 @@ export function PatientsView() {
                 </button>
               )}
             </div>
+            <Button type="submit" variant="outline" disabled={!find.trim() || finding}>
+              <Search className="h-4 w-4" data-icon="inline-start" />
+              {finding ? 'Finding…' : 'Find'}
+            </Button>
             <ColumnsMenu
               columns={allColumns}
               isVisible={isVisible}
@@ -232,6 +297,11 @@ export function PatientsView() {
             <p className="-mt-2 font-mono text-xs text-muted-foreground">
               {visible.length} match{visible.length === 1 ? '' : 'es'} for{' '}
               <span className="text-foreground">{find.trim()}</span>
+              {usingServerFind ? (
+                <span className="text-muted-foreground"> · via /v3/patient/find</span>
+              ) : (
+                <span className="text-muted-foreground"> · local filter — press Enter to search the vault</span>
+              )}
             </p>
           )}
 
