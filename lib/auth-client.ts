@@ -87,13 +87,27 @@ const SESSION_COOKIES = [
 ] as const
 
 /**
+ * Web host of the 1health Patient Vault app per environment.
+ *
+ * NOTE: this is intentionally NOT `onehealth_base_url`. That cookie holds the
+ * *API* host (e.g. demo.1health.io), but the Patient Vault *web app* is served
+ * from a different host in the demo environment (dev.1health.io). Using the API
+ * host produced a 404 on sign-out.
+ */
+const PATIENT_VAULT_WEB_HOSTS: Record<"demo" | "prod", string> = {
+  demo: "https://dev.1health.io",
+  prod: "https://app.1health.io",
+}
+
+/**
  * Resolves the 1health Patient Vault homepage for the active environment. Read
- * this BEFORE clearing cookies, since it depends on `onehealth_base_url`.
- * Falls back to the demo host if no session cookie is present.
+ * this BEFORE clearing cookies, since it depends on `onehealth_environment`.
+ * Falls back to the demo web host if the environment cookie is absent.
  */
 export function getPatientVaultHomeUrl(): string {
-  const baseUrl = getCookie("onehealth_base_url") ?? "https://demo.1health.io"
-  return `${baseUrl}/patient-vault`
+  const env = getCookie("onehealth_environment")
+  const host = env === "prod" ? PATIENT_VAULT_WEB_HOSTS.prod : PATIENT_VAULT_WEB_HOSTS.demo
+  return `${host}/patient-vault`
 }
 
 /**
