@@ -23,8 +23,7 @@ export const SEED_PATIENTS: SeedPatient[] = [
   {
     patient: {
       firstName: "Cito",
-      lastName: "",
-      middleName: "Gaston",
+      lastName: "Gaston",
       dob: "1988-04-12",
       gender: "female",
       race: "white",
