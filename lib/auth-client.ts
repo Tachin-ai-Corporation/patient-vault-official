@@ -41,6 +41,8 @@
 
 "use client"
 
+import { recordApiCall, type BusApiMethod } from "@/lib/api-inspector-bus"
+
 // ============================================================================
 // COOKIE UTILITIES
 // ============================================================================
@@ -379,6 +381,67 @@ export class SessionExpiredError extends Error {
 }
 
 /**
+ * Publish a completed round-trip to the API Inspector bus so the in-app
+ * inspector can render it as a live call. Best-effort: any failure here must
+ * never break the actual request, so it is fully guarded.
+ *
+ * Bodies are parsed to JSON when possible (falling back to the raw string), and
+ * FormData bodies are summarized rather than serialized. Only calls made
+ * through authFetch (the PV API surface) are published — the OAuth token
+ * refresh is deliberately NOT recorded, since its body carries the refresh
+ * token.
+ */
+function publishInspectorCall(
+  url: string,
+  method: string,
+  requestBody: BodyInit | null | undefined,
+  status: number,
+  responseText: string,
+  latencyMs: number,
+): void {
+  try {
+    let path: string
+    try {
+      const u = new URL(url)
+      path = u.pathname + u.search
+    } catch {
+      path = url
+    }
+
+    let reqBody: unknown = undefined
+    if (requestBody instanceof FormData) {
+      reqBody = `[FormData with ${Array.from(requestBody.keys()).length} field(s)]`
+    } else if (typeof requestBody === "string") {
+      try {
+        reqBody = JSON.parse(requestBody)
+      } catch {
+        reqBody = requestBody
+      }
+    } else if (requestBody != null) {
+      reqBody = requestBody
+    }
+
+    let resBody: unknown = responseText
+    try {
+      resBody = JSON.parse(responseText)
+    } catch {
+      // Leave as the raw string when the response isn't JSON.
+    }
+
+    recordApiCall({
+      method: method.toUpperCase() as BusApiMethod,
+      path,
+      requestBody: reqBody,
+      status,
+      responseBody: resBody,
+      latencyMs,
+    })
+  } catch {
+    // Never let inspector recording affect the request path.
+  }
+}
+
+/**
  * =============================================================================
  * authFetch - CLIENT-SIDE AUTHENTICATED FETCH
  * =============================================================================
@@ -475,6 +538,13 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     duration,
   })
 
+  // Publish to the in-app API Inspector — but only when this is the final
+  // outcome. A 401 here is followed by a token refresh + retry below; we record
+  // the retry's result instead so the inspector shows the effective call.
+  if (response.status !== 401) {
+    publishInspectorCall(url, method, options.body, response.status, responseBody, duration)
+  }
+
   // Handle 401 Unauthorized - attempt token refresh and retry
   if (response.status === 401) {
     console.log("[auth-client] Received 401, attempting token refresh...")
@@ -530,6 +600,8 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
       responseBody: retryBody,
       duration: retryDuration,
     })
+
+    publishInspectorCall(url, method, options.body, retryResponse.status, retryBody, retryDuration)
 
     return retryResponse
   }

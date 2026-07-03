@@ -6,10 +6,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { useSession, type ApiEnv } from '@/lib/session-context'
+import { subscribeApiCalls } from '@/lib/api-inspector-bus'
 
 // ============================================================================
 // API Inspector — a shared, in-memory record of the API calls behind every
@@ -116,6 +118,7 @@ export function maskedAuthValue(env: ApiEnv): string {
 }
 
 export function ApiInspectorProvider({ children }: { children: ReactNode }) {
+  const { session } = useSession()
   const [calls, setCalls] = useState<ApiCall[]>([])
   const [enabled, setEnabledState] = useState<boolean>(true)
   const [visibility, setVisibilityState] =
@@ -212,6 +215,46 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
     // Newest first; cap the log so it never grows unbounded.
     setCalls((prev) => [entry, ...prev].slice(0, MAX_CALLS))
   }, [])
+
+  // Bridge the real HTTP layer into the inspector. `authFetch` publishes every
+  // completed round-trip to the bus; we tag it with the current project/env
+  // scope (so the panel's scope filter matches) and record it as a LIVE call.
+  //
+  // Latest `enabled`/scope are read through refs so we can subscribe exactly
+  // once on mount — re-subscribing would re-flush the boot-time buffer.
+  const enabledRef = useRef(enabled)
+  const scopeRef = useRef({
+    projectId: session.currentProjectId,
+    env: session.currentEnv,
+  })
+  useEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
+  useEffect(() => {
+    scopeRef.current = {
+      projectId: session.currentProjectId,
+      env: session.currentEnv,
+    }
+  }, [session.currentProjectId, session.currentEnv])
+
+  useEffect(() => {
+    const unsubscribe = subscribeApiCalls((c) => {
+      if (!enabledRef.current) return
+      logApiCall({
+        method: c.method,
+        path: c.path,
+        requestBody: c.requestBody,
+        projectId: scopeRef.current.projectId,
+        env: scopeRef.current.env,
+        liveResponse: {
+          status: c.status,
+          body: c.responseBody,
+          latencyMs: c.latencyMs,
+        },
+      })
+    })
+    return unsubscribe
+  }, [logApiCall])
 
   const clearCalls = useCallback((key?: string) => {
     if (!key) {

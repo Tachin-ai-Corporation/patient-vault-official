@@ -28,9 +28,11 @@ export function SeedProgressModal({
   return (
     <Modal
       open={open}
-      // While seeding is in progress the modal is not dismissible; once done the
-      // backdrop/close is enabled.
-      onClose={done ? onClose : () => {}}
+      // Dismissible at any time — clicking the backdrop, pressing Escape, or the
+      // close button hides the dialog. Seeding runs independently of this modal,
+      // so closing it does NOT stop the batch; it keeps running in the
+      // background and you can watch each call land live in the API Inspector.
+      onClose={onClose}
       title="Seeding sample data"
       description="Creating synthetic patient records in the vault via the 1health v3 API. Each patient is written with its contacts and addresses."
       className="max-w-lg"
@@ -55,7 +57,7 @@ export function SeedProgressModal({
         <p className="text-xs leading-relaxed text-muted-foreground">
           {done
             ? `Created ${created} patient${created === 1 ? '' : 's'}. You can close this dialog.`
-            : 'Please keep this dialog open until seeding completes.'}
+            : 'You can close this dialog anytime — seeding continues in the background and each call appears live in the API Inspector.'}
         </p>
       </div>
     </Modal>
