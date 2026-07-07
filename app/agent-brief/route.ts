@@ -101,7 +101,7 @@ export async function GET() {
     faq: faqs.map((f) => ({ q: f.q, a: f.a.replace(/\n+/g, ' ') })),
     links: {
       platform: 'https://dev.1health.io',
-      baa: 'https://dev.1health.io/patient-vault/baa',
+      baa: 'https://pv.1health.io/baa',
     },
   }
 

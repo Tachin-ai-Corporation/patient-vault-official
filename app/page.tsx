@@ -24,7 +24,7 @@ const jsonLdSoftwareApp = {
   name: 'Patient Vault',
   applicationCategory: 'HealthApplication',
   operatingSystem: 'Web',
-  url: 'https://dev.1health.io/patient-vault',
+  url: 'https://pv.1health.io',
   description:
     'The patient database for your healthcare app. SOC 2 Type II, HIPAA — BAA executed at signup. Free to start.',
   author: {

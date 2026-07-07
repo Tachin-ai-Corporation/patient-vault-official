@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
     },
-    sitemap: 'https://dev.1health.io/sitemap.xml',
+    sitemap: 'https://pv.1health.io/sitemap.xml',
   }
 }

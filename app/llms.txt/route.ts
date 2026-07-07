@@ -79,7 +79,7 @@ ${faqLines()}
 
 ## More
 Platform: https://dev.1health.io
-BAA (public): https://dev.1health.io/patient-vault/baa
+BAA (public): https://pv.1health.io/baa
 `
 
   return new NextResponse(body, {
