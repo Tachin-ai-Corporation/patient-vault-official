@@ -11,6 +11,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://pv.1health.io'),
   title: 'Patient Vault — 1health',
   description:
     'Manage a vault of patient records through the 1health healthcare data API.',

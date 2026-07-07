@@ -17,6 +17,30 @@ import { Faq, faqs } from '@/components/faq'
 import { ForAgents } from '@/components/for-agents'
 import { Footer } from '@/components/footer'
 import { Parallax } from '@/components/parallax'
+import type { Metadata } from 'next'
+
+const PAGE_TITLE = 'Patient Vault — The patient database for your healthcare app'
+const PAGE_DESCRIPTION =
+  'The patient database for your healthcare app. SOC 2 Type II, HIPAA — BAA executed at signup. Free to start.'
+
+export const metadata: Metadata = {
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: 'https://pv.1health.io' },
+  openGraph: {
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    url: 'https://pv.1health.io',
+    siteName: '1health',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+  },
+  robots: { index: true, follow: true },
+}
 
 const jsonLdSoftwareApp = {
   '@context': 'https://schema.org',

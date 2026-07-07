@@ -1,6 +1,14 @@
+import type { Metadata } from 'next'
 import { Nav } from '@/components/nav'
 import { Footer } from '@/components/footer'
 import { baaContent, BAA_VERSION } from '@/components/agreement'
+
+export const metadata: Metadata = {
+  title: 'Business Associate Agreement — Patient Vault',
+  description:
+    'The HIPAA Business Associate Agreement for Patient Vault, executed at signup.',
+  alternates: { canonical: 'https://pv.1health.io/baa' },
+}
 
 const REGISTER_URL = 'https://1health.demo.1health.io/register?openApp=Patient%20Vault'
 
