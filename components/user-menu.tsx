@@ -1,17 +1,23 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
 import { getPatientVaultHomeUrl, signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
   const { session } = useSession()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   function handleSelect(label: string) {
     setOpen(false)
+    if (label === 'Console') {
+      router.push('/console')
+      return
+    }
     if (label === 'Sign out') {
       // Resolve the 1health Patient Vault homepage BEFORE clearing cookies
       // (it reads onehealth_base_url), then wipe every session cookie so the
@@ -68,7 +74,7 @@ export function UserMenu() {
             </p>
           </div>
           <div className="h-px bg-border" />
-          {['Account', 'Sign out'].map((label) => (
+          {['Console', 'Sign out'].map((label) => (
             <button
               key={label}
               type="button"

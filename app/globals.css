@@ -169,3 +169,91 @@
     }
   }
 }
+
+/* ──────────────────────────────────────────────────────────────
+   Public marketing surface (landing at "/") — named 1health palette
+   tokens consumed via inline `var(--color-*)` styles, plus the
+   marketing-only utility classes. Console tokens above are untouched.
+   Dark is the default; `.light` remaps the ground/surface/text.
+   ────────────────────────────────────────────────────────────── */
+:root,
+.dark {
+  --color-graphite: #202833;
+  --color-charcoal: #313b47;
+  --color-slate: #566373;
+  --color-mist: #aeb8c4;
+  --color-cloud: #e6ebf0;
+
+  --color-trust-blue: #246b8f;
+  --color-network-teal: #1f9a9b;
+  --color-care-mint: #5fc7b2;
+  --color-signal-aqua: #8fd8e6;
+  --color-clinical-ice: #e8f7fa;
+
+  --color-pulse: #d84f45;
+  --color-coral: #e8786f;
+  --color-blush: #f2c8c3;
+  --color-amber: #d6a83a;
+  --color-glow: #f5e6b8;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  --shadow-1: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.24);
+  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.32);
+}
+
+.light {
+  --color-graphite: #f4f6f9;
+  --color-charcoal: #ffffff;
+  --color-slate: #7a8696;
+  --color-mist: #4a5560;
+  --color-cloud: #161b22;
+
+  --shadow-1: 0 4px 16px rgba(20, 30, 45, 0.08);
+  --shadow-2: 0 8px 28px rgba(20, 30, 45, 0.1);
+  --shadow-3: 0 16px 48px rgba(20, 30, 45, 0.12);
+}
+
+/* Grid backdrop utility */
+.grid-backdrop {
+  background-image:
+    linear-gradient(rgba(31, 154, 155, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 154, 155, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Motion easing */
+.ease-1health {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hover glow utility */
+.hover-glow:hover {
+  box-shadow:
+    0 0 0 1px rgba(143, 216, 230, 0.32),
+    0 0 24px rgba(143, 216, 230, 0.18);
+}
+
+/* Card hover utility */
+.card-hover {
+  transition:
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(143, 216, 230, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(143, 216, 230, 0.24),
+    0 12px 32px rgba(0, 0, 0, 0.24);
+}
