@@ -1,13 +1,8 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
-import { Suspense } from 'react'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
-import { SessionProvider } from '@/lib/session-context'
-import { ApiInspectorProvider } from '@/lib/api-inspector'
-import { DcpGateProvider } from '@/lib/dcp-context'
-import { AppShell } from '@/components/app-shell'
 
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'] })
 const jetbrainsMono = JetBrains_Mono({
@@ -47,17 +42,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="font-sans antialiased">
-        <ThemeProvider>
-          <Suspense fallback={null}>
-            <SessionProvider>
-              <ApiInspectorProvider>
-                <DcpGateProvider>
-                  <AppShell>{children}</AppShell>
-                </DcpGateProvider>
-              </ApiInspectorProvider>
-            </SessionProvider>
-          </Suspense>
-        </ThemeProvider>
+        <ThemeProvider>{children}</ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
