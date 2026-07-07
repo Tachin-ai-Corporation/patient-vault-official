@@ -13,10 +13,31 @@ export function Footer() {
           </p>
         </div>
         <nav className="flex flex-wrap items-center gap-4 font-mono text-[11px] uppercase tracking-[0.12em] text-[--color-slate]">
-          <Link href="/terms" className="hover:text-[--color-mist] transition-colors">Terms</Link>
-          <Link href="/privacy" className="hover:text-[--color-mist] transition-colors">Privacy</Link>
+          <a
+            href="https://www.tachin.ai/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[--color-mist] transition-colors"
+          >
+            Terms
+          </a>
+          <a
+            href="https://www.tachin.ai/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[--color-mist] transition-colors"
+          >
+            Privacy
+          </a>
+          <a
+            href="https://www.tachin.ai/security"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[--color-mist] transition-colors"
+          >
+            Security
+          </a>
           <Link href="/baa" className="hover:text-[--color-mist] transition-colors">BAA</Link>
-          <Link href="/security" className="hover:text-[--color-mist] transition-colors">Security</Link>
           <a
             href="https://dev.1health.io/"
             className="text-[--color-network-teal] hover:opacity-80 transition-opacity"
