@@ -28,14 +28,14 @@ export default defineConfig({
   },
 
   projects: [
-    // Proyecto de setup: corre primero, hace login y guarda las cookies
+    // Setup project: runs first, makes login and saves cookies
     {
       name: "setup",
       testMatch: /auth\.setup\.ts/,
       use: { ...devices["Desktop Chrome"], launchOptions: { args: CHROME_ARGS } },
     },
 
-    // Tests que requieren autenticación (excluye *.no-auth.spec.ts)
+    // Tests that require authentication (exclude *.no-auth.spec.ts)
     {
       name: "chromium",
       testIgnore: /.*\.no-auth\.spec\.ts/,
@@ -47,7 +47,7 @@ export default defineConfig({
       dependencies: ["setup"],
     },
 
-    // Tests sin autenticación (página /auth, etc.)
+    // Tests without authentication (auth page, etc.)
     {
       name: "no-auth",
       testMatch: /.*\.no-auth\.spec\.ts/,
