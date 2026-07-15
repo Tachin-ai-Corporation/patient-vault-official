@@ -19,6 +19,7 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Popover,
+  PopoverClose,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
@@ -536,10 +537,11 @@ function DrawerRow({
 }
 
 /**
- * Row kebab menu. Uses the shared Popover primitive (portal-based) so the menu
- * renders above the table and is never clipped by the `overflow-x-auto` table
- * wrapper — matching the columns menu and API-surface popover. Controlled so an
- * item selection can close the menu before running its action. Deleted rows
+ * Row kebab menu. Uses the shared Popover primitive uncontrolled — exactly like
+ * the working columns menu and API-surface popover — so the trigger toggles
+ * reliably and the portal-based content renders above the table without being
+ * clipped by the `overflow-x-auto` wrapper. Each item is a `PopoverClose`, so a
+ * selection closes the menu and runs its action in a single click. Deleted rows
  * only offer "View details".
  */
 function RowMenu({
@@ -553,15 +555,8 @@ function RowMenu({
   onDownload: () => void
   onDelete: () => void
 }) {
-  const [open, setOpen] = useState(false)
-
-  function pick(fn: () => void) {
-    setOpen(false)
-    fn()
-  }
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover>
       <PopoverTrigger
         aria-label="Document actions"
         className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
@@ -570,19 +565,15 @@ function RowMenu({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-44 p-1">
         <div role="menu">
-          <MenuItem icon={Eye} onClick={() => pick(onView)}>
+          <MenuItem icon={Eye} onClick={onView}>
             View details
           </MenuItem>
           {!deleted && (
             <>
-              <MenuItem icon={Download} onClick={() => pick(onDownload)}>
+              <MenuItem icon={Download} onClick={onDownload}>
                 Download
               </MenuItem>
-              <MenuItem
-                icon={Trash2}
-                destructive
-                onClick={() => pick(onDelete)}
-              >
+              <MenuItem icon={Trash2} destructive onClick={onDelete}>
                 Delete
               </MenuItem>
             </>
@@ -593,6 +584,8 @@ function RowMenu({
   )
 }
 
+// A single menu row. Rendered as a `PopoverClose` so clicking it closes the
+// popover (base-ui) and fires its action in the same click.
 function MenuItem({
   icon: Icon,
   children,
@@ -605,8 +598,7 @@ function MenuItem({
   destructive?: boolean
 }) {
   return (
-    <button
-      type="button"
+    <PopoverClose
       role="menuitem"
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded-input px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
@@ -617,7 +609,7 @@ function MenuItem({
     >
       <Icon className="h-3.5 w-3.5" />
       {children}
-    </button>
+    </PopoverClose>
   )
 }
 
