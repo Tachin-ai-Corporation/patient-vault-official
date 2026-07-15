@@ -70,6 +70,24 @@ function unwrapList<T>(data: unknown, ...keys: string[]): T[] {
   return []
 }
 
+/**
+ * Normalize a raw attachment object into a DocumentDTO. The 1health v3 API
+ * returns a numeric `id` (a Long) as the identifier — the same convention the
+ * patient module uses (`String(dto.id)`). We surface it as the string
+ * `documentId` the rest of the app expects, so the detail/download/delete
+ * endpoints receive a real id instead of `undefined`. Falls back across a few
+ * alternate key spellings for safety.
+ */
+function normalizeDoc(raw: unknown): DocumentDTO {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const rawId = r.documentId ?? r.id ?? r.documentID ?? r.attachmentId
+  return {
+    ...(r as unknown as DocumentDTO),
+    documentId:
+      rawId === undefined || rawId === null ? '' : String(rawId),
+  }
+}
+
 // ============================================================================
 // Endpoints
 // ============================================================================
@@ -94,7 +112,14 @@ export async function listDocuments(
     `/v3/patient/${patientId}/attach${qs ? `?${qs}` : ''}`,
     { method: 'GET' },
   )
-  return unwrapList<DocumentDTO>(data, 'documents', 'attachments', 'content', 'items', 'data')
+  return unwrapList<unknown>(
+    data,
+    'documents',
+    'attachments',
+    'content',
+    'items',
+    'data',
+  ).map(normalizeDoc)
 }
 
 /**
@@ -106,9 +131,11 @@ export async function getDocument(
   patientId: string,
   documentId: string,
 ): Promise<DocumentDTO> {
-  return apiRequest<DocumentDTO>(`/v3/patient/${patientId}/attach/${documentId}`, {
-    method: 'GET',
-  })
+  const data = await apiRequest<unknown>(
+    `/v3/patient/${patientId}/attach/${documentId}`,
+    { method: 'GET' },
+  )
+  return normalizeDoc(data)
 }
 
 /** Body for attaching (uploading) a new document. */
@@ -141,11 +168,12 @@ export async function attachDocument(
   if (input.metadata && Object.keys(input.metadata).length > 0) {
     body.metadata = input.metadata
   }
-  return apiRequest<DocumentDTO>(`/v3/patient/${patientId}/attach`, {
+  const data = await apiRequest<unknown>(`/v3/patient/${patientId}/attach`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+  return normalizeDoc(data)
 }
 
 /**
