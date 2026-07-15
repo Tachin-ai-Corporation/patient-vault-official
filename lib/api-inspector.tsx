@@ -56,6 +56,10 @@ export type ApiCall = {
   status?: number
   responseBody?: unknown
   latencyMs?: number
+  // Set only for upload calls whose base64 `data` field was truncated at
+  // publish time: the original payload size in KB (formatted). Used by the
+  // copy helpers to annotate the truncated body; the full base64 is not kept.
+  uploadOriginalSizeKb?: string
   // Scope: which project + environment this call belongs to. The panel only
   // shows calls for the project/env the developer is currently viewing.
   projectId: string
@@ -75,6 +79,9 @@ export type LogApiCallInput = {
   // Present ONLY when a real PV API call was performed. Omit it (the default)
   // to record an illustrative request with no fabricated response.
   liveResponse?: LiveResponse
+  // Forwarded from the bus when a large upload payload was truncated at
+  // publish time: the original base64 size in KB (formatted).
+  uploadOriginalSizeKb?: string
 }
 
 export type InspectorVisibility = 'hidden' | 'collapsed' | 'expanded'
@@ -209,6 +216,7 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
       status: live?.status,
       responseBody: live ? live.body : undefined,
       latencyMs: live?.latencyMs,
+      uploadOriginalSizeKb: input.uploadOriginalSizeKb,
       projectId: input.projectId,
       env: input.env,
     }
@@ -244,6 +252,7 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
         method: c.method,
         path: c.path,
         requestBody: c.requestBody,
+        uploadOriginalSizeKb: c.uploadOriginalSizeKb,
         projectId: scopeRef.current.projectId,
         env: scopeRef.current.env,
         liveResponse: {
@@ -325,8 +334,38 @@ export function useApiEmitter() {
   )
 }
 
+// ============================================================================
+// Attachment (upload) helpers
+//
+// A POST to a path containing "/attach" whose JSON body carries a base64 `data`
+// field is a file upload. The base64 payload can be megabytes, so it is
+// truncated at publish time (see lib/api-inspector-bus.ts) — the stored body
+// already holds the shortened `data` and the entry records the original size in
+// `uploadOriginalSizeKb`. Rendering shows the stored body verbatim; the copy
+// helpers below swap in a placeholder (cURL) or append a size note (JSON).
+// ============================================================================
+
+// True when the call is a document upload (POST /…/attach with a `data` field).
+// Accepts the minimal shape so it works on both ApiCall and bus rows.
+export function isUploadCall(
+  call: Pick<ApiCall, 'method' | 'path' | 'requestBody'>,
+): boolean {
+  return (
+    call.method === 'POST' &&
+    call.path.includes('/attach') &&
+    !!call.requestBody &&
+    typeof call.requestBody === 'object' &&
+    typeof (call.requestBody as Record<string, unknown>).data === 'string'
+  )
+}
+
+// The literal cURL placeholder standing in for the omitted base64 payload.
+export const CURL_DATA_PLACEHOLDER = '<BASE64_FILE_CONTENT>'
+
 // Build a valid cURL string for a recorded call. This is request-only, so it is
-// accurate for both illustrative and live entries.
+// accurate for both illustrative and live entries. Upload calls emit the
+// literal <BASE64_FILE_CONTENT> placeholder in place of the real payload; the
+// Authorization header keeps the existing masked-key convention.
 export function buildCurl(call: ApiCall): string {
   const base = 'https://api.1health.io'
   const lines: string[] = [`curl -X ${call.method} '${base}${call.path}'`]
@@ -334,7 +373,13 @@ export function buildCurl(call: ApiCall): string {
     lines.push(`  -H '${k}: ${v}'`)
   }
   if (call.requestBody !== undefined) {
-    lines.push(`  -d '${JSON.stringify(call.requestBody)}'`)
+    const body = isUploadCall(call)
+      ? {
+          ...(call.requestBody as Record<string, unknown>),
+          data: CURL_DATA_PLACEHOLDER,
+        }
+      : call.requestBody
+    lines.push(`  -d '${JSON.stringify(body)}'`)
   }
   return lines.join(' \\\n')
 }
@@ -342,13 +387,22 @@ export function buildCurl(call: ApiCall): string {
 // Build the JSON payload copied by "Copy JSON". For illustrative calls the
 // response is null and a note explains why — we never copy a fabricated result.
 export function buildJson(call: ApiCall): string {
+  // Upload bodies were already truncated at publish time; copy that stored body
+  // and append a "_note" recording the original payload size.
+  const requestBodyForCopy =
+    isUploadCall(call) && call.uploadOriginalSizeKb
+      ? {
+          ...(call.requestBody as Record<string, unknown>),
+          _note: `data truncated — full payload was ${call.uploadOriginalSizeKb} KB base64`,
+        }
+      : (call.requestBody ?? null)
   return JSON.stringify(
     {
       request: {
         method: call.method,
         path: call.path,
         headers: call.requestHeaders,
-        body: call.requestBody ?? null,
+        body: requestBodyForCopy,
       },
       response: call.illustrative
         ? null

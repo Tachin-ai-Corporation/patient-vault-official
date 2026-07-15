@@ -57,6 +57,16 @@ function formatTime(ts: number): string {
   })
 }
 
+// A signed download URL from an attachment detail response. Returned so the
+// detail view can render it as plain (non-clickable) text with an expiry note.
+function responseDownloadUrl(body: unknown): string | null {
+  if (body && typeof body === 'object') {
+    const url = (body as Record<string, unknown>).downloadUrl
+    if (typeof url === 'string' && url.length > 0) return url
+  }
+  return null
+}
+
 export function ApiInspectorPanel() {
   const { session } = useSession()
   const {
@@ -523,6 +533,11 @@ function CallDetail({ call }: { call: ApiCall | null }) {
             <pre className="mt-2 overflow-x-auto rounded-input border border-border bg-muted/40 p-2.5 font-mono text-[12px] leading-relaxed text-foreground">
               {JSON.stringify(call.responseBody, null, 2)}
             </pre>
+            {responseDownloadUrl(call.responseBody) && (
+              <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-muted-foreground">
+                Signed URL — expires 15 min after issue.
+              </p>
+            )}
           </>
         )}
       </DetailSection>

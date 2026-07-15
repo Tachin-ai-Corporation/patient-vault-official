@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { CopyButton } from '@/components/ui/copy-button'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
+import { DocumentsSection } from '@/components/patients/documents-section'
 import { EditDemographicsModal } from '@/components/patients/edit-demographics-modal'
 import {
   RelatedRecordModal,
@@ -608,6 +609,9 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
             </div>
           )}
         </RecordSectionCard>
+
+        {/* 4. Documents */}
+        <DocumentsSection patientId={patient.id} />
       </div>
 
       {/* Modals */}
