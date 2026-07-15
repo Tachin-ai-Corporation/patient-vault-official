@@ -138,6 +138,43 @@ export async function getDocument(
   })
 }
 
+/** Body for attaching (uploading) a new document. */
+export interface AttachDocumentInput {
+  documentType: string
+  contentType: string
+  name: string
+  /** Base64-encoded file contents (no data-URI prefix). */
+  data: string
+  /** Optional arbitrary metadata; omitted from the request when empty. */
+  metadata?: Record<string, string>
+}
+
+/**
+ * Attach (upload) a new document to a patient. The file must already be
+ * base64-encoded by the caller. On success the API returns the created record
+ * including a server-assigned `documentId`.
+ */
+export async function attachDocument(
+  patientId: string,
+  input: AttachDocumentInput,
+): Promise<DocumentDTO> {
+  const body: Record<string, unknown> = {
+    documentType: input.documentType,
+    contentType: input.contentType,
+    name: input.name,
+    data: input.data,
+  }
+  // Only include `metadata` when at least one key/value pair is present.
+  if (input.metadata && Object.keys(input.metadata).length > 0) {
+    body.metadata = input.metadata
+  }
+  return request<DocumentDTO>(`/patient/${patientId}/attach`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 /**
  * Deactivate (soft-delete) a document. The underlying file is retained and
  * remains visible under the Deleted / All status filters.

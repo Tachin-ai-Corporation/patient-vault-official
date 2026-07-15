@@ -14,6 +14,7 @@ import {
   FileJson,
   File as FileIcon,
   RefreshCw,
+  Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -27,6 +28,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
+import { AttachDocumentModal } from '@/components/patients/attach-document-modal'
 import {
   listDocuments,
   getDocument,
@@ -125,8 +127,16 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
   const [pendingDelete, setPendingDelete] = useState<DocumentDTO | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Attach modal placeholder (real modal built in a later step).
+  // Attach modal + transient success toast.
   const [attachOpen, setAttachOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  // Auto-dismiss the success toast.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const count = documents?.length ?? 0
   const summary =
@@ -461,21 +471,29 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
         </p>
       </Modal>
 
-      {/* Attach document — placeholder modal (real one built in a later step) */}
-      <Modal
+      {/* Attach document */}
+      <AttachDocumentModal
         open={attachOpen}
+        patientId={patientId}
         onClose={() => setAttachOpen(false)}
-        title="Attach document"
-        footer={
-          <Button variant="ghost" onClick={() => setAttachOpen(false)}>
-            Close
-          </Button>
-        }
-      >
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Document upload is coming soon.
-        </p>
-      </Modal>
+        onAttached={(doc) => {
+          setToast(`Attached ${doc.name || 'document'}`)
+          // Re-fetch the list with the current filters.
+          void mutate()
+        }}
+      />
+
+      {/* Success toast */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-[60] flex items-center gap-2 rounded-card border border-border bg-card px-4 py-3 text-sm text-card-foreground shadow-xl animate-in fade-in-0 slide-in-from-bottom-2"
+        >
+          <Check className="h-4 w-4 text-accent" />
+          {toast}
+        </div>
+      )}
     </RecordSectionCard>
   )
 }
