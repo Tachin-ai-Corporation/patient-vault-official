@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import useSWR from 'swr'
 import {
   MoreVertical,
@@ -16,7 +16,13 @@ import {
   RefreshCw,
   Check,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Modal } from '@/components/ui/modal'
 import { Drawer } from '@/components/ui/drawer'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -530,7 +536,14 @@ function DrawerRow({
   )
 }
 
-/** Row kebab menu. Deleted rows only offer "View details". */
+/**
+ * Row kebab menu. Uses the shared Popover primitive uncontrolled — exactly like
+ * the working columns menu and API-surface popover — so the trigger toggles
+ * reliably and the portal-based content renders above the table without being
+ * clipped by the `overflow-x-auto` wrapper. Each item is a `PopoverClose`, so a
+ * selection closes the menu and runs its action in a single click. Deleted rows
+ * only offer "View details".
+ */
 function RowMenu({
   deleted,
   onView,
@@ -542,70 +555,37 @@ function RowMenu({
   onDownload: () => void
   onDelete: () => void
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  function pick(fn: () => void) {
-    setOpen(false)
-    fn()
-  }
-
   return (
-    <div ref={ref} className="relative inline-block text-left">
-      <Button
-        variant="ghost"
-        size="icon-sm"
+    <Popover>
+      <PopoverTrigger
         aria-label="Document actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
       >
         <MoreVertical className="h-4 w-4" />
-      </Button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-[calc(100%+4px)] z-50 w-44 overflow-hidden rounded-card border border-border bg-popover p-1 shadow-xl"
-        >
-          <MenuItem icon={Eye} onClick={() => pick(onView)}>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-44 p-1">
+        <div role="menu">
+          <MenuItem icon={Eye} onClick={onView}>
             View details
           </MenuItem>
           {!deleted && (
             <>
-              <MenuItem icon={Download} onClick={() => pick(onDownload)}>
+              <MenuItem icon={Download} onClick={onDownload}>
                 Download
               </MenuItem>
-              <MenuItem
-                icon={Trash2}
-                destructive
-                onClick={() => pick(onDelete)}
-              >
+              <MenuItem icon={Trash2} destructive onClick={onDelete}>
                 Delete
               </MenuItem>
             </>
           )}
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
+// A single menu row. Rendered as a `PopoverClose` so clicking it closes the
+// popover (base-ui) and fires its action in the same click.
 function MenuItem({
   icon: Icon,
   children,
@@ -618,8 +598,7 @@ function MenuItem({
   destructive?: boolean
 }) {
   return (
-    <button
-      type="button"
+    <PopoverClose
       role="menuitem"
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded-input px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
@@ -630,7 +609,7 @@ function MenuItem({
     >
       <Icon className="h-3.5 w-3.5" />
       {children}
-    </button>
+    </PopoverClose>
   )
 }
 
