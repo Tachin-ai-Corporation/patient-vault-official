@@ -325,8 +325,69 @@ export function useApiEmitter() {
   )
 }
 
+// ============================================================================
+// Attachment (upload) helpers
+//
+// A POST to a path containing "/attach" whose JSON body carries a base64 `data`
+// field is a file upload. The base64 payload can be megabytes, so we never
+// render or copy it verbatim: it is truncated for display, replaced with a
+// placeholder in cURL, and annotated with its size everywhere.
+// ============================================================================
+
+// True when the call is a document upload (POST /…/attach with a base64 `data`
+// field). Accepts the minimal shape so it works on both ApiCall and bus rows.
+export function isUploadCall(
+  call: Pick<ApiCall, 'method' | 'path' | 'requestBody'>,
+): boolean {
+  return (
+    call.method === 'POST' &&
+    call.path.includes('/attach') &&
+    !!call.requestBody &&
+    typeof call.requestBody === 'object' &&
+    typeof (call.requestBody as Record<string, unknown>).data === 'string'
+  )
+}
+
+// The literal cURL placeholder standing in for the omitted base64 payload.
+export const CURL_DATA_PLACEHOLDER = '<BASE64_FILE_CONTENT>'
+
+// Human-readable size of the base64 payload that WOULD be sent on the wire.
+// base64 chars are one byte each, so string length is the transmitted size.
+export function base64SizeKb(data: string): string {
+  const kb = data.length / 1024
+  if (kb >= 10) return Math.round(kb).toLocaleString()
+  if (kb >= 1) return kb.toFixed(1)
+  return kb.toFixed(2)
+}
+
+// Display value for a truncated `data` field: first 40 chars + a size note.
+export function truncatedDataValue(data: string): string {
+  return `${data.slice(0, 40)}… (${base64SizeKb(data)} KB base64, truncated for display)`
+}
+
+// A shallow clone of an upload request body with `data` truncated for display.
+// Field order is preserved (data stays in place); when `withNote` is set, a
+// trailing "_note" explains the truncation (used by Copy JSON).
+export function displayUploadBody(
+  requestBody: unknown,
+  opts?: { withNote?: boolean },
+): Record<string, unknown> {
+  const src = (requestBody ?? {}) as Record<string, unknown>
+  const data = typeof src.data === 'string' ? src.data : ''
+  const clone: Record<string, unknown> = {
+    ...src,
+    data: truncatedDataValue(data),
+  }
+  if (opts?.withNote) {
+    clone._note = `data truncated — full payload was ${base64SizeKb(data)} KB base64`
+  }
+  return clone
+}
+
 // Build a valid cURL string for a recorded call. This is request-only, so it is
-// accurate for both illustrative and live entries.
+// accurate for both illustrative and live entries. Upload calls emit the
+// literal <BASE64_FILE_CONTENT> placeholder in place of the real payload; the
+// Authorization header keeps the existing masked-key convention.
 export function buildCurl(call: ApiCall): string {
   const base = 'https://api.1health.io'
   const lines: string[] = [`curl -X ${call.method} '${base}${call.path}'`]
@@ -334,7 +395,13 @@ export function buildCurl(call: ApiCall): string {
     lines.push(`  -H '${k}: ${v}'`)
   }
   if (call.requestBody !== undefined) {
-    lines.push(`  -d '${JSON.stringify(call.requestBody)}'`)
+    const body = isUploadCall(call)
+      ? {
+          ...(call.requestBody as Record<string, unknown>),
+          data: CURL_DATA_PLACEHOLDER,
+        }
+      : call.requestBody
+    lines.push(`  -d '${JSON.stringify(body)}'`)
   }
   return lines.join(' \\\n')
 }
@@ -342,13 +409,18 @@ export function buildCurl(call: ApiCall): string {
 // Build the JSON payload copied by "Copy JSON". For illustrative calls the
 // response is null and a note explains why — we never copy a fabricated result.
 export function buildJson(call: ApiCall): string {
+  // Upload bodies carry a huge base64 `data` field; copy the truncated
+  // placeholder plus a "_note" recording the real payload size instead.
+  const requestBodyForCopy = isUploadCall(call)
+    ? displayUploadBody(call.requestBody, { withNote: true })
+    : (call.requestBody ?? null)
   return JSON.stringify(
     {
       request: {
         method: call.method,
         path: call.path,
         headers: call.requestHeaders,
-        body: call.requestBody ?? null,
+        body: requestBodyForCopy,
       },
       response: call.illustrative
         ? null
