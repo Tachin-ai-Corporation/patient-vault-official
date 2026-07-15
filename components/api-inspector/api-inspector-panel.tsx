@@ -14,8 +14,6 @@ import { useSession } from '@/lib/session-context'
 import {
   buildCurl,
   buildJson,
-  displayUploadBody,
-  isUploadCall,
   scopeKeyFor,
   useApiInspector,
   type ApiCall,
@@ -503,13 +501,7 @@ function CallDetail({ call }: { call: ApiCall | null }) {
               Body
             </p>
             <pre className="overflow-x-auto rounded-input border border-border bg-muted/40 p-2.5 font-mono text-[12px] leading-relaxed text-foreground">
-              {JSON.stringify(
-                isUploadCall(call)
-                  ? displayUploadBody(call.requestBody)
-                  : call.requestBody,
-                null,
-                2,
-              )}
+              {JSON.stringify(call.requestBody, null, 2)}
             </pre>
           </div>
         )}

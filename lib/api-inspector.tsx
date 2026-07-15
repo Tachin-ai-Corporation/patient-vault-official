@@ -56,6 +56,10 @@ export type ApiCall = {
   status?: number
   responseBody?: unknown
   latencyMs?: number
+  // Set only for upload calls whose base64 `data` field was truncated at
+  // publish time: the original payload size in KB (formatted). Used by the
+  // copy helpers to annotate the truncated body; the full base64 is not kept.
+  uploadOriginalSizeKb?: string
   // Scope: which project + environment this call belongs to. The panel only
   // shows calls for the project/env the developer is currently viewing.
   projectId: string
@@ -75,6 +79,9 @@ export type LogApiCallInput = {
   // Present ONLY when a real PV API call was performed. Omit it (the default)
   // to record an illustrative request with no fabricated response.
   liveResponse?: LiveResponse
+  // Forwarded from the bus when a large upload payload was truncated at
+  // publish time: the original base64 size in KB (formatted).
+  uploadOriginalSizeKb?: string
 }
 
 export type InspectorVisibility = 'hidden' | 'collapsed' | 'expanded'
@@ -209,6 +216,7 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
       status: live?.status,
       responseBody: live ? live.body : undefined,
       latencyMs: live?.latencyMs,
+      uploadOriginalSizeKb: input.uploadOriginalSizeKb,
       projectId: input.projectId,
       env: input.env,
     }
@@ -244,6 +252,7 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
         method: c.method,
         path: c.path,
         requestBody: c.requestBody,
+        uploadOriginalSizeKb: c.uploadOriginalSizeKb,
         projectId: scopeRef.current.projectId,
         env: scopeRef.current.env,
         liveResponse: {
@@ -329,13 +338,15 @@ export function useApiEmitter() {
 // Attachment (upload) helpers
 //
 // A POST to a path containing "/attach" whose JSON body carries a base64 `data`
-// field is a file upload. The base64 payload can be megabytes, so we never
-// render or copy it verbatim: it is truncated for display, replaced with a
-// placeholder in cURL, and annotated with its size everywhere.
+// field is a file upload. The base64 payload can be megabytes, so it is
+// truncated at publish time (see lib/api-inspector-bus.ts) — the stored body
+// already holds the shortened `data` and the entry records the original size in
+// `uploadOriginalSizeKb`. Rendering shows the stored body verbatim; the copy
+// helpers below swap in a placeholder (cURL) or append a size note (JSON).
 // ============================================================================
 
-// True when the call is a document upload (POST /…/attach with a base64 `data`
-// field). Accepts the minimal shape so it works on both ApiCall and bus rows.
+// True when the call is a document upload (POST /…/attach with a `data` field).
+// Accepts the minimal shape so it works on both ApiCall and bus rows.
 export function isUploadCall(
   call: Pick<ApiCall, 'method' | 'path' | 'requestBody'>,
 ): boolean {
@@ -350,39 +361,6 @@ export function isUploadCall(
 
 // The literal cURL placeholder standing in for the omitted base64 payload.
 export const CURL_DATA_PLACEHOLDER = '<BASE64_FILE_CONTENT>'
-
-// Human-readable size of the base64 payload that WOULD be sent on the wire.
-// base64 chars are one byte each, so string length is the transmitted size.
-export function base64SizeKb(data: string): string {
-  const kb = data.length / 1024
-  if (kb >= 10) return Math.round(kb).toLocaleString()
-  if (kb >= 1) return kb.toFixed(1)
-  return kb.toFixed(2)
-}
-
-// Display value for a truncated `data` field: first 40 chars + a size note.
-export function truncatedDataValue(data: string): string {
-  return `${data.slice(0, 40)}… (${base64SizeKb(data)} KB base64, truncated for display)`
-}
-
-// A shallow clone of an upload request body with `data` truncated for display.
-// Field order is preserved (data stays in place); when `withNote` is set, a
-// trailing "_note" explains the truncation (used by Copy JSON).
-export function displayUploadBody(
-  requestBody: unknown,
-  opts?: { withNote?: boolean },
-): Record<string, unknown> {
-  const src = (requestBody ?? {}) as Record<string, unknown>
-  const data = typeof src.data === 'string' ? src.data : ''
-  const clone: Record<string, unknown> = {
-    ...src,
-    data: truncatedDataValue(data),
-  }
-  if (opts?.withNote) {
-    clone._note = `data truncated — full payload was ${base64SizeKb(data)} KB base64`
-  }
-  return clone
-}
 
 // Build a valid cURL string for a recorded call. This is request-only, so it is
 // accurate for both illustrative and live entries. Upload calls emit the
@@ -409,11 +387,15 @@ export function buildCurl(call: ApiCall): string {
 // Build the JSON payload copied by "Copy JSON". For illustrative calls the
 // response is null and a note explains why — we never copy a fabricated result.
 export function buildJson(call: ApiCall): string {
-  // Upload bodies carry a huge base64 `data` field; copy the truncated
-  // placeholder plus a "_note" recording the real payload size instead.
-  const requestBodyForCopy = isUploadCall(call)
-    ? displayUploadBody(call.requestBody, { withNote: true })
-    : (call.requestBody ?? null)
+  // Upload bodies were already truncated at publish time; copy that stored body
+  // and append a "_note" recording the original payload size.
+  const requestBodyForCopy =
+    isUploadCall(call) && call.uploadOriginalSizeKb
+      ? {
+          ...(call.requestBody as Record<string, unknown>),
+          _note: `data truncated — full payload was ${call.uploadOriginalSizeKb} KB base64`,
+        }
+      : (call.requestBody ?? null)
   return JSON.stringify(
     {
       request: {
