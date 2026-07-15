@@ -187,3 +187,31 @@ export async function deleteDocument(
     method: 'DELETE',
   })
 }
+
+// ============================================================================
+// Method-not-allowed probe (API surface demo)
+// ============================================================================
+
+/**
+ * Fire a raw request against an attachment URL for a method the resource does
+ * not support, so the resulting 405 is recorded live in the API Inspector.
+ *
+ * This intentionally goes through `authFetch` (not the throwing `request`
+ * helper) so it emits the exact same inspector entry an integrating
+ * developer's backend would produce — masked auth header included — and never
+ * throws on the expected non-2xx status. Returns the HTTP status code.
+ */
+export async function probeAttachEndpoint(
+  patientId: string,
+  method: 'PUT' | 'PATCH' | 'POST' | 'DELETE',
+  scope: 'collection' | 'item',
+  documentId?: string,
+): Promise<number> {
+  const path =
+    scope === 'collection'
+      ? `/patient/${patientId}/attach`
+      : `/patient/${patientId}/attach/${documentId || 'sample-document-id'}`
+  const baseUrl = getOneHealthBaseUrl()
+  const res = await authFetch(`${baseUrl}/api${path}`, { method })
+  return res.status
+}

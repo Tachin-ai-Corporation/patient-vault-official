@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { AttachDocumentModal } from '@/components/patients/attach-document-modal'
+import { AttachApiSurface } from '@/components/patients/attach-api-surface'
 import {
   listDocuments,
   getDocument,
@@ -198,14 +199,20 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
       title="documents"
       summary={summary}
       action={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAttachOpen(true)}
-        >
-          <Plus className="h-3.5 w-3.5" data-icon="inline-start" />
-          Attach document
-        </Button>
+        <div className="flex items-center gap-2">
+          <AttachApiSurface
+            patientId={patientId}
+            sampleDocumentId={documents?.[0]?.documentId}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAttachOpen(true)}
+          >
+            <Plus className="h-3.5 w-3.5" data-icon="inline-start" />
+            Attach document
+          </Button>
+        </div>
       }
     >
       {/* Filters — both re-query the API */}
