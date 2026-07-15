@@ -10,7 +10,7 @@
 
 "use client"
 
-import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
+import { apiRequest } from "@/lib/api/client"
 import {
   type Patient,
   type Coded,
@@ -402,25 +402,13 @@ export function addressDtoToView(a: AddressDTO): AddressView {
 }
 
 // ============================================================================
-// Low-level request helper
+// Low-level request helper (shared — see lib/api/client.ts)
 // ============================================================================
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const baseUrl = getOneHealthBaseUrl()
-  const res = await authFetch(`${baseUrl}/api${path}`, init)
-  if (!res.ok) {
-    let detail = ""
-    try {
-      detail = await res.text()
-    } catch {
-      /* ignore */
-    }
-    throw new Error(`1health API ${res.status}: ${detail || res.statusText}`)
-  }
-  if (res.status === 204) return undefined as T
-  const text = await res.text()
-  return (text ? JSON.parse(text) : undefined) as T
-}
+// All patient calls route through the single shared client so the base path
+// and `/api` prefix are assembled in exactly one place. Call sites keep passing
+// the versioned path (e.g. `/v3/patient/...`).
+const request = apiRequest
 
 // ============================================================================
 // Patient list / grid / find
