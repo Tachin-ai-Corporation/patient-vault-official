@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import useSWR from 'swr'
 import {
   MoreVertical,
@@ -16,7 +16,12 @@ import {
   RefreshCw,
   Check,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Modal } from '@/components/ui/modal'
 import { Drawer } from '@/components/ui/drawer'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -530,7 +535,13 @@ function DrawerRow({
   )
 }
 
-/** Row kebab menu. Deleted rows only offer "View details". */
+/**
+ * Row kebab menu. Uses the shared Popover primitive (portal-based) so the menu
+ * renders above the table and is never clipped by the `overflow-x-auto` table
+ * wrapper — matching the columns menu and API-surface popover. Controlled so an
+ * item selection can close the menu before running its action. Deleted rows
+ * only offer "View details".
+ */
 function RowMenu({
   deleted,
   onView,
@@ -543,23 +554,6 @@ function RowMenu({
   onDelete: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
 
   function pick(fn: () => void) {
     setOpen(false)
@@ -567,22 +561,15 @@ function RowMenu({
   }
 
   return (
-    <div ref={ref} className="relative inline-block text-left">
-      <Button
-        variant="ghost"
-        size="icon-sm"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
         aria-label="Document actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
       >
         <MoreVertical className="h-4 w-4" />
-      </Button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-[calc(100%+4px)] z-50 w-44 overflow-hidden rounded-card border border-border bg-popover p-1 shadow-xl"
-        >
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-44 p-1">
+        <div role="menu">
           <MenuItem icon={Eye} onClick={() => pick(onView)}>
             View details
           </MenuItem>
@@ -601,8 +588,8 @@ function RowMenu({
             </>
           )}
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
