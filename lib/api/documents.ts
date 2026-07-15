@@ -1,20 +1,20 @@
 /**
  * Client-side Patient Vault document (attachment) API (1health v3).
  *
- * Typed wrappers over `authFetch` for the patient attachment endpoints. Every
- * call goes through the shared `request()` helper so it uses the same base
- * path, auth header, and API Inspector logging as the rest of the app (see
- * lib/api/patient.ts).
+ * Typed wrappers for the patient attachment endpoints. Every call goes through
+ * the shared client (`apiRequest` / `apiFetch` in lib/api/client.ts) so it uses
+ * the same versioned base path, auth header, and API Inspector logging as the
+ * patient module.
  *
- * Endpoints:
- *   GET    /patient/{id}/attach                 list (newest first)
- *   GET    /patient/{id}/attach/{documentId}    detail (+ fresh downloadUrl)
- *   DELETE /patient/{id}/attach/{documentId}    deactivate (file retained)
+ * Endpoints (all under the shared /api/v3 base):
+ *   GET    /v3/patient/{id}/attach                 list (newest first)
+ *   GET    /v3/patient/{id}/attach/{documentId}    detail (+ fresh downloadUrl)
+ *   DELETE /v3/patient/{id}/attach/{documentId}    deactivate (file retained)
  */
 
 'use client'
 
-import { authFetch, getOneHealthBaseUrl } from '@/lib/auth-client'
+import { apiRequest, apiFetch } from '@/lib/api/client'
 
 // ============================================================================
 // Types
@@ -56,35 +56,8 @@ export interface DocumentListQuery {
 }
 
 // ============================================================================
-// Low-level request helper (mirrors lib/api/patient.ts)
+// Helpers
 // ============================================================================
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const baseUrl = getOneHealthBaseUrl()
-  const res = await authFetch(`${baseUrl}/api${path}`, init)
-  if (!res.ok) {
-    // Surface the API's `message` field when present so callers can show it.
-    let message = ''
-    let detail = ''
-    try {
-      detail = await res.text()
-      if (detail) {
-        try {
-          const parsed = JSON.parse(detail)
-          if (parsed && typeof parsed.message === 'string') message = parsed.message
-        } catch {
-          /* not JSON */
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    throw new Error(message || `1health API ${res.status}: ${detail || res.statusText}`)
-  }
-  if (res.status === 204) return undefined as T
-  const text = await res.text()
-  return (text ? JSON.parse(text) : undefined) as T
-}
 
 function unwrapList<T>(data: unknown, ...keys: string[]): T[] {
   if (Array.isArray(data)) return data as T[]
@@ -117,8 +90,8 @@ export async function listDocuments(
   else if (query.status === 'deleted') params.set('active', 'false')
   // 'active' (default) omits the parameter entirely.
   const qs = params.toString()
-  const data = await request<unknown>(
-    `/patient/${patientId}/attach${qs ? `?${qs}` : ''}`,
+  const data = await apiRequest<unknown>(
+    `/v3/patient/${patientId}/attach${qs ? `?${qs}` : ''}`,
     { method: 'GET' },
   )
   return unwrapList<DocumentDTO>(data, 'documents', 'attachments', 'content', 'items', 'data')
@@ -133,7 +106,7 @@ export async function getDocument(
   patientId: string,
   documentId: string,
 ): Promise<DocumentDTO> {
-  return request<DocumentDTO>(`/patient/${patientId}/attach/${documentId}`, {
+  return apiRequest<DocumentDTO>(`/v3/patient/${patientId}/attach/${documentId}`, {
     method: 'GET',
   })
 }
@@ -168,7 +141,7 @@ export async function attachDocument(
   if (input.metadata && Object.keys(input.metadata).length > 0) {
     body.metadata = input.metadata
   }
-  return request<DocumentDTO>(`/patient/${patientId}/attach`, {
+  return apiRequest<DocumentDTO>(`/v3/patient/${patientId}/attach`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -183,7 +156,7 @@ export async function deleteDocument(
   patientId: string,
   documentId: string,
 ): Promise<void> {
-  await request<unknown>(`/patient/${patientId}/attach/${documentId}`, {
+  await apiRequest<unknown>(`/v3/patient/${patientId}/attach/${documentId}`, {
     method: 'DELETE',
   })
 }
@@ -196,10 +169,10 @@ export async function deleteDocument(
  * Fire a raw request against an attachment URL for a method the resource does
  * not support, so the resulting 405 is recorded live in the API Inspector.
  *
- * This intentionally goes through `authFetch` (not the throwing `request`
- * helper) so it emits the exact same inspector entry an integrating
- * developer's backend would produce — masked auth header included — and never
- * throws on the expected non-2xx status. Returns the HTTP status code.
+ * This intentionally goes through `apiFetch` (the non-throwing shared client)
+ * so it emits the exact same inspector entry an integrating developer's backend
+ * would produce — same base path + masked auth header — and never throws on the
+ * expected non-2xx status. Returns the HTTP status code.
  */
 export async function probeAttachEndpoint(
   patientId: string,
@@ -209,9 +182,8 @@ export async function probeAttachEndpoint(
 ): Promise<number> {
   const path =
     scope === 'collection'
-      ? `/patient/${patientId}/attach`
-      : `/patient/${patientId}/attach/${documentId || 'sample-document-id'}`
-  const baseUrl = getOneHealthBaseUrl()
-  const res = await authFetch(`${baseUrl}/api${path}`, { method })
+      ? `/v3/patient/${patientId}/attach`
+      : `/v3/patient/${patientId}/attach/${documentId || 'sample-document-id'}`
+  const res = await apiFetch(path, { method })
   return res.status
 }
