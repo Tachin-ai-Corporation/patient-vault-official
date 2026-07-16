@@ -8,6 +8,7 @@ import { Field, FieldGroup, Select, TextInput } from '@/components/ui/field'
 import {
   ADDRESS_USE_OPTIONS,
   CONTACT_TYPE_OPTIONS,
+  COUNTRY_OPTIONS,
   ETHNICITY_OPTIONS,
   GENDER_IDENTITY_OPTIONS,
   LANGUAGE_OPTIONS,
@@ -406,13 +407,19 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
                 />
               </Field>
               <Field label="Country" htmlFor="addr-country">
-                <TextInput
+                <Select
                   id="addr-country"
                   value={address.country}
                   onChange={(e) =>
                     setAddress({ ...address, country: e.target.value })
                   }
-                />
+                >
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
               </Field>
             </div>
           )}

@@ -8,6 +8,7 @@ import { Field, Select, TextInput } from '@/components/ui/field'
 import {
   ADDRESS_USE_OPTIONS,
   CONTACT_TYPE_OPTIONS,
+  COUNTRY_OPTIONS,
   type ContactType,
   type AddressUse,
 } from '@/lib/patient-data'
@@ -248,13 +249,19 @@ export function RelatedRecordModal({
             />
           </Field>
           <Field label="Country" htmlFor="ra-country">
-            <TextInput
+            <Select
               id="ra-country"
               value={address.country}
               onChange={(e) =>
                 setAddress({ ...address, country: e.target.value })
               }
-            />
+            >
+              {COUNTRY_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
       )}
