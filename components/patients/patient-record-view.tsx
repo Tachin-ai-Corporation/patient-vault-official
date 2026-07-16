@@ -231,7 +231,11 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         `${editId ? 'Updated' : 'Added'} ${related === 'contact' ? 'contact' : 'address'}`,
       )
     } catch (e) {
+      // Surface the API error and re-throw so RelatedRecordModal keeps itself
+      // open (it only closes when onSave resolves) instead of signalling a
+      // false success.
       showNotice((e as Error).message || 'Failed to save record')
+      throw e
     } finally {
       setBusy(false)
     }
