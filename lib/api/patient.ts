@@ -456,7 +456,10 @@ export async function findPatients(criteria: {
   if (criteria.firstName) params.set("firstName", criteria.firstName)
   if (criteria.lastName) params.set("lastName", criteria.lastName)
   if (criteria.dob) params.set("dob", criteria.dob)
-  if (criteria.sexAtBirth) params.set("sexAtBirth", criteria.sexAtBirth)
+  // The find endpoint expects the snake_case `sex_at_birth` query param (see
+  // lib/api-endpoints.ts). Sending camelCase `sexAtBirth` is ignored/rejected
+  // server-side, so keep this aligned with the documented parameter name.
+  if (criteria.sexAtBirth) params.set("sex_at_birth", criteria.sexAtBirth)
   // Docs: PatientFindResponseDTO -> { patients: [{ id, matchedOn, score }] }.
   const data = await request<{ patients: FindCandidate[] }>(
     `/v3/patient/find?${params.toString()}`,
