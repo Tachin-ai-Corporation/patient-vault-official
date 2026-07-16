@@ -99,6 +99,24 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
     if (!given.trim()) nextErrors.given = 'Given name is required.'
     if (!family.trim()) nextErrors.family = 'Family name is required.'
     if (!dob) nextErrors.dob = 'Date of birth is required.'
+
+    // When a contact block is added it must carry a value, otherwise the
+    // POST /contact call fails server-side.
+    if (contact && !contact.value.trim()) {
+      nextErrors.c_value = 'Contact value is required.'
+    }
+
+    // When an address block is added, the API requires a complete address —
+    // notably postalCode, whose omission the server rejects with a 400. Enforce
+    // the full set here so partial addresses never reach the API.
+    if (address) {
+      if (!address.line1.trim()) nextErrors.addr_line1 = 'Line 1 is required.'
+      if (!address.city.trim()) nextErrors.addr_city = 'City is required.'
+      if (!address.state.trim()) nextErrors.addr_state = 'State is required.'
+      if (!address.postal_code.trim())
+        nextErrors.addr_zip = 'Postal code is required.'
+    }
+
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
@@ -304,10 +322,11 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
                   ))}
                 </Select>
               </Field>
-              <Field label="Value" htmlFor="c-value">
+              <Field label="Value" htmlFor="c-value" error={errors.c_value}>
                 <TextInput
                   id="c-value"
                   value={contact.value}
+                  invalid={!!errors.c_value}
                   onChange={(e) =>
                     setContact({ ...contact, value: e.target.value })
                   }
@@ -345,38 +364,42 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
                   ))}
                 </Select>
               </Field>
-              <Field label="Line 1" htmlFor="addr-l1">
+              <Field label="Line 1" htmlFor="addr-l1" error={errors.addr_line1}>
                 <TextInput
                   id="addr-l1"
                   value={address.line1}
+                  invalid={!!errors.addr_line1}
                   onChange={(e) =>
                     setAddress({ ...address, line1: e.target.value })
                   }
                   placeholder="123 Maple Ave"
                 />
               </Field>
-              <Field label="City" htmlFor="addr-city">
+              <Field label="City" htmlFor="addr-city" error={errors.addr_city}>
                 <TextInput
                   id="addr-city"
                   value={address.city}
+                  invalid={!!errors.addr_city}
                   onChange={(e) =>
                     setAddress({ ...address, city: e.target.value })
                   }
                 />
               </Field>
-              <Field label="State" htmlFor="addr-state">
+              <Field label="State" htmlFor="addr-state" error={errors.addr_state}>
                 <TextInput
                   id="addr-state"
                   value={address.state}
+                  invalid={!!errors.addr_state}
                   onChange={(e) =>
                     setAddress({ ...address, state: e.target.value })
                   }
                 />
               </Field>
-              <Field label="Postal code" htmlFor="addr-zip">
+              <Field label="Postal code" htmlFor="addr-zip" error={errors.addr_zip}>
                 <TextInput
                   id="addr-zip"
                   value={address.postal_code}
+                  invalid={!!errors.addr_zip}
                   onChange={(e) =>
                     setAddress({ ...address, postal_code: e.target.value })
                   }
