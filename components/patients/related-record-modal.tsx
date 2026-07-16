@@ -56,7 +56,9 @@ type RelatedRecordModalProps = {
   open: boolean
   kind: RelatedKind
   onClose: () => void
-  onSave: (value: RelatedValue) => void
+  // May be async; the modal only closes once it resolves without throwing, so a
+  // server-side rejection keeps the dialog open with the user's input intact.
+  onSave: (value: RelatedValue) => void | Promise<void>
   // When provided, the modal opens in edit mode: fields are pre-filled with the
   // existing record and the submit action reads as "Save" instead of "Add".
   initial?: RelatedValue | null
@@ -72,6 +74,7 @@ export function RelatedRecordModal({
   const isEdit = initial != null
   const [contact, setContact] = useState<ContactDraft>(EMPTY_CONTACT)
   const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!open) return
@@ -81,11 +84,34 @@ export function RelatedRecordModal({
     } else {
       setAddress(initial ? (initial as AddressDraft) : EMPTY_ADDRESS)
     }
+    setErrors({})
   }, [open, kind, initial])
 
-  function handleSubmit() {
-    onSave(kind === 'contact' ? contact : address)
-    onClose()
+  async function handleSubmit() {
+    // Enforce the fields the v3 API marks required so an incomplete record is
+    // never POSTed. Address requires line1, city, state, and postalCode (a
+    // missing state is what the API rejects with a 400); a contact requires a
+    // value. This mirrors the add-patient and demographics modals.
+    const nextErrors: Record<string, string> = {}
+    if (kind === 'contact') {
+      if (!contact.value.trim()) nextErrors.value = 'Contact value is required.'
+    } else {
+      if (!address.line1.trim()) nextErrors.line1 = 'Line 1 is required.'
+      if (!address.city.trim()) nextErrors.city = 'City is required.'
+      if (!address.state.trim()) nextErrors.state = 'State is required.'
+      if (!address.postal_code.trim())
+        nextErrors.postal_code = 'Postal code is required.'
+    }
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+
+    try {
+      await onSave(kind === 'contact' ? contact : address)
+      onClose()
+    } catch {
+      // The parent surfaces the API error via a notice; keep the modal open so
+      // the user can correct their input rather than lose it.
+    }
   }
 
   const title = `${isEdit ? 'Edit' : 'Add'} ${kind}`
@@ -128,10 +154,11 @@ export function RelatedRecordModal({
               ))}
             </Select>
           </Field>
-          <Field label="Value" htmlFor="rc-value">
+          <Field label="Value" htmlFor="rc-value" error={errors.value}>
             <TextInput
               id="rc-value"
               value={contact.value}
+              invalid={!!errors.value}
               onChange={(e) => setContact({ ...contact, value: e.target.value })}
               placeholder={
                 contact.type === 'email' ? 'name@example.com' : '+15555551234'
@@ -177,10 +204,11 @@ export function RelatedRecordModal({
               ))}
             </Select>
           </Field>
-          <Field label="Line 1" htmlFor="ra-l1">
+          <Field label="Line 1" htmlFor="ra-l1" error={errors.line1}>
             <TextInput
               id="ra-l1"
               value={address.line1}
+              invalid={!!errors.line1}
               onChange={(e) => setAddress({ ...address, line1: e.target.value })}
               placeholder="123 Maple Ave"
             />
@@ -193,24 +221,27 @@ export function RelatedRecordModal({
               placeholder="Apt 4B"
             />
           </Field>
-          <Field label="City" htmlFor="ra-city">
+          <Field label="City" htmlFor="ra-city" error={errors.city}>
             <TextInput
               id="ra-city"
               value={address.city}
+              invalid={!!errors.city}
               onChange={(e) => setAddress({ ...address, city: e.target.value })}
             />
           </Field>
-          <Field label="State" htmlFor="ra-state">
+          <Field label="State" htmlFor="ra-state" error={errors.state}>
             <TextInput
               id="ra-state"
               value={address.state}
+              invalid={!!errors.state}
               onChange={(e) => setAddress({ ...address, state: e.target.value })}
             />
           </Field>
-          <Field label="Postal code" htmlFor="ra-zip">
+          <Field label="Postal code" htmlFor="ra-zip" error={errors.postal_code}>
             <TextInput
               id="ra-zip"
               value={address.postal_code}
+              invalid={!!errors.postal_code}
               onChange={(e) =>
                 setAddress({ ...address, postal_code: e.target.value })
               }

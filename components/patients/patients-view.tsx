@@ -157,12 +157,17 @@ export function PatientsView() {
       const created = await createPatientRecord(draft.patient)
       if (draft.contact) await addPatientContact(created.id, draft.contact)
       if (draft.address) await addPatientAddress(created.id, draft.address)
-      await reloadPatients()
       showNotice(
         `Added ${draft.patient.firstName} ${draft.patient.lastName}`,
       )
     } catch (e) {
+      // Surface the real API error and re-throw so the modal stays open instead
+      // of signalling a false success. A patient/contact created before the
+      // failing step still persists, so we reload below to reflect it.
       showNotice((e as Error).message || 'Failed to add patient')
+      throw e
+    } finally {
+      await reloadPatients()
     }
   }
 
