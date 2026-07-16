@@ -10,7 +10,7 @@
 
 "use client"
 
-import { apiRequest } from "@/lib/api/client"
+import { apiRequest, apiFetch } from "@/lib/api/client"
 import {
   type Patient,
   type Coded,
@@ -613,15 +613,45 @@ export interface DeceasedInput {
   placeOfDeath?: string
 }
 
-/** GET the deceased record. Returns null when the patient is not marked
- *  deceased (the API answers 404 in that case, which is not an error here). */
+/**
+ * GET the deceased record. Returns null when the patient simply has no death
+ * record (the common case), rather than treating it as an error.
+ *
+ * The 1health API signals "no deceased record" inconsistently: the transport
+ * status is HTTP 400, while the JSON body carries an application code of 404 —
+ * e.g. `{ "code": 404, "message": "No deceased record found for patient..." }`.
+ * (So the honest answer to "is it 400 or 404?" is: the HTTP status is 400 and
+ * the body's `code` is 404 — they disagree.) We use the non-throwing `apiFetch`
+ * so the call is still logged in the API Inspector, then inspect the real
+ * status and body: the not-deceased case is detected from a 404 status, a body
+ * `code` of 404, or a "no deceased record" message, and returns null. Any other
+ * failure (e.g. a genuine malformed-request 400) is surfaced as an error.
+ */
 export async function fetchDeceased(patientId: string): Promise<DeceasedRecord | null> {
-  try {
-    return await request<DeceasedRecord>(`/v3/patient/${patientId}/deceased`, { method: "GET" })
-  } catch (e) {
-    if (e instanceof Error && /\b404\b/.test(e.message)) return null
-    throw e
+  const res = await apiFetch(`/v3/patient/${patientId}/deceased`, { method: "GET" })
+  const text = await res.text().catch(() => "")
+
+  if (res.ok) {
+    return text ? (JSON.parse(text) as DeceasedRecord) : null
   }
+
+  let bodyCode: number | undefined
+  let bodyMessage = ""
+  try {
+    const parsed = JSON.parse(text)
+    if (parsed && typeof parsed === "object") {
+      if (typeof parsed.code === "number") bodyCode = parsed.code
+      if (typeof parsed.message === "string") bodyMessage = parsed.message
+    }
+  } catch {
+    /* not JSON */
+  }
+
+  const noRecord =
+    res.status === 404 || bodyCode === 404 || /no deceased record/i.test(bodyMessage)
+  if (noRecord) return null
+
+  throw new Error(bodyMessage || `1health API ${res.status}: ${text || res.statusText}`)
 }
 
 /** Mark a patient deceased. POST is not idempotent — if the patient is already
