@@ -263,6 +263,18 @@ export function RelatedRecordModal({
               ))}
             </Select>
           </Field>
+          <Field label="Primary" htmlFor="ra-primary">
+            <Select
+              id="ra-primary"
+              value={address.primary ? 'yes' : 'no'}
+              onChange={(e) =>
+                setAddress({ ...address, primary: e.target.value === 'yes' })
+              }
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </Select>
+          </Field>
         </div>
       )}
     </Modal>

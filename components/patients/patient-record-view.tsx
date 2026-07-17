@@ -7,12 +7,19 @@ import useSWR from 'swr'
 import { ArrowLeft, Pencil, Plus, FileText, Trash2, HeartPulse } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
 import {
+  CONTACT_TYPE_OPTIONS,
   languageLabel,
   patientFullName,
   prettifyCode,
   type Patient,
 } from '@/lib/patient-data'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { CopyButton } from '@/components/ui/copy-button'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
@@ -76,6 +83,10 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
   const [deceasedOpen, setDeceasedOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // Contacts card view controls (client-side over the already-loaded record):
+  // filter to one contact type and optionally sort by type.
+  const [contactTypeFilter, setContactTypeFilter] = useState<string>('all')
+  const [contactSortByType, setContactSortByType] = useState(false)
 
   function openAddRelated(kind: RelatedKind) {
     setRelatedEditId(null)
@@ -303,6 +314,24 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
     ? `${primaryContact.type} · ${primaryContact.value}`
     : 'No contacts on file'
 
+  // Contact types actually present, used to build the filter dropdown so it
+  // only offers types the patient has.
+  const presentContactTypes = CONTACT_TYPE_OPTIONS.filter((t) =>
+    patient.contacts.some((c) => c.type === t),
+  )
+  // Apply the type filter, then optionally sort by type (primary contacts
+  // first within each type). Sorting is stable, preserving original order.
+  const visibleContacts = patient.contacts
+    .filter(
+      (c) => contactTypeFilter === 'all' || c.type === contactTypeFilter,
+    )
+    .sort((a, b) => {
+      if (!contactSortByType) return 0
+      const byType = a.type.localeCompare(b.type)
+      if (byType !== 0) return byType
+      return Number(b.isPrimary) - Number(a.isPrimary)
+    })
+
   const primaryAddress =
     patient.addresses.find((a) => a.primary) ??
     patient.addresses.find((a) => a.use === 'home') ??
@@ -489,8 +518,50 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
           {patient.contacts.length === 0 ? (
             <EmptyLine>No contacts on file.</EmptyLine>
           ) : (
-            <div className="divide-y divide-border">
-              {patient.contacts.map((c) => (
+            <>
+              {/* Filter / sort controls (client-side over the loaded record) */}
+              <div className="mb-3 flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Type</span>
+                  <div className="w-36">
+                    <Select
+                      value={contactTypeFilter}
+                      onValueChange={(v) => setContactTypeFilter(v as string)}
+                    >
+                      <SelectTrigger
+                        aria-label="Filter contacts by type"
+                        className="h-8"
+                      />
+                      <SelectContent>
+                        <SelectItem value="all">All types</SelectItem>
+                        {presentContactTypes.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t.charAt(0).toUpperCase() + t.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-pressed={contactSortByType}
+                  onClick={() => setContactSortByType((v) => !v)}
+                  className={`rounded-input border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    contactSortByType
+                      ? 'border-aqua/60 bg-muted/40 text-foreground'
+                      : 'border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Sort by type
+                </button>
+              </div>
+
+              {visibleContacts.length === 0 ? (
+                <EmptyLine>No contacts match this filter.</EmptyLine>
+              ) : (
+                <div className="divide-y divide-border">
+                  {visibleContacts.map((c) => (
                 <div
                   key={c.id}
                   className="flex items-center justify-between gap-3 py-2"
@@ -540,7 +611,9 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
                   </span>
                 </div>
               ))}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </RecordSectionCard>
 
