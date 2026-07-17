@@ -76,6 +76,9 @@ export function RelatedRecordModal({
   const [contact, setContact] = useState<ContactDraft>(EMPTY_CONTACT)
   const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // Server-side rejection (e.g. the API refusing to un-set the only primary
+  // address). Shown inline inside the dialog since the dialog stays open.
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -86,6 +89,7 @@ export function RelatedRecordModal({
       setAddress(initial ? (initial as AddressDraft) : EMPTY_ADDRESS)
     }
     setErrors({})
+    setSubmitError(null)
   }, [open, kind, initial])
 
   async function handleSubmit() {
@@ -106,12 +110,19 @@ export function RelatedRecordModal({
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
+    setSubmitError(null)
     try {
       await onSave(kind === 'contact' ? contact : address)
       onClose()
-    } catch {
-      // The parent surfaces the API error via a notice; keep the modal open so
-      // the user can correct their input rather than lose it.
+    } catch (e) {
+      // Surface the server rejection inline and keep the modal open so the user
+      // can correct their input rather than lose it. Common case: the API
+      // refuses to demote the only primary address ("first set another
+      // Location as the primary").
+      setSubmitError(
+        (e as Error).message ||
+          'Could not save. Please review the fields and try again.',
+      )
     }
   }
 
@@ -138,6 +149,14 @@ export function RelatedRecordModal({
         </>
       }
     >
+      {submitError && (
+        <div
+          role="alert"
+          className="mb-3 rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {submitError}
+        </div>
+      )}
       {kind === 'contact' ? (
         <div className="grid grid-cols-2 gap-3">
           <Field label="Type" htmlFor="rc-type">
