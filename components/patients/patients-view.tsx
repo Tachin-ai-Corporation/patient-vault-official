@@ -108,7 +108,18 @@ export function PatientsView() {
     }
     setFinding(true)
     try {
-      const candidates = await findPatients(parseFindCriteria(q))
+      const criteria = parseFindCriteria(q)
+      let candidates = await findPatients(criteria)
+      // The find API can't match first + last name in one request, so a single
+      // token is sent as lastName first. If that finds nothing, retry the same
+      // token as firstName (e.g. "lily" is a first name) before giving up.
+      const isSingleName =
+        criteria.lastName != null &&
+        criteria.firstName == null &&
+        criteria.dob == null
+      if (candidates.length === 0 && isSingleName) {
+        candidates = await findPatients({ firstName: q, exact: false })
+      }
       const byId = new Map(patients.map((p) => [p.id, p]))
       const ranked = candidates
         .map((c) => byId.get(String(c.id)))
