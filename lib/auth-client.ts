@@ -90,13 +90,7 @@ const SESSION_COOKIES = [
 
 /**
  * User-facing 1health login page per environment, deep-linked to the Patient
- * Vault app. This is the SAME canonical URL used by the /auth page (LOGIN_URLS)
- * and the marketing nav/hero — the only correct place to send a signed-out
- * user, since this app is launched via 1health SSO and has no local login page.
- *
- * NOTE: the previous `https://dev.1health.io/patient-vault` value was NOT a real
- * page and returned a 404 on sign-out (and never actually logged the user out,
- * so re-launching auto-authenticated). Do not reintroduce it.
+ * Vault app. Used as the post-logout landing page so the user can sign back in.
  */
 const PATIENT_VAULT_LOGIN_URLS: Record<"demo" | "prod", string> = {
   demo: "https://1health.demo.1health.io/login?openApp=Patient%20Vault",
@@ -104,13 +98,39 @@ const PATIENT_VAULT_LOGIN_URLS: Record<"demo" | "prod", string> = {
 }
 
 /**
- * Resolves the 1health login page for the active environment. Read this BEFORE
- * clearing cookies, since it depends on `onehealth_environment`. Falls back to
- * the demo login page if the environment cookie is absent.
+ * Builds the 1health RP-initiated logout URL for the active session.
+ *
+ * WHY THIS EXISTS: clearing our own cookies is NOT enough to log out. This app
+ * is launched via 1health SSO, and the SSO session lives on the 1health domain.
+ * If we merely clear cookies and send the user to a login page that deep-links
+ * back into the app (`?openApp=Patient Vault`), 1health sees the still-active
+ * session and immediately re-launches the app with a fresh LPL — the user is
+ * "logged back in". To truly sign out we must hit 1health's OIDC end-session
+ * endpoint so the SSO session itself is terminated.
+ *
+ * The endpoint (`/auth/connect/logout`) and its sibling `/auth/oauth2/token`
+ * (already used for refresh) are confirmed in the environment's OIDC discovery
+ * document. We derive the host from the `onehealth_base_url` cookie (stripping a
+ * trailing `/api`) so this works for both demo and prod without hardcoding.
+ *
+ * Read this BEFORE clearing cookies, since it depends on `onehealth_base_url`
+ * and `onehealth_environment`.
  */
-export function getPatientVaultHomeUrl(): string {
-  const env = getCookie("onehealth_environment")
-  return env === "prod" ? PATIENT_VAULT_LOGIN_URLS.prod : PATIENT_VAULT_LOGIN_URLS.demo
+export function getSignOutUrl(): string {
+  const env = getCookie("onehealth_environment") === "prod" ? "prod" : "demo"
+  const postLogoutRedirect = PATIENT_VAULT_LOGIN_URLS[env]
+
+  const rawBase = getCookie("onehealth_base_url")
+  // Fall back to the login page directly if we somehow have no base URL to build
+  // the logout endpoint from (better than navigating nowhere).
+  if (!rawBase) return postLogoutRedirect
+
+  const base = rawBase.replace(/\/api\/?$/, "").replace(/\/$/, "")
+  const params = new URLSearchParams({
+    client_id: "public-client",
+    post_logout_redirect_uri: postLogoutRedirect,
+  })
+  return `${base}/auth/connect/logout?${params.toString()}`
 }
 
 /**
