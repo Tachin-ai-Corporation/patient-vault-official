@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
-import { getPatientVaultHomeUrl, signOut } from '@/lib/auth-client'
+import { getSignOutUrl, signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
@@ -19,13 +19,14 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Resolve the 1health Patient Vault homepage BEFORE clearing cookies
-      // (it reads onehealth_base_url), then wipe every session cookie so the
-      // user is truly logged out — a soft route change alone left the cookies
-      // in place, so the session survived. Finally, hard-navigate to 1health.
-      const homeUrl = getPatientVaultHomeUrl()
+      // Build the 1health end-session URL BEFORE clearing cookies (it reads
+      // onehealth_base_url/environment), then wipe every session cookie on our
+      // origin. Finally, hard-navigate to 1health's OIDC logout so the SSO
+      // session itself is terminated — otherwise 1health just re-launches the
+      // app and the user appears "logged back in".
+      const logoutUrl = getSignOutUrl()
       signOut()
-      window.location.assign(homeUrl)
+      window.location.assign(logoutUrl)
     }
   }
 
