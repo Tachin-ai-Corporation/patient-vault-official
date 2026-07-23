@@ -89,18 +89,68 @@ const SESSION_COOKIES = [
 ] as const
 
 /**
- * Clears every session cookie so the user is fully logged out of this app.
+ * Fully logs the user out of THIS app. Await this before navigating away.
  *
- * Note: this only clears cookies on OUR origin, which is all that's needed.
- * Authentication here is LPL-launch based (see /app/api/token), not an OIDC
- * browser session, so there is no separate 1health session for this app to end.
- * The caller hard-navigates to /auth afterward — deliberately NOT to a 1health
- * URL carrying `?openApp=Patient Vault`, which would make the still-logged-in
- * 1health platform relaunch the app and appear to "log the user back in".
+ * Clearing happens in three layers because the session cookies may be written
+ * scoped to the parent domain (`.1health.io`) and/or marked HttpOnly during the
+ * 1health launch — neither of which client JS can remove:
+ *
+ *   1. SERVER: POST /api/logout, which expires every session cookie across the
+ *      host-only AND parent-domain scopes (and can clear HttpOnly cookies). This
+ *      is the layer that actually kills the stale `access_token` that was
+ *      silently re-authenticating the user. We await it so the Set-Cookie
+ *      response is applied before we navigate.
+ *   2. CLIENT cookies: sweep readable (non-HttpOnly) cookies with path/domain
+ *      variants as a fast, belt-and-suspenders clear.
+ *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
+ *
+ * IMPORTANT — what this does NOT do: it cannot end the 1health *platform*
+ * session, which lives on the 1health domain. Relaunching the app from 1health
+ * (or a `?openApp=Patient Vault` deep-link) can still mint a fresh LPL. That is
+ * a platform-side logout, separate from signing out of this app.
  */
-export function signOut(): void {
-  for (const name of SESSION_COOKIES) {
-    deleteCookie(name)
+export async function signOut(): Promise<void> {
+  // 1. Authoritative server-side clear (handles parent-domain + HttpOnly).
+  try {
+    await fetch("/api/logout", { method: "POST", credentials: "include", cache: "no-store" })
+  } catch {
+    // Network failure shouldn't block the local clear + redirect below.
+  }
+
+  // 2. Client-side cookie sweep (known cookies + any other readable ones).
+  if (typeof document !== "undefined") {
+    const host = window.location.hostname
+    const labels = host.split(".")
+    const domains = [undefined, host, `.${host}`]
+    // Add every parent-domain scope (e.g. `.1health.io`) so a broadly-scoped
+    // cookie is also targeted.
+    for (let i = 1; i < labels.length - 1; i++) {
+      domains.push("." + labels.slice(i).join("."))
+    }
+    const paths = ["/", window.location.pathname]
+
+    const names = new Set<string>(SESSION_COOKIES as readonly string[])
+    for (const cookie of document.cookie.split(";")) {
+      const name = cookie.split("=")[0]?.trim()
+      if (name) names.add(name)
+    }
+
+    for (const name of names) {
+      for (const path of paths) {
+        for (const domain of domains) {
+          const domainPart = domain ? `; domain=${domain}` : ""
+          document.cookie = `${name}=; path=${path}; max-age=0${domainPart}`
+        }
+      }
+    }
+  }
+
+  // 3. Clear web storage so nothing can rehydrate the old session.
+  try {
+    window.localStorage?.clear()
+    window.sessionStorage?.clear()
+  } catch {
+    // Storage may be unavailable (private mode / SSR) — safe to ignore.
   }
 }
 
