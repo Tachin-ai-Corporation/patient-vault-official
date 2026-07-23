@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
-import { signOut } from '@/lib/auth-client'
+import { getPlatformLogoutUrl, signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
@@ -19,16 +19,20 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // AWAIT the full logout (server route clears parent-domain/HttpOnly
-      // cookies that client JS can't touch — the stale access_token that was
-      // silently re-authenticating the user), then hard-navigate to our own
-      // /auth screen. We deliberately do NOT redirect to a 1health URL carrying
-      // `?openApp=Patient Vault`, which would make the still-logged-in 1health
-      // platform mint a fresh LPL and relaunch us. Landing on /auth with no
-      // `lpl` shows the signed-out screen and never auto-authenticates; the
-      // full-page load also discards in-memory SWR caches from the session.
+      // Resolve the 1health platform logout URL BEFORE clearing cookies (it
+      // reads onehealth_base_url). Then AWAIT the app-side logout, which clears
+      // our own session cookies (including parent-domain/HttpOnly ones via the
+      // /api/logout server route). Finally, hard-navigate to the 1health
+      // PLATFORM logout endpoint.
+      //
+      // This last step is the real fix: clearing our cookies alone left the
+      // 1health SSO session alive, so reopening the app silently re-authed. The
+      // platform's `${apiHost}/api/logout` ends that SSO session server-side and
+      // redirects to the 1health login page — so the user is truly logged out
+      // and must sign in again before the app can be relaunched.
+      const platformLogoutUrl = getPlatformLogoutUrl()
       await signOut()
-      window.location.assign('/auth')
+      window.location.assign(platformLogoutUrl)
     }
   }
 
