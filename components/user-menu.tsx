@@ -12,23 +12,22 @@ export function UserMenu() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  function handleSelect(label: string) {
+  async function handleSelect(label: string) {
     setOpen(false)
     if (label === 'Console') {
       router.push('/console')
       return
     }
     if (label === 'Sign out') {
-      // Clear every session cookie on our origin, then hard-navigate to our own
-      // /auth screen. We deliberately do NOT redirect to a 1health URL: this app
-      // is launched via an encrypted LPL, and any 1health link carrying the
-      // `?openApp=Patient Vault` deep-link makes the still-logged-in 1health
-      // platform mint a fresh LPL and instantly relaunch us — that is what made
-      // "sign out" appear to log the user right back in. Landing on /auth with
-      // no `lpl` param shows the signed-out screen (choose environment / paste
-      // LPL / "Go to 1health") and never auto-authenticates. The full-page load
-      // also discards in-memory SWR caches from the previous session.
-      signOut()
+      // AWAIT the full logout (server route clears parent-domain/HttpOnly
+      // cookies that client JS can't touch — the stale access_token that was
+      // silently re-authenticating the user), then hard-navigate to our own
+      // /auth screen. We deliberately do NOT redirect to a 1health URL carrying
+      // `?openApp=Patient Vault`, which would make the still-logged-in 1health
+      // platform mint a fresh LPL and relaunch us. Landing on /auth with no
+      // `lpl` shows the signed-out screen and never auto-authenticates; the
+      // full-page load also discards in-memory SWR caches from the session.
+      await signOut()
       window.location.assign('/auth')
     }
   }

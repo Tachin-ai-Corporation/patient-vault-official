@@ -89,45 +89,54 @@ const SESSION_COOKIES = [
 ] as const
 
 /**
- * Clears all client-side session state so the user is fully logged out of THIS
- * app (our origin only).
+ * Fully logs the user out of THIS app. Await this before navigating away.
  *
- * This does two things beyond the obvious:
- *   1. Deletes the known SESSION_COOKIES explicitly, AND sweeps every other
- *      readable cookie on the origin as a safety net (in case the launch flow
- *      ever writes a cookie not tracked in SESSION_COOKIES). Each cookie is
- *      cleared with several path/domain variants so a cookie written under a
- *      non-root path can't survive.
- *   2. Clears local/session storage, so nothing cached (e.g. an SWR fallback)
- *      can rehydrate a previous identity.
+ * Clearing happens in three layers because the session cookies may be written
+ * scoped to the parent domain (`.1health.io`) and/or marked HttpOnly during the
+ * 1health launch — neither of which client JS can remove:
+ *
+ *   1. SERVER: POST /api/logout, which expires every session cookie across the
+ *      host-only AND parent-domain scopes (and can clear HttpOnly cookies). This
+ *      is the layer that actually kills the stale `access_token` that was
+ *      silently re-authenticating the user. We await it so the Set-Cookie
+ *      response is applied before we navigate.
+ *   2. CLIENT cookies: sweep readable (non-HttpOnly) cookies with path/domain
+ *      variants as a fast, belt-and-suspenders clear.
+ *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
  *
  * IMPORTANT — what this does NOT do: it cannot end the 1health *platform*
- * session. This app is launched via an encrypted LPL (see /app/api/token); the
- * platform login lives on the 1health domain, in a separate browser session we
- * can't reach from here. So after signing out of this app, relaunching from
- * 1health (or any `?openApp=Patient Vault` deep-link) will still auto-issue a
- * fresh LPL and log the user straight back in. Truly forcing re-authentication
- * requires logging out of 1health itself, which is a platform-side action.
+ * session, which lives on the 1health domain. Relaunching the app from 1health
+ * (or a `?openApp=Patient Vault` deep-link) can still mint a fresh LPL. That is
+ * a platform-side logout, separate from signing out of this app.
  */
-export function signOut(): void {
-  // 1a. Explicitly clear the cookies we know about.
-  for (const name of SESSION_COOKIES) {
-    deleteCookie(name)
+export async function signOut(): Promise<void> {
+  // 1. Authoritative server-side clear (handles parent-domain + HttpOnly).
+  try {
+    await fetch("/api/logout", { method: "POST", credentials: "include", cache: "no-store" })
+  } catch {
+    // Network failure shouldn't block the local clear + redirect below.
   }
 
-  // 1b. Safety net: sweep any other readable (non-HttpOnly) cookies too.
+  // 2. Client-side cookie sweep (known cookies + any other readable ones).
   if (typeof document !== "undefined") {
     const host = window.location.hostname
-    // Try root domain variants (e.g. `.1health.io`) in addition to host-only so
-    // a cookie set with a broader Domain attribute is also removed.
-    const domains = [undefined, host, `.${host}`, `.${host.split(".").slice(-2).join(".")}`]
+    const labels = host.split(".")
+    const domains = [undefined, host, `.${host}`]
+    // Add every parent-domain scope (e.g. `.1health.io`) so a broadly-scoped
+    // cookie is also targeted.
+    for (let i = 1; i < labels.length - 1; i++) {
+      domains.push("." + labels.slice(i).join("."))
+    }
     const paths = ["/", window.location.pathname]
 
+    const names = new Set<string>(SESSION_COOKIES as readonly string[])
     for (const cookie of document.cookie.split(";")) {
       const name = cookie.split("=")[0]?.trim()
-      if (!name) continue
+      if (name) names.add(name)
+    }
+
+    for (const name of names) {
       for (const path of paths) {
-        deleteCookie(name)
         for (const domain of domains) {
           const domainPart = domain ? `; domain=${domain}` : ""
           document.cookie = `${name}=; path=${path}; max-age=0${domainPart}`
@@ -136,7 +145,7 @@ export function signOut(): void {
     }
   }
 
-  // 2. Clear web storage so nothing can rehydrate the old session.
+  // 3. Clear web storage so nothing can rehydrate the old session.
   try {
     window.localStorage?.clear()
     window.sessionStorage?.clear()
