@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
-import { getSignOutUrl, signOut } from '@/lib/auth-client'
+import { signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
@@ -19,14 +19,17 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Build the 1health end-session URL BEFORE clearing cookies (it reads
-      // onehealth_base_url/environment), then wipe every session cookie on our
-      // origin. Finally, hard-navigate to 1health's OIDC logout so the SSO
-      // session itself is terminated — otherwise 1health just re-launches the
-      // app and the user appears "logged back in".
-      const logoutUrl = getSignOutUrl()
+      // Clear every session cookie on our origin, then hard-navigate to our own
+      // /auth screen. We deliberately do NOT redirect to a 1health URL: this app
+      // is launched via an encrypted LPL, and any 1health link carrying the
+      // `?openApp=Patient Vault` deep-link makes the still-logged-in 1health
+      // platform mint a fresh LPL and instantly relaunch us — that is what made
+      // "sign out" appear to log the user right back in. Landing on /auth with
+      // no `lpl` param shows the signed-out screen (choose environment / paste
+      // LPL / "Go to 1health") and never auto-authenticates. The full-page load
+      // also discards in-memory SWR caches from the previous session.
       signOut()
-      window.location.assign(logoutUrl)
+      window.location.assign('/auth')
     }
   }
 
