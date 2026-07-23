@@ -89,27 +89,28 @@ const SESSION_COOKIES = [
 ] as const
 
 /**
- * Web host of the 1health Patient Vault app per environment.
+ * User-facing 1health login page per environment, deep-linked to the Patient
+ * Vault app. This is the SAME canonical URL used by the /auth page (LOGIN_URLS)
+ * and the marketing nav/hero — the only correct place to send a signed-out
+ * user, since this app is launched via 1health SSO and has no local login page.
  *
- * NOTE: this is intentionally NOT `onehealth_base_url`. That cookie holds the
- * *API* host (e.g. demo.1health.io), but the Patient Vault *web app* is served
- * from a different host in the demo environment (dev.1health.io). Using the API
- * host produced a 404 on sign-out.
+ * NOTE: the previous `https://dev.1health.io/patient-vault` value was NOT a real
+ * page and returned a 404 on sign-out (and never actually logged the user out,
+ * so re-launching auto-authenticated). Do not reintroduce it.
  */
-const PATIENT_VAULT_WEB_HOSTS: Record<"demo" | "prod", string> = {
-  demo: "https://dev.1health.io",
-  prod: "https://app.1health.io",
+const PATIENT_VAULT_LOGIN_URLS: Record<"demo" | "prod", string> = {
+  demo: "https://1health.demo.1health.io/login?openApp=Patient%20Vault",
+  prod: "https://1health.app.1health.io/login?openApp=Patient%20Vault",
 }
 
 /**
- * Resolves the 1health Patient Vault homepage for the active environment. Read
- * this BEFORE clearing cookies, since it depends on `onehealth_environment`.
- * Falls back to the demo web host if the environment cookie is absent.
+ * Resolves the 1health login page for the active environment. Read this BEFORE
+ * clearing cookies, since it depends on `onehealth_environment`. Falls back to
+ * the demo login page if the environment cookie is absent.
  */
 export function getPatientVaultHomeUrl(): string {
   const env = getCookie("onehealth_environment")
-  const host = env === "prod" ? PATIENT_VAULT_WEB_HOSTS.prod : PATIENT_VAULT_WEB_HOSTS.demo
-  return `${host}/patient-vault`
+  return env === "prod" ? PATIENT_VAULT_LOGIN_URLS.prod : PATIENT_VAULT_LOGIN_URLS.demo
 }
 
 /**
