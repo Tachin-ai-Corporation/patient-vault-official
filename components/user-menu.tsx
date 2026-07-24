@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
-import { getPlatformLogoutUrl, signOut } from '@/lib/auth-client'
+import {
+  getPlatformLoginUrl,
+  getPlatformLogoutUrl,
+  signOut,
+} from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
@@ -19,20 +23,36 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Resolve the 1health platform logout URL BEFORE clearing cookies (it
-      // reads onehealth_base_url). Then AWAIT the app-side logout, which clears
-      // our own session cookies (including parent-domain/HttpOnly ones via the
-      // /api/logout server route). Finally, hard-navigate to the 1health
-      // PLATFORM logout endpoint.
-      //
-      // This last step is the real fix: clearing our cookies alone left the
-      // 1health SSO session alive, so reopening the app silently re-authed. The
-      // platform's `${apiHost}/api/logout` ends that SSO session server-side and
-      // redirects to the 1health login page — so the user is truly logged out
-      // and must sign in again before the app can be relaunched.
+      // Resolve both 1health URLs BEFORE clearing cookies (they read
+      // onehealth_base_url / onehealth_environment).
       const platformLogoutUrl = getPlatformLogoutUrl()
+      const platformLoginUrl = getPlatformLoginUrl()
+
+      // 1. Clear this app's own session (cookies + storage, incl. the server
+      //    /api/logout route for parent-domain/HttpOnly cookies).
       await signOut()
-      window.location.assign(platformLogoutUrl)
+
+      // 2. End the 1health PLATFORM SSO session in the BACKGROUND. This is the
+      //    session that was silently re-launching the app. We must NOT navigate
+      //    to it directly: it 302s to a hardcoded /api/login?logout API route
+      //    that returns a 401 error page. Firing it as a same-site credentialed
+      //    request expires the platform session cookie without showing that
+      //    broken page. `no-cors` is fine — we don't need to read the response,
+      //    only let the browser process its Set-Cookie.
+      try {
+        await fetch(platformLogoutUrl, {
+          method: 'GET',
+          credentials: 'include',
+          mode: 'no-cors',
+          cache: 'no-store',
+        })
+      } catch {
+        // Network/CORS failure shouldn't block landing on the login page.
+      }
+
+      // 3. Send the user to the real, working 1health login page (HTTP 200),
+      //    not the API route. From here a fresh sign-in is required.
+      window.location.assign(platformLoginUrl)
     }
   }
 

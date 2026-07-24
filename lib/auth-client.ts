@@ -163,25 +163,44 @@ const ENV_API_HOSTS: Record<"demo" | "prod", string> = {
 }
 
 /**
- * Builds the 1health PLATFORM logout URL for the active environment.
+ * Per-environment 1health web-app (SPA) host. This is the user-facing site the
+ * platform login page lives on — distinct from the API host above.
+ */
+const ENV_WEB_HOSTS: Record<"demo" | "prod", string> = {
+  demo: "https://1health.demo.1health.io",
+  prod: "https://1health.app.1health.io",
+}
+
+function activeEnv(): "demo" | "prod" {
+  return getCookie("onehealth_environment") === "prod" ? "prod" : "demo"
+}
+
+/**
+ * Builds the 1health PLATFORM logout endpoint for the active environment.
  *
- * WHY THIS IS THE REAL FIX: signing out of this app only clears our own cookies.
- * The reason the user gets "logged in automatically" afterward is the 1health
- * platform SSO session — a separate login on the 1health domain that launches
- * this app. That session is ended by the platform's own server-side logout
- * endpoint, `${apiHost}/api/logout`, which expires the platform session cookie
- * and 302-redirects to the 1health login page (`/api/login?logout`). This is
- * the same endpoint the 1health web app itself uses to log out.
+ * This ends the 1health SSO session (the session that silently re-launches this
+ * app). It is meant to be called as a BACKGROUND request, not navigated to as a
+ * top-level page: the endpoint 302-redirects to a hardcoded `/api/login?logout`
+ * API route that returns 401 in the browser, so following the redirect shows an
+ * ugly error page. Fire it in the background to expire the platform session
+ * cookie (pv.1health.io and the API host are same-site under 1health.io, so the
+ * cookie is sent), then send the user to `getPlatformLoginUrl()` yourself.
  *
- * Read this BEFORE clearing cookies, since it depends on `onehealth_base_url`
- * (falls back to the env host, then demo, if the cookie is already gone).
+ * Read BEFORE clearing cookies — depends on `onehealth_base_url` (falls back to
+ * the env API host, then demo).
  */
 export function getPlatformLogoutUrl(): string {
-  const base =
-    getCookie("onehealth_base_url") ||
-    ENV_API_HOSTS[getCookie("onehealth_environment") === "prod" ? "prod" : "demo"]
-  const host = base.replace(/\/$/, "")
-  return `${host}/api/logout`
+  const base = getCookie("onehealth_base_url") || ENV_API_HOSTS[activeEnv()]
+  return `${base.replace(/\/$/, "")}/api/logout`
+}
+
+/**
+ * The user-facing 1health login page for the active environment. This is where
+ * to send the browser after firing the background platform logout — a real,
+ * working page (HTTP 200), unlike the API `/api/login` route.
+ */
+export function getPlatformLoginUrl(): string {
+  return `${ENV_WEB_HOSTS[activeEnv()]}/login`
 }
 
 // ============================================================================
