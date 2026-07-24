@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
-import { getPlatformLogoutUrl, signOut } from '@/lib/auth-client'
+import { signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
@@ -19,21 +19,17 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Resolve the 1health platform logout URL BEFORE clearing cookies (it
-      // reads onehealth_environment).
-      const platformLogoutUrl = getPlatformLogoutUrl()
-
-      // 1. Clear THIS app's session (cookies + storage, incl. the server
-      //    /api/logout route for parent-domain/HttpOnly cookies).
+      // Clear THIS app's session (tokens/cookies + storage, incl. the server
+      // /api/logout route for parent-domain/HttpOnly cookies), then hard-reload
+      // to our own /auth screen.
+      //
+      // This is the correct logout for 1health: per platform guidance there is
+      // NO logout/end-session endpoint — auth is OAuth2/token-based and you log
+      // out by discarding the tokens (what signOut does) and letting them
+      // expire. The 1health *platform* session is separate and can't be ended
+      // from here, so relaunching from 1health while it's active may re-auth.
       await signOut()
-
-      // 2. TOP-LEVEL navigate to the 1health platform's own /logout route — the
-      //    same one their web app's "log out" button uses. This ends the SSO
-      //    session (which was silently re-launching this app) and lands on the
-      //    platform login page. A top-level navigation is required so the
-      //    browser processes the session-clearing Set-Cookie; a background fetch
-      //    can't reliably clear the platform's SameSite/HttpOnly cookie.
-      window.location.assign(platformLogoutUrl)
+      window.location.assign('/auth')
     }
   }
 

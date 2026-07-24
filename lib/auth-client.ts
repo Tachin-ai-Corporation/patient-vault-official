@@ -104,9 +104,13 @@ const SESSION_COOKIES = [
  *      variants as a fast, belt-and-suspenders clear.
  *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
  *
- * NOTE: this only clears THIS app's session. To also end the 1health *platform*
- * SSO session (which is what silently re-launches the app), the caller should
- * afterward navigate the browser to `getPlatformLogoutUrl()`.
+ * NOTE: this only clears THIS app's session, and that is by design. Per 1health
+ * platform guidance, there is NO server logout/end-session endpoint — auth is
+ * OAuth2/token-based and the prescribed way to "log out" is exactly this: drop
+ * the tokens client-side and let them expire. Because the app is launched via
+ * an encrypted LPL, relaunching from 1health while its own platform session is
+ * still active can still mint fresh tokens; that platform session is separate
+ * and cannot be ended from here.
  */
 export async function signOut(): Promise<void> {
   // 1. Authoritative server-side clear (handles parent-domain + HttpOnly).
@@ -151,37 +155,6 @@ export async function signOut(): Promise<void> {
   } catch {
     // Storage may be unavailable (private mode / SSR) — safe to ignore.
   }
-}
-
-/**
- * Per-environment 1health web-app (SPA) host — the user-facing site, distinct
- * from the API host. This is where the platform's own login/logout pages live.
- */
-const ENV_WEB_HOSTS: Record<"demo" | "prod", string> = {
-  demo: "https://1health.demo.1health.io",
-  prod: "https://1health.app.1health.io",
-}
-
-function activeEnv(): "demo" | "prod" {
-  return getCookie("onehealth_environment") === "prod" ? "prod" : "demo"
-}
-
-/**
- * Builds the 1health PLATFORM logout URL for the active environment.
- *
- * This is the SPA's OWN user-facing logout route (`{webHost}/logout`) — the same
- * one the 1health web app uses when a user clicks "log out". It ends the 1health
- * SSO session (the session that was silently re-launching this app) AND lands on
- * a proper login page. Navigate to it as a TOP-LEVEL page load.
- *
- * Why not the API endpoint (`{apiHost}/api/logout`): that 302-redirects to a
- * hardcoded `/api/login?logout` API route that returns HTTP 401 in the browser
- * (an error page). And a background fetch to it can't reliably clear the
- * platform's SameSite/HttpOnly session cookie. The SPA `/logout` route is the
- * correct, user-facing entry point.
- */
-export function getPlatformLogoutUrl(): string {
-  return `${ENV_WEB_HOSTS[activeEnv()]}/logout`
 }
 
 // ============================================================================
