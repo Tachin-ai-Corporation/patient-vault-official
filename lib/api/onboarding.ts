@@ -14,6 +14,10 @@
 
 import { authFetch, getOneHealthBaseUrl, refreshToken, setCookie } from "@/lib/auth-client"
 import { fetchMyself } from "@/lib/api/user"
+import { fetchAllTenants } from "@/lib/api/tenant"
+
+/** The shared bootstrap tenant every developer is dropped onto before setup. */
+const BOOTSTRAP_TENANT_ID = 1
 
 // ============================================================================
 // Types
@@ -131,6 +135,34 @@ async function postTenant(
     return { ok: false, status: response.status, body: await response.text() }
   }
   return { ok: true, data: await response.json() }
+}
+
+/** Escape a string for safe use inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/**
+ * Look for a Patient Vault this user already created, so we can reuse it instead
+ * of provisioning a duplicate on every launch.
+ *
+ * The onboarding gate re-fires whenever the platform drops the user back on the
+ * bootstrap tenant (id 1) via LPL, which previously caused a brand-new org to be
+ * created each time (and, due to name collisions, names like "… Patient Vault
+ * 745650"). We match the canonical name — exactly `<base>` or `<base> <6 digits>`
+ * — across the user's accessible tenants, ignore the bootstrap tenant, and
+ * return the LOWEST id so repeated logins always converge on the same vault.
+ */
+export async function findExistingVaultId(baseName: string): Promise<number | null> {
+  const all = await fetchAllTenants()
+  if (!all.success || !all.data) return null
+
+  const pattern = new RegExp(`^${escapeRegExp(baseName)}( \\d{6})?$`)
+  const matches = all.data
+    .filter((t) => t.id !== BOOTSTRAP_TENANT_ID && typeof t.name === "string" && pattern.test(t.name))
+    .sort((a, b) => a.id - b.id)
+
+  return matches.length > 0 ? matches[0].id : null
 }
 
 export async function createTenant(input: CreateTenantInput): Promise<CreateTenantResult> {
@@ -267,7 +299,6 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
     const url = `${baseUrl}/api/v2/user/switch-tenant/${tenantId}?revokeToken=false`
 
     const response = await authFetch(url, { method: "GET" })
-    console.log("[v0] switchTenant: target tenantId =", tenantId, "| switch-tenant status =", response.status)
 
     if (!response.ok) {
       const errorText = await response.text()

@@ -93,9 +93,51 @@ export interface TenantConfigResult {
   error?: string
 }
 
+/** A single entry from GET /v2/tenant/all (the platform "Switch Context" list). */
+export interface TenantSummary {
+  id: number
+  name: string
+  subdomain?: string
+  createdTimestamp?: string
+}
+
+export interface AllTenantsResult {
+  success: boolean
+  data?: TenantSummary[]
+  error?: string
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
+
+/**
+ * Lists every tenant/organization the authenticated user can access — the same
+ * set that powers the platform's "Switch Context" menu. Used by onboarding to
+ * detect (and reuse) a Patient Vault the user already created, instead of
+ * provisioning a duplicate on every launch.
+ */
+export async function fetchAllTenants(): Promise<AllTenantsResult> {
+  try {
+    const baseUrl = getOneHealthBaseUrl()
+    const url = `${baseUrl}/api/v2/tenant/all`
+
+    const response = await authFetch(url, { method: "GET" })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[1health API] fetchAllTenants error:", response.status, errorText)
+      return { success: false, error: `Failed to list tenants: ${response.status}` }
+    }
+
+    const data = await response.json()
+    const list = Array.isArray(data) ? data : Array.isArray(data?.content) ? data.content : []
+    return { success: true, data: list as TenantSummary[] }
+  } catch (error) {
+    console.error("[1health API] fetchAllTenants exception:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
 
 /**
  * Fetches tenant sys-config for the given tenant ID.
