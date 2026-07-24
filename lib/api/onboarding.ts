@@ -212,6 +212,7 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
     const url = `${baseUrl}/api/v2/user/switch-tenant/${tenantId}?revokeToken=false`
 
     const response = await authFetch(url, { method: "GET" })
+    console.log("[v0] switchTenant: target tenantId =", tenantId, "| switch-tenant status =", response.status)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -222,8 +223,10 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
     // Step 2 — opportunistically adopt a token from the body if present. Most
     // deployments return no content here, so this is best-effort only.
     const data = await response.json().catch(() => null)
+    console.log("[v0] switchTenant: switch-tenant response body =", JSON.stringify(data))
     const bodyToken =
       data?.access_token ?? data?.accessToken ?? data?.token?.access_token ?? data?.token?.tokenValue
+    console.log("[v0] switchTenant: body contained a token? =", Boolean(bodyToken))
     if (bodyToken) {
       const refreshTok = data?.refresh_token ?? data?.refreshToken ?? data?.token?.refresh_token ?? null
       const expiresIn = Number(data?.expires_in ?? data?.expiresIn ?? 3600)
@@ -238,17 +241,35 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
       // token; on subsequent passes always refresh to try to advance the context.
       if (attempt > 1 || !bodyToken) {
         const refreshed = await refreshToken()
+        console.log(`[v0] switchTenant: attempt ${attempt} — refreshToken() returned`, refreshed)
         if (!refreshed && !bodyToken) {
           return { success: false, error: "Could not obtain an org-scoped token after switching" }
         }
       }
 
       const me = await fetchMyself()
+      console.log(
+        `[v0] switchTenant: attempt ${attempt} — fetchMyself success =`,
+        me.success,
+        "| tenantContext =",
+        JSON.stringify(me.data?.tenantContext),
+        "| expected tenantId =",
+        tenantId,
+        "| match =",
+        me.data?.tenantContext?.id === tenantId,
+      )
       if (me.success && me.data?.tenantContext?.id === tenantId) {
         return { success: true }
       }
     }
 
+    console.log(
+      "[v0] switchTenant: FAILED — active tenant never became",
+      tenantId,
+      "after",
+      MAX_ATTEMPTS,
+      "attempts. The refresh_token grant is likely re-issuing a token scoped to the original tenant.",
+    )
     return {
       success: false,
       error: "Switched organization, but the active tenant did not update. Please try again.",
