@@ -78,6 +78,7 @@ export function OnboardingOverlay({
   const [steps, setSteps] = useState<StepState[]>(INITIAL_STEPS)
   const [apiKey, setApiKey] = useState<ApiToken | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [debug, setDebug] = useState<string | null>(null)
   const startedRef = useRef(false)
 
   const setStatus = useCallback((id: StepId, status: StepStatus) => {
@@ -86,6 +87,7 @@ export function OnboardingOverlay({
 
   const run = useCallback(async () => {
     setError(null)
+    setDebug(null)
 
     // Step 1 — create org
     setStatus('org', 'active')
@@ -106,6 +108,7 @@ export function OnboardingOverlay({
     if (!switched.success) {
       setStatus('switch', 'error')
       setError(switched.error ?? 'Could not switch to your organization.')
+      if (switched.debug) setDebug(switched.debug)
       return
     }
     setStatus('switch', 'done')
@@ -133,6 +136,7 @@ export function OnboardingOverlay({
   const retry = useCallback(() => {
     setSteps(INITIAL_STEPS)
     setApiKey(null)
+    setDebug(null)
     void run()
   }, [run])
 
@@ -175,6 +179,14 @@ export function OnboardingOverlay({
                     {error}
                   </p>
                 </div>
+                {debug && (
+                  <div className="mt-3 flex items-start gap-2 rounded-input border border-border bg-background px-3 py-2">
+                    <code className="min-w-0 flex-1 break-all font-mono text-[11px] leading-relaxed text-muted-foreground">
+                      {debug}
+                    </code>
+                    <CopyButton value={debug} label="Copy diagnostic details" />
+                  </div>
+                )}
                 <Button variant="outline" size="sm" className="mt-3" onClick={retry}>
                   <RefreshCw className="h-3.5 w-3.5" data-icon="inline-start" />
                   Try again
