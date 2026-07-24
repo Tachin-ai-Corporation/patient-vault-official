@@ -6,12 +6,6 @@ import { useSession } from '@/lib/session-context'
 import { signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
-// When we learn the exact URL the 1health platform uses to end its own SSO
-// session (capture it from the 1health app's own "log out" button in the
-// Network tab), set it here to also log the user out of 1health on sign out.
-// Until then, sign out is app-only and lands on our /auth screen.
-const PLATFORM_LOGOUT_URL: string | null = null
-
 export function UserMenu() {
   const { session } = useSession()
   const router = useRouter()
@@ -25,22 +19,17 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Clear THIS app's session (cookies + storage, incl. the server
+      // Clear THIS app's session (tokens/cookies + storage, incl. the server
       // /api/logout route for parent-domain/HttpOnly cookies), then hard-reload
-      // to our own /auth screen. This is a reliable app-only logout.
+      // to our own /auth screen.
       //
-      // NOTE: This does NOT end the 1health *platform* SSO session, so a
-      // relaunch from 1health can still auto-authenticate. Every attempt to end
-      // the platform session from here has failed (the guessed logout URLs 404 /
-      // 400 / 401), so we need the exact logout URL the 1health app itself uses
-      // before wiring platform logout back in. See PLATFORM_LOGOUT_URL below.
+      // This is the correct logout for 1health: per platform guidance there is
+      // NO logout/end-session endpoint — auth is OAuth2/token-based and you log
+      // out by discarding the tokens (what signOut does) and letting them
+      // expire. The 1health *platform* session is separate and can't be ended
+      // from here, so relaunching from 1health while it's active may re-auth.
       await signOut()
-
-      if (PLATFORM_LOGOUT_URL) {
-        window.location.assign(PLATFORM_LOGOUT_URL)
-      } else {
-        window.location.assign('/auth')
-      }
+      window.location.assign('/auth')
     }
   }
 

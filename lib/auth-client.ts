@@ -104,10 +104,13 @@ const SESSION_COOKIES = [
  *      variants as a fast, belt-and-suspenders clear.
  *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
  *
- * NOTE: this only clears THIS app's session. It does NOT end the 1health
- * *platform* SSO session (which is what silently re-launches the app). Ending
- * that requires the platform's own logout URL, which we don't yet have — see
- * PLATFORM_LOGOUT_URL in components/user-menu.tsx.
+ * NOTE: this only clears THIS app's session, and that is by design. Per 1health
+ * platform guidance, there is NO server logout/end-session endpoint — auth is
+ * OAuth2/token-based and the prescribed way to "log out" is exactly this: drop
+ * the tokens client-side and let them expire. Because the app is launched via
+ * an encrypted LPL, relaunching from 1health while its own platform session is
+ * still active can still mint fresh tokens; that platform session is separate
+ * and cannot be ended from here.
  */
 export async function signOut(): Promise<void> {
   // 1. Authoritative server-side clear (handles parent-domain + HttpOnly).
