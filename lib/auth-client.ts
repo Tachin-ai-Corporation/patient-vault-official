@@ -154,17 +154,8 @@ export async function signOut(): Promise<void> {
 }
 
 /**
- * Per-environment API host fallback used only if the `onehealth_base_url` cookie
- * is missing (e.g. it was already cleared). Mirrors ENV_URLS on the /auth page.
- */
-const ENV_API_HOSTS: Record<"demo" | "prod", string> = {
-  demo: "https://demo.1health.io",
-  prod: "https://app.1health.io",
-}
-
-/**
- * Per-environment 1health web-app (SPA) host. This is the user-facing site the
- * platform login page lives on — distinct from the API host above.
+ * Per-environment 1health web-app (SPA) host — the user-facing site, distinct
+ * from the API host. This is where the platform's own login/logout pages live.
  */
 const ENV_WEB_HOSTS: Record<"demo" | "prod", string> = {
   demo: "https://1health.demo.1health.io",
@@ -176,31 +167,21 @@ function activeEnv(): "demo" | "prod" {
 }
 
 /**
- * Builds the 1health PLATFORM logout endpoint for the active environment.
+ * Builds the 1health PLATFORM logout URL for the active environment.
  *
- * This ends the 1health SSO session (the session that silently re-launches this
- * app). It is meant to be called as a BACKGROUND request, not navigated to as a
- * top-level page: the endpoint 302-redirects to a hardcoded `/api/login?logout`
- * API route that returns 401 in the browser, so following the redirect shows an
- * ugly error page. Fire it in the background to expire the platform session
- * cookie (pv.1health.io and the API host are same-site under 1health.io, so the
- * cookie is sent), then send the user to `getPlatformLoginUrl()` yourself.
+ * This is the SPA's OWN user-facing logout route (`{webHost}/logout`) — the same
+ * one the 1health web app uses when a user clicks "log out". It ends the 1health
+ * SSO session (the session that was silently re-launching this app) AND lands on
+ * a proper login page. Navigate to it as a TOP-LEVEL page load.
  *
- * Read BEFORE clearing cookies — depends on `onehealth_base_url` (falls back to
- * the env API host, then demo).
+ * Why not the API endpoint (`{apiHost}/api/logout`): that 302-redirects to a
+ * hardcoded `/api/login?logout` API route that returns HTTP 401 in the browser
+ * (an error page). And a background fetch to it can't reliably clear the
+ * platform's SameSite/HttpOnly session cookie. The SPA `/logout` route is the
+ * correct, user-facing entry point.
  */
 export function getPlatformLogoutUrl(): string {
-  const base = getCookie("onehealth_base_url") || ENV_API_HOSTS[activeEnv()]
-  return `${base.replace(/\/$/, "")}/api/logout`
-}
-
-/**
- * The user-facing 1health login page for the active environment. This is where
- * to send the browser after firing the background platform logout — a real,
- * working page (HTTP 200), unlike the API `/api/login` route.
- */
-export function getPlatformLoginUrl(): string {
-  return `${ENV_WEB_HOSTS[activeEnv()]}/login`
+  return `${ENV_WEB_HOSTS[activeEnv()]}/logout`
 }
 
 // ============================================================================
