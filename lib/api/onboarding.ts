@@ -36,6 +36,8 @@ export interface CreateTenantResult {
 export interface SwitchTenantResult {
   success: boolean
   error?: string
+  /** Safe diagnostic summary (no token values) surfaced in the UI when needed. */
+  debug?: string
 }
 
 export interface ApiToken {
@@ -187,6 +189,59 @@ function persistTokens(accessToken: string, refreshTok: string | null, expiresIn
   setCookie("refresh_token_expires_at", String(now + expiresIn * 2), expiresIn * 2)
 }
 
+/** A JWT is three base64url segments separated by dots. */
+function looksLikeJwt(v: unknown): v is string {
+  return typeof v === "string" && /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/.test(v)
+}
+
+/** Recursively collect every string leaf with its dotted key path. */
+function collectStrings(obj: unknown, path: string, out: Array<{ path: string; value: string }>): void {
+  if (obj == null) return
+  if (typeof obj === "string") {
+    out.push({ path, value: obj })
+    return
+  }
+  if (typeof obj === "object") {
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      collectStrings(v, path ? `${path}.${k}` : k, out)
+    }
+  }
+}
+
+/**
+ * Robustly extract the org-scoped access token (and refresh token, if any) from
+ * the switch-tenant response body, regardless of the exact field names. We look
+ * for a JWT-shaped string — preferring a key path that mentions "access"/"token"
+ * — because the response schema has varied across 1health deployments.
+ */
+function extractTokensFromBody(data: unknown): {
+  accessToken: string | null
+  refreshToken: string | null
+  accessTokenPath: string | null
+} {
+  const strings: Array<{ path: string; value: string }> = []
+  collectStrings(data, "", strings)
+
+  const jwts = strings.filter((s) => looksLikeJwt(s.value))
+  // Prefer a JWT whose path clearly names the access token.
+  const access =
+    jwts.find((s) => /access/i.test(s.path)) ??
+    jwts.find((s) => /token/i.test(s.path) && !/refresh/i.test(s.path)) ??
+    jwts.find((s) => !/refresh/i.test(s.path)) ??
+    jwts[0] ??
+    null
+
+  // A refresh token: a string keyed with "refresh" that isn't the access token.
+  const refresh =
+    strings.find((s) => /refresh/i.test(s.path) && s.value !== access?.value) ?? null
+
+  return {
+    accessToken: access?.value ?? null,
+    refreshToken: refresh?.value ?? null,
+    accessTokenPath: access?.path ?? null,
+  }
+}
+
 /**
  * Switch the active tenant to the developer's newly-created org.
  *
@@ -220,59 +275,72 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
       return { success: false, error: `Failed to switch organization: ${response.status}` }
     }
 
-    // Step 2 — opportunistically adopt a token from the body if present. Most
-    // deployments return no content here, so this is best-effort only.
-    const data = await response.json().catch(() => null)
-    console.log("[v0] switchTenant: switch-tenant response body =", JSON.stringify(data))
-    const bodyToken =
-      data?.access_token ?? data?.accessToken ?? data?.token?.access_token ?? data?.token?.tokenValue
-    console.log("[v0] switchTenant: body contained a token? =", Boolean(bodyToken))
-    if (bodyToken) {
-      const refreshTok = data?.refresh_token ?? data?.refreshToken ?? data?.token?.refresh_token ?? null
-      const expiresIn = Number(data?.expires_in ?? data?.expiresIn ?? 3600)
-      persistTokens(bodyToken, refreshTok, expiresIn)
+    // Step 2 — extract the org-scoped token from the response body. On real
+    // 1health deployments the switch-tenant call returns the new token here; we
+    // scan robustly for a JWT so we don't depend on exact field names. This is
+    // the token bound to the NEW tenant — unlike the refresh grant, whose
+    // refresh token is still bound to the original tenant.
+    const rawBody = await response.text()
+    let data: unknown = null
+    try {
+      data = rawBody ? JSON.parse(rawBody) : null
+    } catch {
+      data = null
     }
 
-    // Steps 3 & 4 — mint an org-scoped token via the refresh grant, then verify
-    // the active tenant actually changed. Retry the refresh once if needed.
-    const MAX_ATTEMPTS = 2
+    const topKeys =
+      data && typeof data === "object" ? Object.keys(data as Record<string, unknown>).join(",") : "(none)"
+    const { accessToken: bodyToken, refreshToken: bodyRefresh, accessTokenPath } =
+      extractTokensFromBody(data)
+
+    const diag: string[] = []
+    diag.push(`switch=${response.status}`)
+    diag.push(`bodyLen=${rawBody.length}`)
+    diag.push(`keys=[${topKeys}]`)
+    diag.push(`tokenFound=${bodyToken ? `yes@${accessTokenPath}` : "no"}`)
+
+    if (bodyToken) {
+      // Best-effort expiry: look for an expires_in-like number anywhere shallow.
+      const shallow = (data ?? {}) as Record<string, any>
+      const expiresIn = Number(
+        shallow.expires_in ?? shallow.expiresIn ?? shallow.token?.expires_in ?? 3600,
+      )
+      persistTokens(bodyToken, bodyRefresh, Number.isFinite(expiresIn) ? expiresIn : 3600)
+    }
+
+    // Steps 3 & 4 — verify the active tenant actually changed. Retry with a
+    // short delay to allow the new context to propagate. Only fall back to the
+    // refresh grant when the body gave us no token (it may re-issue an
+    // original-tenant token, but it's better than nothing).
+    const MAX_ATTEMPTS = 3
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      // On the first pass, only refresh if the body didn't already give us a
-      // token; on subsequent passes always refresh to try to advance the context.
-      if (attempt > 1 || !bodyToken) {
+      if (!bodyToken) {
         const refreshed = await refreshToken()
-        console.log(`[v0] switchTenant: attempt ${attempt} — refreshToken() returned`, refreshed)
-        if (!refreshed && !bodyToken) {
-          return { success: false, error: "Could not obtain an org-scoped token after switching" }
+        diag.push(`a${attempt}:refresh=${refreshed}`)
+        if (!refreshed) {
+          return {
+            success: false,
+            error: "Could not obtain an org-scoped token after switching",
+            debug: diag.join(" | "),
+          }
         }
       }
 
       const me = await fetchMyself()
-      console.log(
-        `[v0] switchTenant: attempt ${attempt} — fetchMyself success =`,
-        me.success,
-        "| tenantContext =",
-        JSON.stringify(me.data?.tenantContext),
-        "| expected tenantId =",
-        tenantId,
-        "| match =",
-        me.data?.tenantContext?.id === tenantId,
-      )
-      if (me.success && me.data?.tenantContext?.id === tenantId) {
+      const gotId = me.data?.tenantContext?.id
+      diag.push(`a${attempt}:me=${me.success ? gotId : me.error}`)
+      if (me.success && gotId === tenantId) {
         return { success: true }
       }
+
+      // brief backoff before retrying (context propagation delay)
+      if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 600))
     }
 
-    console.log(
-      "[v0] switchTenant: FAILED — active tenant never became",
-      tenantId,
-      "after",
-      MAX_ATTEMPTS,
-      "attempts. The refresh_token grant is likely re-issuing a token scoped to the original tenant.",
-    )
     return {
       success: false,
-      error: "Switched organization, but the active tenant did not update. Please try again.",
+      error: `Switched organization, but the active tenant did not update (expected ${tenantId}). Please try again.`,
+      debug: diag.join(" | "),
     }
   } catch (error) {
     console.error("[1health API] switchTenant exception:", error)
