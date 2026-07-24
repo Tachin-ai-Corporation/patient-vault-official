@@ -3,8 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
-import { getPlatformLogoutUrl, signOut } from '@/lib/auth-client'
+import { signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
+
+// When we learn the exact URL the 1health platform uses to end its own SSO
+// session (capture it from the 1health app's own "log out" button in the
+// Network tab), set it here to also log the user out of 1health on sign out.
+// Until then, sign out is app-only and lands on our /auth screen.
+const PLATFORM_LOGOUT_URL: string | null = null
 
 export function UserMenu() {
   const { session } = useSession()
@@ -19,21 +25,22 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Resolve the 1health platform logout URL BEFORE clearing cookies (it
-      // reads onehealth_environment).
-      const platformLogoutUrl = getPlatformLogoutUrl()
-
-      // 1. Clear THIS app's session (cookies + storage, incl. the server
-      //    /api/logout route for parent-domain/HttpOnly cookies).
+      // Clear THIS app's session (cookies + storage, incl. the server
+      // /api/logout route for parent-domain/HttpOnly cookies), then hard-reload
+      // to our own /auth screen. This is a reliable app-only logout.
+      //
+      // NOTE: This does NOT end the 1health *platform* SSO session, so a
+      // relaunch from 1health can still auto-authenticate. Every attempt to end
+      // the platform session from here has failed (the guessed logout URLs 404 /
+      // 400 / 401), so we need the exact logout URL the 1health app itself uses
+      // before wiring platform logout back in. See PLATFORM_LOGOUT_URL below.
       await signOut()
 
-      // 2. TOP-LEVEL navigate to the 1health platform's own /logout route — the
-      //    same one their web app's "log out" button uses. This ends the SSO
-      //    session (which was silently re-launching this app) and lands on the
-      //    platform login page. A top-level navigation is required so the
-      //    browser processes the session-clearing Set-Cookie; a background fetch
-      //    can't reliably clear the platform's SameSite/HttpOnly cookie.
-      window.location.assign(platformLogoutUrl)
+      if (PLATFORM_LOGOUT_URL) {
+        window.location.assign(PLATFORM_LOGOUT_URL)
+      } else {
+        window.location.assign('/auth')
+      }
     }
   }
 
