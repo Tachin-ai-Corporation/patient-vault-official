@@ -17,6 +17,7 @@ import type { UserInfo } from '@/lib/api/user'
 import {
   createApiToken,
   createTenant,
+  findExistingVaultId,
   switchTenant,
   type ApiToken,
 } from '@/lib/api/onboarding'
@@ -89,22 +90,31 @@ export function OnboardingOverlay({
     setError(null)
     setDebug(null)
 
-    // Step 1 — create org
+    // Step 1 — reuse the user's existing Patient Vault if one exists, otherwise
+    // create it. This prevents a fresh duplicate org on every LPL relaunch (the
+    // platform drops returning users back on the bootstrap tenant, which
+    // re-triggers onboarding).
     setStatus('org', 'active')
-    const created = await createTenant({
-      name: vaultName(user),
-      primaryCorporateEmail: user.email,
-    })
-    if (!created.success || !created.tenantId) {
-      setStatus('org', 'error')
-      setError(created.error ?? 'Could not create your organization.')
-      return
+    const name = vaultName(user)
+    let tenantId = await findExistingVaultId(name)
+
+    if (!tenantId) {
+      const created = await createTenant({
+        name,
+        primaryCorporateEmail: user.email,
+      })
+      if (!created.success || !created.tenantId) {
+        setStatus('org', 'error')
+        setError(created.error ?? 'Could not create your organization.')
+        return
+      }
+      tenantId = created.tenantId
     }
     setStatus('org', 'done')
 
     // Step 2 — switch tenant (persists the new org-scoped token)
     setStatus('switch', 'active')
-    const switched = await switchTenant(created.tenantId)
+    const switched = await switchTenant(tenantId)
     if (!switched.success) {
       setStatus('switch', 'error')
       setError(switched.error ?? 'Could not switch to your organization.')
