@@ -3,11 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
-import {
-  getPlatformLoginUrl,
-  getPlatformLogoutUrl,
-  signOut,
-} from '@/lib/auth-client'
+import { getPlatformLogoutUrl, signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 export function UserMenu() {
@@ -23,36 +19,21 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Resolve both 1health URLs BEFORE clearing cookies (they read
-      // onehealth_base_url / onehealth_environment).
+      // Resolve the 1health platform logout URL BEFORE clearing cookies (it
+      // reads onehealth_environment).
       const platformLogoutUrl = getPlatformLogoutUrl()
-      const platformLoginUrl = getPlatformLoginUrl()
 
-      // 1. Clear this app's own session (cookies + storage, incl. the server
+      // 1. Clear THIS app's session (cookies + storage, incl. the server
       //    /api/logout route for parent-domain/HttpOnly cookies).
       await signOut()
 
-      // 2. End the 1health PLATFORM SSO session in the BACKGROUND. This is the
-      //    session that was silently re-launching the app. We must NOT navigate
-      //    to it directly: it 302s to a hardcoded /api/login?logout API route
-      //    that returns a 401 error page. Firing it as a same-site credentialed
-      //    request expires the platform session cookie without showing that
-      //    broken page. `no-cors` is fine — we don't need to read the response,
-      //    only let the browser process its Set-Cookie.
-      try {
-        await fetch(platformLogoutUrl, {
-          method: 'GET',
-          credentials: 'include',
-          mode: 'no-cors',
-          cache: 'no-store',
-        })
-      } catch {
-        // Network/CORS failure shouldn't block landing on the login page.
-      }
-
-      // 3. Send the user to the real, working 1health login page (HTTP 200),
-      //    not the API route. From here a fresh sign-in is required.
-      window.location.assign(platformLoginUrl)
+      // 2. TOP-LEVEL navigate to the 1health platform's own /logout route — the
+      //    same one their web app's "log out" button uses. This ends the SSO
+      //    session (which was silently re-launching this app) and lands on the
+      //    platform login page. A top-level navigation is required so the
+      //    browser processes the session-clearing Set-Cookie; a background fetch
+      //    can't reliably clear the platform's SameSite/HttpOnly cookie.
+      window.location.assign(platformLogoutUrl)
     }
   }
 
