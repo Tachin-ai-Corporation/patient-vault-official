@@ -57,20 +57,52 @@ export function getCookie(name: string): string | null {
 }
 
 /**
+ * Returns true when the page is running in a secure context (HTTPS), which is a
+ * hard requirement for `SameSite=None` — browsers reject `None` without `Secure`.
+ * `localhost` is treated as secure by modern browsers, so local dev still gets
+ * the cross-site path and stays iframe-testable.
+ */
+function isSecureContext(): boolean {
+  if (typeof window === "undefined") return false
+  return window.location.protocol === "https:" || window.location.hostname === "localhost"
+}
+
+/**
+ * The cookie attribute string shared by every session cookie written from the
+ * client. Single source of truth so the auth page and token refresh can't drift.
+ *
+ * On HTTPS we emit `SameSite=None; Secure; Partitioned` so the cookie is sent
+ * when Patient Vault is embedded in a cross-site iframe. `Partitioned` opts into
+ * CHIPS, giving the embed its own cookie jar keyed to the top-level site — which
+ * is what keeps `SameSite=None` acceptable to browsers phasing out third-party
+ * cookies. On plain HTTP (non-localhost dev) `None` would be dropped, so we fall
+ * back to `Lax` to keep local development working.
+ */
+export function cookieAttributes(): string {
+  return isSecureContext() ? "; SameSite=None; Secure; Partitioned" : "; SameSite=Lax"
+}
+
+/**
  * Sets a cookie with the given name, value, and maxAge (in seconds)
  */
 export function setCookie(name: string, value: string, maxAge: number): void {
   if (typeof document === "undefined") return
-  const secure = window.location.protocol === "https:" ? "; Secure" : ""
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}${cookieAttributes()}`
 }
 
 /**
- * Deletes a cookie by setting its maxAge to 0
+ * Deletes a cookie by setting its maxAge to 0.
+ *
+ * A partitioned (CHIPS) cookie lives in a separate jar from an unpartitioned one,
+ * and an expiry only matches a cookie with the same partition attribute — so we
+ * emit both forms to guarantee removal regardless of how the cookie was written.
  */
 export function deleteCookie(name: string): void {
   if (typeof document === "undefined") return
   document.cookie = `${name}=; path=/; max-age=0`
+  if (isSecureContext()) {
+    document.cookie = `${name}=; path=/; max-age=0; SameSite=None; Secure; Partitioned`
+  }
 }
 
 /**
@@ -138,11 +170,19 @@ export async function signOut(): Promise<void> {
       if (name) names.add(name)
     }
 
+    // Partitioned (CHIPS) cookies occupy a different jar than unpartitioned ones,
+    // and an expiry only matches the same partition attribute — so clear both.
+    const partitionVariants = isSecureContext()
+      ? ["", "; SameSite=None; Secure; Partitioned"]
+      : [""]
+
     for (const name of names) {
       for (const path of paths) {
         for (const domain of domains) {
           const domainPart = domain ? `; domain=${domain}` : ""
-          document.cookie = `${name}=; path=${path}; max-age=0${domainPart}`
+          for (const partition of partitionVariants) {
+            document.cookie = `${name}=; path=${path}; max-age=0${domainPart}${partition}`
+          }
         }
       }
     }

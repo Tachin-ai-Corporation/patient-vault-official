@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { withBrandingId } from "@/lib/auth-branding"
+import { setCookie } from "@/lib/auth-client"
 
 type AuthState = "idle" | "loading" | "success" | "error" | "manual-entry"
 type Environment = "demo" | "prod"
@@ -131,13 +132,14 @@ function AuthContent() {
     }
   }, [])
 
-  // Persist environment choice to cookie
+  // Persist environment choice to cookie. Uses the shared setCookie helper so
+  // these cookies get the same iframe-compatible attributes
+  // (SameSite=None; Secure; Partitioned) as the rest of the session.
   useEffect(() => {
     if (!environment) return
-    const secure = window.location.protocol === "https:" ? "; Secure" : ""
-    document.cookie = `onehealth_environment=${environment}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure}`
-    const baseUrl = ENV_URLS[environment]
-    document.cookie = `onehealth_base_url=${baseUrl}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure}`
+    const THIRTY_DAYS = 60 * 60 * 24 * 30
+    setCookie("onehealth_environment", environment, THIRTY_DAYS)
+    setCookie("onehealth_base_url", ENV_URLS[environment], THIRTY_DAYS)
   }, [environment])
 
   // Process LPL when ready

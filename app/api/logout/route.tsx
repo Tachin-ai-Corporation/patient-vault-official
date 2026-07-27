@@ -16,7 +16,7 @@ import { NextResponse } from "next/server"
  * This route runs on pv.1health.io, which is within `.1health.io`, so it is
  * allowed to expire cookies on both the host-only scope AND the parent-domain
  * scope, including HttpOnly ones. We emit an explicit Set-Cookie per cookie ×
- * domain-scope so no variant can survive.
+ * domain-scope × partition-variant so no variant can survive.
  */
 
 const SESSION_COOKIES = [
@@ -52,15 +52,29 @@ function domainVariants(host: string): string[] {
   return [...variants]
 }
 
+const EXPIRED = "Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+
 function buildExpiredCookies(host: string, secure: boolean): string[] {
   const domains = domainVariants(host)
-  const expiredAttrs = "Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
+
+  // A partitioned (CHIPS) cookie lives in a different jar than an unpartitioned
+  // one, and an expiring Set-Cookie only matches a cookie with the same
+  // partition attribute. Session cookies are now written as
+  // `SameSite=None; Secure; Partitioned`, so we must emit BOTH forms — the
+  // partitioned one to clear current cookies, and the legacy `Lax` one to clear
+  // any cookie written before this change. Omitting either silently breaks
+  // sign-out.
+  const variants = secure
+    ? ["SameSite=None; Secure; Partitioned", "SameSite=None; Secure", "SameSite=Lax; Secure"]
+    : ["SameSite=Lax"]
+
   const cookies: string[] = []
   for (const name of SESSION_COOKIES) {
     for (const domain of domains) {
       const domainPart = domain ? `; Domain=${domain}` : ""
-      const securePart = secure ? "; Secure" : ""
-      cookies.push(`${name}=${domainPart ? "" : ""}; ${expiredAttrs}${domainPart}${securePart}`)
+      for (const variant of variants) {
+        cookies.push(`${name}=; ${EXPIRED}${domainPart}; ${variant}`)
+      }
     }
   }
   return cookies
@@ -68,7 +82,12 @@ function buildExpiredCookies(host: string, secure: boolean): string[] {
 
 function handle(req: Request): NextResponse {
   const host = req.headers.get("host") ?? ""
-  const secure = new URL(req.url).protocol === "https:"
+  // Derive the protocol from the forwarded header — behind Vercel's proxy the
+  // internal request URL is not reliably https, and `Secure` must be accurate
+  // because it is required for both SameSite=None and Partitioned.
+  const secure = (req.headers.get("x-forwarded-proto") ?? new URL(req.url).protocol.replace(":", ""))
+    .split(",")[0]
+    .trim() === "https"
 
   const res = NextResponse.json({ ok: true })
   for (const cookie of buildExpiredCookies(host, secure)) {
