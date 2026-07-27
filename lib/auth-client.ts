@@ -120,31 +120,76 @@ const SESSION_COOKIES = [
   "user_id",
 ] as const
 
+/** True if the access token is missing or past (or within 30s of) its expiry. */
+function accessTokenLooksExpired(): boolean {
+  if (!getAccessToken()) return true
+  const at = getCookie("token_expires_at")
+  if (!at) return false // no timestamp -> assume usable; let the call decide
+  const expiresAt = Number.parseInt(at, 10)
+  if (Number.isNaN(expiresAt)) return false
+  return Math.floor(Date.now() / 1000) >= expiresAt - 30
+}
+
 /**
- * Fully logs the user out of THIS app. Await this before navigating away.
+ * Best-effort call to the 1health platform logout endpoint, which invalidates
+ * the server-side session/token. Never throws — logout must always proceed to
+ * local teardown regardless of the outcome.
  *
- * Clearing happens in three layers because the session cookies may be written
- * scoped to the parent domain (`.1health.io`) and/or marked HttpOnly during the
- * 1health launch — neither of which client JS can remove:
+ * The endpoint is `POST {OAUTH_ROOT}/auth/user/logout` with a Bearer access
+ * token and credentials included (so platform cookies are sent). OAUTH_ROOT is
+ * the base URL with a trailing `/api` stripped — the same convention
+ * `refreshToken()` uses for `/auth/oauth2/token`.
+ */
+async function platformLogout(): Promise<void> {
+  try {
+    // Refresh once if the access token is (near) expired, so the Bearer we send
+    // is valid and the server-side invalidation actually lands.
+    if (accessTokenLooksExpired() && getRefreshToken()) {
+      await refreshToken()
+    }
+    const token = getAccessToken()
+    if (!token) return // nothing to invalidate
+
+    const root = getOneHealthBaseUrl().replace(/\/api\/?$/, "")
+    const res = await fetch(`${root}/auth/user/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include", // spec: withCredentials -> send platform cookies
+      cache: "no-store",
+    })
+    console.log("[v0] platformLogout:", res.status)
+  } catch (e) {
+    // CORS block / network error / missing base URL — fall through to teardown.
+    console.log("[v0] platformLogout failed (continuing):", (e as Error)?.message)
+  }
+}
+
+/**
+ * Fully logs the user out. Await this before navigating away.
  *
+ * Step 0 invalidates the server-side platform session; the remaining layers tear
+ * down local state. Clearing happens in layers because the session cookies may
+ * be written scoped to the parent domain (`.1health.io`) and/or marked HttpOnly
+ * during the 1health launch — neither of which client JS can remove:
+ *
+ *   0. PLATFORM: POST {OAUTH_ROOT}/auth/user/logout (Bearer + credentials) to
+ *      invalidate the server-side token/session. Done FIRST, while we still hold
+ *      a valid access token. Best-effort: never blocks the teardown below.
  *   1. SERVER: POST /api/logout, which expires every session cookie across the
- *      host-only AND parent-domain scopes (and can clear HttpOnly cookies). This
- *      is the layer that actually kills the stale `access_token` that was
- *      silently re-authenticating the user. We await it so the Set-Cookie
- *      response is applied before we navigate.
+ *      host-only AND parent-domain scopes (and can clear HttpOnly cookies). We
+ *      await it so the Set-Cookie response is applied before we navigate.
  *   2. CLIENT cookies: sweep readable (non-HttpOnly) cookies with path/domain
  *      variants as a fast, belt-and-suspenders clear.
  *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
  *
- * NOTE: this only clears THIS app's session, and that is by design. Per 1health
- * platform guidance, there is NO server logout/end-session endpoint — auth is
- * OAuth2/token-based and the prescribed way to "log out" is exactly this: drop
- * the tokens client-side and let them expire. Because the app is launched via
- * an encrypted LPL, relaunching from 1health while its own platform session is
- * still active can still mint fresh tokens; that platform session is separate
- * and cannot be ended from here.
+ * NOTE: relaunching from 1health while its own platform SSO session is still
+ * active can still mint fresh tokens; that broader SSO session is separate and
+ * may require the platform's own logout UI to fully end.
  */
 export async function signOut(): Promise<void> {
+  // 0. Invalidate the server-side platform session while we still hold a token.
+  await platformLogout()
+
   // 1. Authoritative server-side clear (handles parent-domain + HttpOnly).
   try {
     await fetch("/api/logout", { method: "POST", credentials: "include", cache: "no-store" })

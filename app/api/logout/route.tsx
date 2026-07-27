@@ -80,7 +80,49 @@ function buildExpiredCookies(host: string, secure: boolean): string[] {
   return cookies
 }
 
-function handle(req: Request): NextResponse {
+/** Read a single cookie value from the incoming request's Cookie header. */
+function readCookie(req: Request, name: string): string | null {
+  const header = req.headers.get("cookie")
+  if (!header) return null
+  const match = header.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+/**
+ * Server-authoritative platform logout. Forwards the caller's access token (and
+ * Cookie header) to `POST {OAUTH_ROOT}/auth/user/logout` so the 1health
+ * server-side session/token is invalidated. This runs server-to-server, so it is
+ * immune to the browser CORS restrictions that can block the client's own
+ * credentialed cross-origin call. Best-effort: any failure is logged and
+ * swallowed so the cookie-clearing response is never affected.
+ */
+async function platformLogout(req: Request): Promise<void> {
+  try {
+    const accessToken = readCookie(req, "access_token")
+    const baseUrl = readCookie(req, "onehealth_base_url")
+    if (!accessToken || !baseUrl) return
+
+    const root = baseUrl.replace(/\/api\/?$/, "")
+    const incomingCookies = req.headers.get("cookie")
+    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
+    if (incomingCookies) headers.Cookie = incomingCookies
+
+    const res = await fetch(`${root}/auth/user/logout`, {
+      method: "POST",
+      headers,
+      cache: "no-store",
+    })
+    console.log("[v0] /api/logout platformLogout:", res.status)
+  } catch (e) {
+    console.log("[v0] /api/logout platformLogout failed (continuing):", (e as Error)?.message)
+  }
+}
+
+async function handle(req: Request): Promise<NextResponse> {
+  // Invalidate the server-side platform session first, while the forwarded
+  // access token is still valid. Best-effort — never blocks the cookie clear.
+  await platformLogout(req)
+
   const host = req.headers.get("host") ?? ""
   // Derive the protocol from the forwarded header — behind Vercel's proxy the
   // internal request URL is not reliably https, and `Secure` must be accurate
