@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Nav } from '@/components/nav'
 import { Footer } from '@/components/footer'
 import { baaContent, BAA_VERSION } from '@/components/agreement'
+import { withBrandingId } from '@/lib/auth-branding'
 
 export const metadata: Metadata = {
   title: 'Business Associate Agreement — Patient Vault',
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://pv.1health.io/baa' },
 }
 
-const REGISTER_URL = 'https://1health.demo.1health.io/register?openApp=Patient%20Vault'
+const REGISTER_URL = withBrandingId('https://1health.demo.1health.io/register?openApp=Patient%20Vault')
 
 export default function PublicBaaPage() {
   return (

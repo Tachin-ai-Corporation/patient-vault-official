@@ -42,3 +42,17 @@ export function resolveBranding(
   if (!overrides) return DEFAULT_BRANDING
   return { ...DEFAULT_BRANDING, ...overrides }
 }
+
+// The Patient Vault brandingId registered with 1health. It is appended to every
+// outbound hosted login/registration URL so 1health renders the Patient Vault
+// branding on its login and registration screens.
+export const BRANDING_ID = '805f90f6-2b22-4e55-8a0c-7c33df804ce5'
+
+/**
+ * Append the Patient Vault `brandingId` to a 1health login/registration URL,
+ * preserving any existing query string (e.g. `?openApp=Patient%20Vault`).
+ */
+export function withBrandingId(url: string): string {
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}brandingId=${BRANDING_ID}`
+}
