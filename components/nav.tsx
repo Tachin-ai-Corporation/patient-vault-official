@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
+import { withBrandingId } from '@/lib/auth-branding'
 
-const REGISTER_URL = 'https://1health.demo.1health.io/register?openApp=Patient%20Vault'
-const LOGIN_URL = 'https://1health.demo.1health.io/login?openApp=Patient%20Vault'
+const REGISTER_URL = withBrandingId('https://1health.demo.1health.io/register?openApp=Patient%20Vault')
+const LOGIN_URL = withBrandingId('https://1health.demo.1health.io/login?openApp=Patient%20Vault')
 
 const NAV_LINKS = [
   { label: 'Pricing', href: '#pricing' },

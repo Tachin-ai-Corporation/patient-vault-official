@@ -10,6 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { withBrandingId } from "@/lib/auth-branding"
 
 type AuthState = "idle" | "loading" | "success" | "error" | "manual-entry"
 type Environment = "demo" | "prod"
@@ -29,9 +30,11 @@ const ENV_URLS: Record<Environment, string> = {
 
 // User-facing 1health login pages that deep-link straight into the Patient Vault
 // app. Used only for the "Go to 1health" / "Go to Demo/Production" buttons.
+// `withBrandingId` appends the Patient Vault brandingId so 1health renders the
+// Patient Vault branding on its login screen.
 const LOGIN_URLS: Record<Environment, string> = {
-  demo: "https://1health.demo.1health.io/login?openApp=Patient%20Vault",
-  prod: "https://1health.app.1health.io/login?openApp=Patient%20Vault",
+  demo: withBrandingId("https://1health.demo.1health.io/login?openApp=Patient%20Vault"),
+  prod: withBrandingId("https://1health.app.1health.io/login?openApp=Patient%20Vault"),
 }
 
 function detectEnvironmentFromReferrer(): Environment | null {
