@@ -140,9 +140,31 @@ function decryptAesGcm({
  * This is the ONLY server-side route that requires the ONEHEALTH_SECRET_KEY.
  * All subsequent API calls are made client-side.
  */
+/**
+ * Shared attributes for every session cookie written by this route.
+ *
+ * `SameSite=None` + `Secure` + `Partitioned` (CHIPS) lets the cookie be sent when
+ * Patient Vault is embedded in a cross-site iframe, while CHIPS scopes it to a
+ * per-top-level-site jar so browsers phasing out third-party cookies still accept
+ * it. `Secure` is derived from the real request protocol rather than `NODE_ENV`,
+ * because `SameSite=None` is invalid without `Secure` — a non-production build
+ * served over HTTPS (preview/staging) would otherwise have its cookies rejected.
+ * On plain HTTP we fall back to `Lax` so local dev keeps working.
+ *
+ * `httpOnly: false` is intentional: client JS reads these tokens.
+ */
+function sessionCookieOptions(req: Request) {
+  const isSecure = (req.headers.get("x-forwarded-proto") ?? "http").split(",")[0].trim() === "https"
+
+  return isSecure
+    ? { httpOnly: false, path: "/", sameSite: "none" as const, secure: true, partitioned: true }
+    : { httpOnly: false, path: "/", sameSite: "lax" as const, secure: false }
+}
+
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies()
+    const cookieOpts = sessionCookieOptions(req)
     const body = await req.json()
 
     if (!body.lpl) {
@@ -154,19 +176,13 @@ export async function POST(req: Request) {
 
     // Store the environment and base URL in cookies
     cookieStore.set("onehealth_environment", environment, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...cookieOpts,
       maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: "/",
     })
 
     cookieStore.set("onehealth_base_url", baseUrl, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...cookieOpts,
       maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: "/",
     })
 
     if (!secretKey) {
@@ -269,38 +285,26 @@ export async function POST(req: Request) {
     const refreshTokenMaxAge = accessTokenMaxAge * 2
 
     cookieStore.set("access_token", authData.access_token, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...cookieOpts,
       maxAge: accessTokenMaxAge,
-      path: "/",
     })
 
     cookieStore.set("refresh_token", authData.refresh_token, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...cookieOpts,
       maxAge: refreshTokenMaxAge,
-      path: "/",
     })
 
     const tokenExpiresAt = Math.floor(Date.now() / 1000) + accessTokenMaxAge
     const refreshExpiresAt = Math.floor(Date.now() / 1000) + refreshTokenMaxAge
 
     cookieStore.set("refresh_token_expires_at", String(refreshExpiresAt), {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...cookieOpts,
       maxAge: refreshTokenMaxAge,
-      path: "/",
     })
 
     cookieStore.set("token_expires_at", String(tokenExpiresAt), {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...cookieOpts,
       maxAge: refreshTokenMaxAge,
-      path: "/",
     })
 
     try {
@@ -320,21 +324,15 @@ export async function POST(req: Request) {
         // Store tenant org ID in cookie for client-side access
         if (tenantData.organization?.id) {
           cookieStore.set("user_org_id", String(tenantData.organization.id), {
-            httpOnly: false,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+            ...cookieOpts,
             maxAge: refreshTokenMaxAge,
-            path: "/",
           })
         }
 
         // Store user ID from the decrypted payload
         cookieStore.set("user_id", String(payload.required.user.id), {
-          httpOnly: false,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
+          ...cookieOpts,
           maxAge: refreshTokenMaxAge,
-          path: "/",
         })
       }
     } catch (tenantErr) {
