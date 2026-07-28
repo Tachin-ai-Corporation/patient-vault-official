@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { Parallax } from '@/components/parallax'
 import { captureRef } from '@/lib/partner-ref'
-import { withBrandingId } from '@/lib/auth-branding'
+import { withAuthParams } from '@/lib/auth-branding'
+import { useTheme } from '@/components/theme-provider'
 
-const REGISTER_URL = withBrandingId('https://1health.demo.1health.io/register?openApp=Patient%20Vault')
+// brandingId + the active light/dark mode are appended per render.
+const REGISTER_BASE = 'https://1health.demo.1health.io/register?openApp=Patient%20Vault'
 
 const partnerMessages: Record<string, string> = {
   verge: 'Verge HealthTech sent you. Your $25,000 in Patient Vault credits will apply at signup.',
@@ -17,6 +19,7 @@ const partnerMessages: Record<string, string> = {
 export function Hero() {
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [partnerRef, setPartnerRef] = useState<string | null>(null)
+  const { theme } = useTheme()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -79,7 +82,7 @@ export function Hero() {
           <div className="flex flex-col gap-3 mb-12">
             <div className="flex flex-wrap items-center gap-4">
               <a
-                href={REGISTER_URL}
+                href={withAuthParams(REGISTER_BASE, theme)}
                 className="flex items-center gap-2 px-5 py-3 rounded-[10px] text-sm font-semibold hover:opacity-90 transition-opacity duration-150"
                 style={{
                   backgroundColor: showBanner ? 'var(--color-amber)' : 'var(--color-network-teal)',
