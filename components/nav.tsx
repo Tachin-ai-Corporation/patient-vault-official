@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
-import { withBrandingId } from '@/lib/auth-branding'
+import { withAuthParams } from '@/lib/auth-branding'
 
-const REGISTER_URL = withBrandingId('https://1health.demo.1health.io/register?openApp=Patient%20Vault')
-const LOGIN_URL = withBrandingId('https://1health.demo.1health.io/login?openApp=Patient%20Vault')
+// Base URLs; brandingId + the active light/dark mode are appended per render so
+// the hosted 1health screen matches the mode selected in this app.
+const REGISTER_BASE = 'https://1health.demo.1health.io/register?openApp=Patient%20Vault'
+const LOGIN_BASE = 'https://1health.demo.1health.io/login?openApp=Patient%20Vault'
 
 const NAV_LINKS = [
   { label: 'Pricing', href: '#pricing' },
@@ -36,6 +38,11 @@ export function Nav() {
   }, [mobileOpen])
 
   const scrolledBg = theme === 'dark' ? 'rgba(32, 40, 51, 0.95)' : 'rgba(244, 246, 249, 0.95)'
+
+  // Recomputed whenever the user toggles the theme, so the outbound link always
+  // carries the current mode.
+  const registerUrl = withAuthParams(REGISTER_BASE, theme)
+  const loginUrl = withAuthParams(LOGIN_BASE, theme)
 
   return (
     <header
@@ -91,7 +98,7 @@ export function Nav() {
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <a
-            href={LOGIN_URL}
+            href={loginUrl}
             className="text-sm font-medium transition-colors duration-150"
             style={{
               color: 'var(--color-mist)',
@@ -106,7 +113,7 @@ export function Nav() {
             Sign in
           </a>
           <a
-            href={REGISTER_URL}
+            href={registerUrl}
             className="flex items-center px-4 py-2 rounded-[10px] text-sm font-semibold transition-opacity duration-150 hover:opacity-90"
             style={{
               backgroundColor: 'var(--color-network-teal)',
@@ -158,7 +165,7 @@ export function Nav() {
           ))}
 
           <a
-            href={LOGIN_URL}
+            href={loginUrl}
             className="py-2 text-base font-medium"
             style={{ color: 'var(--color-cloud)' }}
           >
@@ -166,7 +173,7 @@ export function Nav() {
           </a>
 
           <a
-            href={REGISTER_URL}
+            href={registerUrl}
             className="mt-2 flex items-center justify-center px-4 py-3 rounded-[10px] text-base font-semibold"
             style={{
               backgroundColor: 'var(--color-network-teal)',

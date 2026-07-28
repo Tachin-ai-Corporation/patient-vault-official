@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Nav } from '@/components/nav'
 import { Footer } from '@/components/footer'
 import { baaContent, BAA_VERSION } from '@/components/agreement'
-import { withBrandingId } from '@/lib/auth-branding'
+import { RegisterLink } from '@/components/register-link'
 
 export const metadata: Metadata = {
   title: 'Business Associate Agreement — Patient Vault',
@@ -10,8 +10,6 @@ export const metadata: Metadata = {
     'The HIPAA Business Associate Agreement for Patient Vault, executed at signup.',
   alternates: { canonical: 'https://pv.1health.io/baa' },
 }
-
-const REGISTER_URL = withBrandingId('https://1health.demo.1health.io/register?openApp=Patient%20Vault')
 
 export default function PublicBaaPage() {
   return (
@@ -60,16 +58,13 @@ export default function PublicBaaPage() {
             <p className="text-[15px] mb-4" style={{ color: 'var(--color-cloud)' }}>
               Ready to execute this agreement?
             </p>
-            <a
-              href={REGISTER_URL}
+            <RegisterLink
               className="inline-flex items-center px-5 py-3 rounded-[10px] text-[15px] font-semibold transition-opacity duration-150 hover:opacity-90"
               style={{
                 backgroundColor: 'var(--color-network-teal)',
                 color: 'var(--color-graphite)',
               }}
-            >
-              Get Started
-            </a>
+            />
           </div>
         </div>
       </main>

@@ -10,7 +10,8 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { withBrandingId } from "@/lib/auth-branding"
+import { withAuthParams } from "@/lib/auth-branding"
+import { useTheme } from "@/components/theme-provider"
 import { setCookie } from "@/lib/auth-client"
 
 type AuthState = "idle" | "loading" | "success" | "error" | "manual-entry"
@@ -23,7 +24,7 @@ interface AuthError {
 
 // API host per environment — written to the `onehealth_base_url` cookie and used
 // for all API calls. Do NOT repurpose these for the outbound "log in via 1health"
-// links; those point at the Patient Vault login page (see LOGIN_URLS).
+// links; those point at the Patient Vault login page (see LOGIN_BASES).
 const ENV_URLS: Record<Environment, string> = {
   demo: "https://demo.1health.io",
   prod: "https://app.1health.io",
@@ -31,11 +32,11 @@ const ENV_URLS: Record<Environment, string> = {
 
 // User-facing 1health login pages that deep-link straight into the Patient Vault
 // app. Used only for the "Go to 1health" / "Go to Demo/Production" buttons.
-// `withBrandingId` appends the Patient Vault brandingId so 1health renders the
-// Patient Vault branding on its login screen.
-const LOGIN_URLS: Record<Environment, string> = {
-  demo: withBrandingId("https://1health.demo.1health.io/login?openApp=Patient%20Vault"),
-  prod: withBrandingId("https://1health.app.1health.io/login?openApp=Patient%20Vault"),
+// These are bases only — `withAuthParams` appends the Patient Vault brandingId
+// and the active light/dark mode so the hosted login screen matches this app.
+const LOGIN_BASES: Record<Environment, string> = {
+  demo: "https://1health.demo.1health.io/login?openApp=Patient%20Vault",
+  prod: "https://1health.app.1health.io/login?openApp=Patient%20Vault",
 }
 
 function detectEnvironmentFromReferrer(): Environment | null {
@@ -116,6 +117,13 @@ function AuthContent() {
   const [manualLpl, setManualLpl] = useState("")
   const [environment, setEnvironment] = useState<Environment | null>(null)
   const searchParams = useSearchParams()
+  const { theme } = useTheme()
+
+  // Outbound 1health login links, carrying brandingId + the active mode.
+  const loginUrls: Record<Environment, string> = {
+    demo: withAuthParams(LOGIN_BASES.demo, theme),
+    prod: withAuthParams(LOGIN_BASES.prod, theme),
+  }
 
   const lpl = (searchParams.get("lpl") || "").replace(/ /g, "+")
 
@@ -210,7 +218,7 @@ function AuthContent() {
     }
   }
 
-  const returnUrl = environment ? LOGIN_URLS[environment] : null
+  const returnUrl = environment ? loginUrls[environment] : null
 
   // Environment selection screen
   if (!environment && authState !== "loading" && authState !== "success") {
@@ -274,7 +282,7 @@ function AuthContent() {
               </p>
               <div className="flex gap-2">
                 <a
-                  href={LOGIN_URLS.demo}
+                  href={loginUrls.demo}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'flex-1' })}
@@ -282,7 +290,7 @@ function AuthContent() {
                   Go to Demo <ExternalLink className="ml-1 h-3 w-3" />
                 </a>
                 <a
-                  href={LOGIN_URLS.prod}
+                  href={loginUrls.prod}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'flex-1' })}

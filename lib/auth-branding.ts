@@ -56,3 +56,30 @@ export function withBrandingId(url: string): string {
   const separator = url.includes('?') ? '&' : '?'
   return `${url}${separator}brandingId=${BRANDING_ID}`
 }
+
+/** Light/dark selection forwarded to the hosted 1health auth screens. */
+export type AuthMode = 'light' | 'dark'
+
+/**
+ * Read the active theme straight from the DOM.
+ *
+ * The pre-hydration script in `layout.tsx` sets `light`/`dark` on <html>, so
+ * this is accurate even before React hydrates — which makes it the reliable
+ * source of truth for server-rendered markup, where `useTheme()` isn't
+ * available. Falls back to `dark` (the app default) outside the browser.
+ */
+export function currentAuthMode(): AuthMode {
+  if (typeof document === 'undefined') return 'dark'
+  return document.documentElement.classList.contains('light') ? 'light' : 'dark'
+}
+
+/**
+ * Build an outbound 1health login/registration URL carrying both the Patient
+ * Vault `brandingId` and the current `mode`, so the hosted screen renders in the
+ * same light/dark mode the user selected here.
+ *
+ * `withBrandingId` always introduces a `?`, so appending `&mode=` is safe.
+ */
+export function withAuthParams(url: string, mode: AuthMode): string {
+  return `${withBrandingId(url)}&mode=${mode}`
+}
