@@ -19,17 +19,24 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Clear THIS app's session (tokens/cookies + storage, incl. the server
-      // /api/logout route for parent-domain/HttpOnly cookies), then hard-reload
-      // to our own /auth screen.
-      //
-      // This is the correct logout for 1health: per platform guidance there is
-      // NO logout/end-session endpoint — auth is OAuth2/token-based and you log
-      // out by discarding the tokens (what signOut does) and letting them
-      // expire. The 1health *platform* session is separate and can't be ended
-      // from here, so relaunching from 1health while it's active may re-auth.
+      // Clear THIS app's session: invalidate the platform token server-side,
+      // then drop cookies/storage (incl. the /api/logout route, which handles
+      // parent-domain + HttpOnly + partitioned cookies).
       await signOut()
-      window.location.assign('/auth')
+
+      // Land on the public marketing page rather than /auth.
+      //
+      // `assign` (a full document load, not a client-side route change) is
+      // required here: "/" is a server component that redirects authenticated
+      // visitors to /patients based on the access_token cookie, so the browser
+      // must re-request it and have the server observe the now-cleared cookies.
+      // A router.push would reuse the current client cache and could bounce the
+      // user straight back into the console.
+      window.location.assign('/')
+
+      // Note: the 1health *platform* SSO session is separate from this app's
+      // tokens, so relaunching from 1health while it is still active can mint a
+      // fresh session without re-prompting for credentials.
     }
   }
 
