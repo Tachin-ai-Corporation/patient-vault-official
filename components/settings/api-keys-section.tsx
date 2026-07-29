@@ -56,13 +56,7 @@ function maskSecret(secret: string): string {
   return `${prefix}${'•'.repeat(24)}`
 }
 
-function EnvSwitch({
-  value,
-  onChange,
-}: {
-  value: ApiEnv
-  onChange: (env: ApiEnv) => void
-}) {
+function EnvSwitch({ value }: { value: ApiEnv }) {
   const envs: ApiEnv[] = ['staging', 'production']
   return (
     <div
@@ -78,7 +72,7 @@ function EnvSwitch({
             role="tab"
             aria-selected={active}
             type="button"
-            onClick={() => onChange(env)}
+            disabled={!active}
             className={`rounded-input px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
               active
                 ? 'bg-background text-foreground shadow-sm'
@@ -156,7 +150,7 @@ function KeyRow({
 }
 
 export function ApiKeysSection() {
-  const { session, currentProject, setCurrentEnv, isProductionActivated, productionMaskedKey } =
+  const { session, currentProject, isProductionActivated, productionMaskedKey } =
     useSession()
   const { currentEnv } = session
 
@@ -240,7 +234,7 @@ export function ApiKeysSection() {
             {headerDescription}
           </p>
         </div>
-        <EnvSwitch value={currentEnv} onChange={setCurrentEnv} />
+        <EnvSwitch value={currentEnv} />
       </div>
 
       {/* Server-side-only helper */}

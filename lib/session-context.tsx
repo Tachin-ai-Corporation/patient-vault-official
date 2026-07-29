@@ -19,7 +19,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -133,7 +132,6 @@ type SessionContextValue = {
   claimPartner: (code: string) => void
   isProductionActivated: boolean
   currentEnv: ApiEnv
-  setCurrentEnv: (env: ApiEnv) => void
   // Developer-platform shims. These back the static Console/Settings screens.
   // The 1health API surface used here (myself + tenant + patients) has no
   // project-management or key-provisioning endpoints, so these are local-only
@@ -266,26 +264,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [projectId, projectName, patients.length],
   )
 
-  // The authenticated backend host is authoritative. Local selector state is
-  // retained only so we can detect and report a UI/backend disagreement.
-  const backendEnv = useMemo<ApiEnv>(() => {
+  // The authenticated backend host is the sole authority for environment.
+  const currentEnv = useMemo<ApiEnv>(() => {
     if (!hasOneHealthSession()) return 'staging'
     return environmentFromBackendHost(getOneHealthBaseUrl()) ?? 'staging'
   }, [user, tenant])
-  const [selectedEnv, setSelectedEnv] = useState<ApiEnv>(backendEnv)
-
-  useEffect(() => {
-    if (selectedEnv !== backendEnv) {
-      console.warn(
-        `[v0] Environment selector (${selectedEnv}) differs from authenticated backend (${backendEnv}); rendering ${backendEnv}.`,
-      )
-    }
-  }, [backendEnv, selectedEnv])
-
-  const currentEnv = backendEnv
-  const setCurrentEnv = useCallback((env: ApiEnv) => {
-    setSelectedEnv(env)
-  }, [])
 
   const session = useMemo<Session>(
     () => ({
@@ -516,7 +499,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       claimPartner,
       isProductionActivated,
       currentEnv,
-      setCurrentEnv,
       updateUserName,
       createProject,
       renameCurrentProject,
