@@ -177,19 +177,26 @@ export function EnvironmentSelector() {
           </div>
           <div role="listbox" aria-label="Environment" className="p-1.5">
             {ENVIRONMENTS.map((environment) => {
+              const id = environmentId(environment)
+              const selected = id === currentEnv
               const env =
-                environmentId(environment) === 'production'
-                  ? { ...environment, status: productionStatus }
+                id === 'production'
+                  ? {
+                      ...environment,
+                      // The authenticated backend wins over stale local setup
+                      // status so Production renders selected, not "Set up".
+                      status: selected ? ('active' as const) : productionStatus,
+                    }
                   : environment
 
               return (
-              <EnvironmentRow
-                key={env.name}
-                env={env}
-                selected={environmentId(env) === currentEnv}
-                onSelect={select}
-                onSetUp={startSetUp}
-              />
+                <EnvironmentRow
+                  key={env.name}
+                  env={env}
+                  selected={selected}
+                  onSelect={select}
+                  onSetUp={startSetUp}
+                />
               )
             })}
           </div>
