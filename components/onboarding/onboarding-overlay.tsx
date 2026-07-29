@@ -94,12 +94,13 @@ export function OnboardingOverlay({
   onDone: () => void
 }) {
   // A returning developer already has a Patient Vault, discoverable inline from
-  // `myself.tenants`. When they do, we skip creation + key generation entirely
-  // and only switch back into the existing org.
+  // `myself.tenants` (any tenant whose name contains "patient vault"). When they
+  // do, we skip creation + key generation entirely and only switch back into the
+  // existing org.
   const name = vaultName(user)
   const returningVaultId = useMemo(
-    () => matchExistingVaultId(user.tenants ?? [], name),
-    [user.tenants, name],
+    () => matchExistingVaultId(user.tenants ?? []),
+    [user.tenants],
   )
   const isReturning = returningVaultId != null
 
@@ -150,7 +151,7 @@ export function OnboardingOverlay({
     // Step 1 — create the org. Guard once more against a vault that exists but
     // wasn't listed in `myself.tenants` (stale payload) so we never duplicate.
     setStatus('org', 'active')
-    let tenantId = await findExistingVaultId(name)
+    let tenantId = await findExistingVaultId()
 
     if (!tenantId) {
       const created = await createTenant({
