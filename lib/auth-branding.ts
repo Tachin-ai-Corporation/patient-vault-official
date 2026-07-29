@@ -83,32 +83,3 @@ export function currentAuthMode(): AuthMode {
 export function withAuthParams(url: string, mode: AuthMode): string {
   return `${withBrandingId(url)}&mode=${mode}`
 }
-
-/** Environment id for the hosted 1health identity provider. */
-export type IdpEnv = 'demo' | 'prod'
-
-// Hosted 1health logout pages, per environment. These live on the SAME host as
-// the login page (`1health.<env>.1health.io`) — the domain that holds the
-// platform's SSO session cookie. Because that host is a *sibling* subdomain of
-// this app (`pv.1health.io`), the browser forbids us from clearing its cookie
-// via Set-Cookie; the only way to end the SSO session is to send the browser
-// through this page. Otherwise the next "Sign in" silently re-mints a session.
-const IDP_LOGOUT_BASES: Record<IdpEnv, string> = {
-  demo: 'https://1health.demo.1health.io/logout',
-  prod: 'https://1health.app.1health.io/logout',
-}
-
-/**
- * Build the hosted 1health logout URL for the given environment. It carries the
- * Patient Vault `brandingId` + `mode` (so the logout screen stays on-brand) and
- * a `redirect_uri` telling 1health to return the user to `returnUrl` (the
- * Patient Vault marketing page) once the SSO session has been ended.
- */
-export function buildIdpLogoutUrl(
-  env: IdpEnv,
-  returnUrl: string,
-  mode: AuthMode,
-): string {
-  const base = `${IDP_LOGOUT_BASES[env]}?redirect_uri=${encodeURIComponent(returnUrl)}`
-  return withAuthParams(base, mode)
-}

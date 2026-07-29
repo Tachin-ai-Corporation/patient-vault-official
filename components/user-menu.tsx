@@ -21,20 +21,21 @@ export function UserMenu() {
     if (label === 'Sign out') {
       // Clear THIS app's session: invalidate the platform token server-side,
       // then drop cookies/storage (incl. the /api/logout route, which handles
-      // parent-domain + HttpOnly + partitioned cookies). signOut() returns the
-      // hosted 1health logout URL to navigate to next.
-      const logoutUrl = await signOut()
+      // parent-domain + HttpOnly + partitioned cookies).
+      await signOut()
 
-      // Navigate to the hosted 1health logout page. This ends the platform SSO
-      // session — which our cookie clearing can't reach, as it lives on the
-      // sibling `1health.<env>.1health.io` host — and then redirects back to the
-      // Patient Vault marketing page. Without this hop the next "Sign in"
-      // silently re-mints a session (only closing the browser ended it before).
-      //
-      // A full document `replace` (not router.push) is required so the SSO host
-      // observes the navigation; `replace` (vs `assign`) also drops the
-      // authenticated page from history so Back can't restore it.
-      window.location.replace(logoutUrl)
+      // Land on the public marketing page. A full document `replace` (not
+      // router.push) is required: "/" is a server component that redirects
+      // authenticated visitors to /patients based on the access_token cookie, so
+      // the browser must re-request it and observe the now-cleared cookies.
+      // `replace` (vs `assign`) also drops the authenticated page from history
+      // so Back can't restore it.
+      window.location.replace('/')
+
+      // NOTE: the 1health *platform* SSO session is separate from this app's
+      // tokens and lives on a sibling host we can't clear here, so relaunching
+      // from 1health while it is still active can mint a fresh session without
+      // re-prompting for credentials.
     }
   }
 
