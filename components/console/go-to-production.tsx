@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card'
 import { useTheme } from '@/components/theme-provider'
 import { BRANDING_ID } from '@/lib/auth-branding'
+import { useSession } from '@/lib/session-context'
 
 function buildRegistrationUrl(mode: 'dark' | 'light'): string {
   const registrationUrl = new URL('/register', 'https://1health.app.1health.io')
@@ -25,9 +26,36 @@ function buildRegistrationUrl(mode: 'dark' | 'light'): string {
 
 export function GoToProduction() {
   const { theme } = useTheme()
+  const { currentEnv } = useSession()
 
   function createProductionAccount() {
     window.location.assign(buildRegistrationUrl(theme))
+  }
+
+  if (currentEnv === 'production') {
+    return (
+      <section aria-labelledby="patient-vault-production-title">
+        <Card className="shadow-none">
+          <CardHeader>
+            <CardTitle
+              id="patient-vault-production-title"
+              className="text-xl text-balance"
+            >
+              Patient Vault production
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm leading-relaxed text-foreground text-pretty">
+              Your production account is active. Patient Vault production access
+              is not yet enabled.
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+              The API will become available on this account when it ships.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+    )
   }
 
   return (
