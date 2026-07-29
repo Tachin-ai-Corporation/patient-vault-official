@@ -2,6 +2,7 @@ import { ConsoleApiKey } from '@/components/console/console-api-key'
 import { PromotionCode } from '@/components/console/promotion-code'
 import { DeveloperProfile } from '@/components/console/developer-profile'
 import { InspectorToggle } from '@/components/console/inspector-toggle'
+import { GoToProduction } from '@/components/console/go-to-production'
 
 // Console is the single settings surface for the developer + this vault. It
 // consolidates the API key, the developer profile (name editable, email
@@ -24,6 +25,7 @@ export function ConsoleView() {
       </div>
 
       <ConsoleApiKey />
+      <GoToProduction />
       <PromotionCode />
       <DeveloperProfile />
       <InspectorToggle />
