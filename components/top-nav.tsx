@@ -33,10 +33,9 @@ function NavButton({ item, active }: { item: NavItem; active: boolean }) {
   )
 }
 
-// Horizontal quick-nav button row that replaces the former left sidebar. The
-// leading environment selector makes this row wide enough to overflow on narrow
-// viewports, so it scrolls horizontally (scrollbar hidden) rather than clipping
-// the last nav item out of reach.
+// Horizontal quick-nav button row that replaces the former left sidebar.
+// The compact environment badge keeps every primary destination visible without
+// introducing a nested horizontal scrolling region.
 export function TopNav() {
   const pathname = usePathname()
   const isActive = (href: string) =>
@@ -45,7 +44,7 @@ export function TopNav() {
   return (
     <nav
       aria-label="Primary"
-      className="sticky top-16 z-20 flex items-center gap-1.5 overflow-x-auto border-b border-border bg-background/80 px-6 py-2 backdrop-blur-md [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="sticky top-16 z-20 flex items-center gap-1.5 border-b border-border bg-background/80 px-6 py-2 backdrop-blur-md"
     >
       {/* Vault + environment selector sits ahead of the nav buttons. */}
       <EnvironmentSelector />

@@ -37,7 +37,7 @@ export function EnvBadge({
         className,
       )}
     >
-      {env}
+      {env === 'production' ? 'PROD' : env}
     </span>
   )
 }
