@@ -41,7 +41,7 @@ export type EnvironmentRecord = {
  */
 export const ENVIRONMENTS: EnvironmentRecord[] = [
   { name: 'Staging', status: 'active', keyPrefix: 'pv_sk_test_' },
-  { name: 'Production', status: 'active', keyPrefix: 'pv_sk_live_' },
+  { name: 'Production', status: 'none', keyPrefix: 'pv_sk_live_' },
 ]
 
 /** `{ name: 'Staging' }` -> `'staging'`, the id held in session state. */

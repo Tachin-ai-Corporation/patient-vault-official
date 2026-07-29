@@ -174,8 +174,8 @@ function ProductionStatusCard({
   return (
     <Card className="border-destructive/50 bg-destructive/10 shadow-none">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base text-destructive">
-          <AlertCircle aria-hidden="true" />
+        <CardTitle className="flex items-center gap-2 text-base">
+          <AlertCircle className="text-destructive" aria-hidden="true" />
           Production access suspended
         </CardTitle>
         <CardDescription>
