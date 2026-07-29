@@ -137,49 +137,40 @@ async function postTenant(
   return { ok: true, data: await response.json() }
 }
 
-/** Escape a string for safe use inside a RegExp. */
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
+/** Substring that identifies any Patient Vault org, regardless of owner prefix. */
+const VAULT_NAME_MARKER = "patient vault"
 
 /**
- * Look for a Patient Vault this user already created, so we can reuse it instead
- * of provisioning a duplicate on every launch.
+ * Pure matcher: given a list of the user's tenants, return the id of an existing
+ * Patient Vault, or null when the user has none.
  *
  * The onboarding gate re-fires whenever the platform drops the user back on the
  * bootstrap tenant (id 1) via LPL, which previously caused a brand-new org to be
- * created each time (and, due to name collisions, names like "… Patient Vault
- * 745650"). We match the canonical name — exactly `<base>` or `<base> <6 digits>`
- * — across the user's accessible tenants, ignore the bootstrap tenant, and
- * return the LOWEST id so repeated logins always converge on the same vault.
- */
-/**
- * Pure matcher: given a list of the user's tenants, return the id of the Patient
- * Vault that matches the canonical name — exactly `<base>` or `<base> <6 digits>`
- * — ignoring the bootstrap tenant, choosing the LOWEST id so repeated logins
- * always converge on the same vault. Returns null when the user has none.
+ * created on every launch. The rule is deliberately broad: if ANY accessible
+ * tenant name contains "patient vault" (case-insensitive) — e.g. "Daniel
+ * Garcia's Patient Vault" or "… Patient Vault 967955" — we reuse it and never
+ * provision another. The bootstrap tenant is ignored, and we return the LOWEST
+ * matching id so repeated logins always converge on the same vault.
  */
 export function matchExistingVaultId(
   tenants: ReadonlyArray<{ id: number; name?: unknown }>,
-  baseName: string,
 ): number | null {
-  const pattern = new RegExp(`^${escapeRegExp(baseName)}( \\d{6})?$`)
   const matches = tenants
     .filter(
       (t) =>
         t.id !== BOOTSTRAP_TENANT_ID &&
         typeof t.name === "string" &&
-        pattern.test(t.name),
+        t.name.toLowerCase().includes(VAULT_NAME_MARKER),
     )
     .sort((a, b) => a.id - b.id)
 
   return matches.length > 0 ? matches[0].id : null
 }
 
-export async function findExistingVaultId(baseName: string): Promise<number | null> {
+export async function findExistingVaultId(): Promise<number | null> {
   const all = await fetchAllTenants()
   if (!all.success || !all.data) return null
-  return matchExistingVaultId(all.data, baseName)
+  return matchExistingVaultId(all.data)
 }
 
 export async function createTenant(input: CreateTenantInput): Promise<CreateTenantResult> {
