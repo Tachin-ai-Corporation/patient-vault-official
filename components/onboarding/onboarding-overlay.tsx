@@ -116,9 +116,10 @@ export function OnboardingOverlay({
   const handleSignOut = useCallback(async () => {
     setSigningOut(true)
     // Clear this app's session server + client side, then hard-navigate to the
-    // public page so the user is never trapped in the setup gate.
+    // public page so the user is never trapped in the setup gate. `replace`
+    // drops this authenticated page from history so Back can't restore it.
     await signOut()
-    window.location.assign('/')
+    window.location.replace('/')
   }, [])
 
   const setStatus = useCallback((id: StepId, status: StepStatus) => {

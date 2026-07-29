@@ -26,13 +26,14 @@ export function UserMenu() {
 
       // Land on the public marketing page rather than /auth.
       //
-      // `assign` (a full document load, not a client-side route change) is
+      // `replace` (a full document load, not a client-side route change) is
       // required here: "/" is a server component that redirects authenticated
       // visitors to /patients based on the access_token cookie, so the browser
       // must re-request it and have the server observe the now-cleared cookies.
       // A router.push would reuse the current client cache and could bounce the
-      // user straight back into the console.
-      window.location.assign('/')
+      // user straight back into the console. `replace` (vs `assign`) also drops
+      // the authenticated page from history so Back can't restore it.
+      window.location.replace('/')
 
       // Note: the 1health *platform* SSO session is separate from this app's
       // tokens, so relaunching from 1health while it is still active can mint a
