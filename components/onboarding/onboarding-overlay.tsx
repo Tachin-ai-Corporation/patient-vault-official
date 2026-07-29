@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Building2,
   Check,
@@ -20,6 +20,7 @@ import {
   createApiToken,
   createTenant,
   findExistingVaultId,
+  matchExistingVaultId,
   switchTenant,
   type ApiToken,
 } from '@/lib/api/onboarding'
@@ -37,6 +38,7 @@ type StepState = {
   status: StepStatus
 }
 
+// First-run provisioning: the developer has no Patient Vault yet.
 const INITIAL_STEPS: StepState[] = [
   {
     id: 'org',
@@ -64,6 +66,19 @@ const INITIAL_STEPS: StepState[] = [
   },
 ]
 
+// Returning developer: a Patient Vault already exists, so we only switch back
+// into it — no org creation, no new API key.
+const RETURNING_STEPS: StepState[] = [
+  {
+    id: 'switch',
+    label: 'Open your organization',
+    activeLabel: 'Opening your organization…',
+    doneLabel: 'Organization ready',
+    icon: RefreshCw,
+    status: 'pending',
+  },
+]
+
 function vaultName(user: UserInfo): string {
   const full = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
   const base = full || user.username || 'My'
@@ -78,7 +93,19 @@ export function OnboardingOverlay({
   /** Called when the developer dismisses the key panel — refreshes the session. */
   onDone: () => void
 }) {
-  const [steps, setSteps] = useState<StepState[]>(INITIAL_STEPS)
+  // A returning developer already has a Patient Vault, discoverable inline from
+  // `myself.tenants`. When they do, we skip creation + key generation entirely
+  // and only switch back into the existing org.
+  const name = vaultName(user)
+  const returningVaultId = useMemo(
+    () => matchExistingVaultId(user.tenants ?? [], name),
+    [user.tenants, name],
+  )
+  const isReturning = returningVaultId != null
+
+  const [steps, setSteps] = useState<StepState[]>(
+    isReturning ? RETURNING_STEPS : INITIAL_STEPS,
+  )
   const [apiKey, setApiKey] = useState<ApiToken | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [debug, setDebug] = useState<string | null>(null)
@@ -101,12 +128,28 @@ export function OnboardingOverlay({
     setError(null)
     setDebug(null)
 
-    // Step 1 — reuse the user's existing Patient Vault if one exists, otherwise
-    // create it. This prevents a fresh duplicate org on every LPL relaunch (the
-    // platform drops returning users back on the bootstrap tenant, which
-    // re-triggers onboarding).
+    // Returning developer — the org already exists (found inline in
+    // `myself.tenants`). Never re-create it or mint a duplicate API key; just
+    // switch back into the vault and drop straight into the console.
+    if (returningVaultId != null) {
+      setStatus('switch', 'active')
+      const switched = await switchTenant(returningVaultId)
+      if (!switched.success) {
+        setStatus('switch', 'error')
+        setError(switched.error ?? 'Could not open your organization.')
+        if (switched.debug) setDebug(switched.debug)
+        return
+      }
+      setStatus('switch', 'done')
+      // Session now points at the real vault — leave the setup gate.
+      onDone()
+      return
+    }
+
+    // First-run developer — provision a new vault.
+    // Step 1 — create the org. Guard once more against a vault that exists but
+    // wasn't listed in `myself.tenants` (stale payload) so we never duplicate.
     setStatus('org', 'active')
-    const name = vaultName(user)
     let tenantId = await findExistingVaultId(name)
 
     if (!tenantId) {
@@ -144,7 +187,7 @@ export function OnboardingOverlay({
     }
     setStatus('key', 'done')
     setApiKey(key.token)
-  }, [setStatus, user])
+  }, [name, onDone, returningVaultId, setStatus, user])
 
   useEffect(() => {
     // Guard against React Strict Mode double-invoke — these steps POST real
@@ -155,11 +198,11 @@ export function OnboardingOverlay({
   }, [run])
 
   const retry = useCallback(() => {
-    setSteps(INITIAL_STEPS)
+    setSteps(isReturning ? RETURNING_STEPS : INITIAL_STEPS)
     setApiKey(null)
     setDebug(null)
     void run()
-  }, [run])
+  }, [isReturning, run])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#10151c]/70 p-4 backdrop-blur-sm">
@@ -173,12 +216,18 @@ export function OnboardingOverlay({
               </span>
               <div>
                 <h1 className="text-base font-semibold tracking-tight text-card-foreground">
-                  {apiKey ? 'Your workspace is ready' : 'Setting up your workspace'}
+                  {apiKey
+                    ? 'Your workspace is ready'
+                    : isReturning
+                      ? 'Opening your workspace'
+                      : 'Setting up your workspace'}
                 </h1>
                 <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
                   {apiKey
                     ? 'Save your API key below to start making requests.'
-                    : 'This runs automatically — no action needed yet.'}
+                    : isReturning
+                      ? 'Welcome back — restoring your organization.'
+                      : 'This runs automatically — no action needed yet.'}
                 </p>
               </div>
             </div>

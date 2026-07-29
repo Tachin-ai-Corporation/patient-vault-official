@@ -6,6 +6,12 @@
 
 import { authFetch, getOneHealthBaseUrl, hasOneHealthSession } from "@/lib/auth-client"
 
+/** A tenant/org the user already belongs to, as returned in `myself.tenants`. */
+export interface UserTenant {
+  id: number
+  name: string
+}
+
 export interface UserInfo {
   id: number
   username: string
@@ -14,6 +20,12 @@ export interface UserInfo {
   email: string
   roles: string[]
   tenantContext: { id: number; name: string }
+  /**
+   * Every tenant/org this user is a member of (the "Switch Context" set).
+   * `myself` returns this inline, so onboarding can detect an existing Patient
+   * Vault without a separate tenant-list call and avoid re-provisioning.
+   */
+  tenants: UserTenant[]
   systemAdministrator: boolean
 }
 
@@ -54,6 +66,14 @@ export async function fetchMyself(): Promise<MyselfResult> {
         email: data.email,
         roles: data.roles || [],
         tenantContext: data.tenantContext,
+        tenants: Array.isArray(data.tenants)
+          ? data.tenants
+              .filter((t: unknown): t is UserTenant => {
+                const rec = t as Record<string, unknown> | null
+                return !!rec && typeof rec.id === "number" && typeof rec.name === "string"
+              })
+              .map((t: UserTenant) => ({ id: t.id, name: t.name }))
+          : [],
         systemAdministrator: data.systemAdministrator || false,
       },
     }

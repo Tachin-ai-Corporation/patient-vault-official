@@ -153,16 +153,33 @@ function escapeRegExp(s: string): string {
  * — across the user's accessible tenants, ignore the bootstrap tenant, and
  * return the LOWEST id so repeated logins always converge on the same vault.
  */
-export async function findExistingVaultId(baseName: string): Promise<number | null> {
-  const all = await fetchAllTenants()
-  if (!all.success || !all.data) return null
-
+/**
+ * Pure matcher: given a list of the user's tenants, return the id of the Patient
+ * Vault that matches the canonical name — exactly `<base>` or `<base> <6 digits>`
+ * — ignoring the bootstrap tenant, choosing the LOWEST id so repeated logins
+ * always converge on the same vault. Returns null when the user has none.
+ */
+export function matchExistingVaultId(
+  tenants: ReadonlyArray<{ id: number; name?: unknown }>,
+  baseName: string,
+): number | null {
   const pattern = new RegExp(`^${escapeRegExp(baseName)}( \\d{6})?$`)
-  const matches = all.data
-    .filter((t) => t.id !== BOOTSTRAP_TENANT_ID && typeof t.name === "string" && pattern.test(t.name))
+  const matches = tenants
+    .filter(
+      (t) =>
+        t.id !== BOOTSTRAP_TENANT_ID &&
+        typeof t.name === "string" &&
+        pattern.test(t.name),
+    )
     .sort((a, b) => a.id - b.id)
 
   return matches.length > 0 ? matches[0].id : null
+}
+
+export async function findExistingVaultId(baseName: string): Promise<number | null> {
+  const all = await fetchAllTenants()
+  if (!all.success || !all.data) return null
+  return matchExistingVaultId(all.data, baseName)
 }
 
 export async function createTenant(input: CreateTenantInput): Promise<CreateTenantResult> {
