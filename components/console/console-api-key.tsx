@@ -188,7 +188,11 @@ export function ConsoleApiKey() {
     }),
   )
   const [productionKeyRecord, setProductionKeyRecord] =
-    useState<MaskedKey | null>(null)
+    useState<MaskedKey | null>(() => ({
+      id: 'key_production_default',
+      masked: mask(keyPrefixFor('production')),
+      created: '2026-07-03T00:00:00.000Z',
+    }))
 
   // Likewise for the one-time reveals: a full secret is only ever written to
   // the variable belonging to the environment that issued it.
