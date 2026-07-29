@@ -135,6 +135,9 @@ async function handle(req: Request): Promise<NextResponse> {
   for (const cookie of buildExpiredCookies(host, secure)) {
     res.headers.append("Set-Cookie", cookie)
   }
+  // Never let this response (or the navigation that follows it) be served from
+  // any cache, so the cleared-cookie state is always authoritative.
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate")
   return res
 }
 
