@@ -9,20 +9,25 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { useTheme } from '@/components/theme-provider'
+import { BRANDING_ID } from '@/lib/auth-branding'
 
-const MOCK_OPAQUE_ACTIVATION_STATE = 'pv_state_7f4c29a1e6b8430db52a'
-
-function buildRegistrationUrl(returnTo: string): string {
-  const registrationUrl = new URL('https://app.1health.io/register')
-  registrationUrl.searchParams.set('app', 'patient-vault')
-  registrationUrl.searchParams.set('state', MOCK_OPAQUE_ACTIVATION_STATE)
-  registrationUrl.searchParams.set('return_to', returnTo)
+function buildRegistrationUrl(mode: 'dark' | 'light'): string {
+  const registrationUrl = new URL('/register', 'https://1health.app.1health.io')
+  const parameters = new URLSearchParams({
+    openApp: 'Patient Vault',
+    brandingId: BRANDING_ID,
+    mode,
+  })
+  registrationUrl.search = parameters.toString()
   return registrationUrl.toString()
 }
 
 export function GoToProduction() {
+  const { theme } = useTheme()
+
   function createProductionAccount() {
-    window.location.assign(buildRegistrationUrl(window.location.href))
+    window.location.assign(buildRegistrationUrl(theme))
   }
 
   return (
