@@ -6,6 +6,7 @@ import { TopBar } from '@/components/top-bar'
 import { TopNav } from '@/components/top-nav'
 import { OnboardingOverlay } from '@/components/onboarding/onboarding-overlay'
 import { ApiInspectorPanel } from '@/components/api-inspector/api-inspector-panel'
+import { ProductionRail } from '@/components/production-rail'
 import { useSession } from '@/lib/session-context'
 
 // Developers launched on the shared bootstrap tenant get their own org
@@ -76,6 +77,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Self-gating: renders only while Production is the active environment. */}
+      <ProductionRail />
       <div className="flex min-h-screen flex-col">
         <TopBar />
         <TopNav />

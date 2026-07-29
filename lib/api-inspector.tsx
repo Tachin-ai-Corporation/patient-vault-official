@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { useSession, type ApiEnv } from '@/lib/session-context'
 import { subscribeApiCalls } from '@/lib/api-inspector-bus'
+import { keyPrefixFor } from '@/lib/environments'
 
 // ============================================================================
 // API Inspector — a shared, in-memory record of the API calls behind every
@@ -117,10 +118,10 @@ export function scopeKeyFor(projectId: string, env: ApiEnv) {
   return `${projectId}::${env}`
 }
 
-// Masked-but-structured bearer value, e.g. "pv_sk_staging_••••…". The prefix
-// (and env segment) is visible; the secret body is masked.
+// Masked-but-structured bearer value. The environment-specific prefix is
+// visible; the secret body is masked.
 export function maskedAuthValue(env: ApiEnv): string {
-  const prefix = env === 'production' ? 'pv_sk_live_' : 'pv_sk_staging_'
+  const prefix = keyPrefixFor(env)
   return `${prefix}${'•'.repeat(24)}`
 }
 

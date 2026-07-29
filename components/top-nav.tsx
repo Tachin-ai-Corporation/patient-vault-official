@@ -4,6 +4,7 @@ import { Fragment } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { QUICK_NAV, type NavItem } from '@/lib/nav'
+import { EnvironmentSelector } from '@/components/environment-selector'
 import { cn } from '@/lib/utils'
 
 function NavButton({ item, active }: { item: NavItem; active: boolean }) {
@@ -33,6 +34,8 @@ function NavButton({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 // Horizontal quick-nav button row that replaces the former left sidebar.
+// The compact environment badge keeps every primary destination visible without
+// introducing a nested horizontal scrolling region.
 export function TopNav() {
   const pathname = usePathname()
   const isActive = (href: string) =>
@@ -43,6 +46,10 @@ export function TopNav() {
       aria-label="Primary"
       className="sticky top-16 z-20 flex items-center gap-1.5 border-b border-border bg-background/80 px-6 py-2 backdrop-blur-md"
     >
+      {/* Vault + environment selector sits ahead of the nav buttons. */}
+      <EnvironmentSelector />
+      <span aria-hidden className="mx-1.5 h-5 w-px shrink-0 bg-border" />
+
       {QUICK_NAV.map((group, groupIndex) => (
         <Fragment key={groupIndex}>
           {groupIndex > 0 && (

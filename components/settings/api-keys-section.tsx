@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Field, TextInput } from '@/components/ui/field'
 import { Modal } from '@/components/ui/modal'
 import { CopyButton } from '@/components/ui/copy-button'
+import { keyPrefixFor } from '@/lib/environments'
 
 // ---- MOCK key model --------------------------------------------------------
 // SWAP POINT: in production, secret keys are issued server-side by the key
@@ -30,7 +31,7 @@ type ApiKey = {
 }
 
 function randomSecret(env: ApiEnv): string {
-  const prefix = env === 'staging' ? 'pv_sk_staging_' : 'pv_sk_live_'
+  const prefix = keyPrefixFor(env)
   const alphabet =
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let body = ''
@@ -168,7 +169,7 @@ export function ApiKeysSection() {
     {
       id: 'key_default',
       name: 'Default',
-      secret: 'pv_sk_staging_3aF9kQ2mD7sZ1xW8bN4tR6yL0pV5cH2j',
+      secret: `${keyPrefixFor('staging')}3aF9kQ2mD7sZ1xW8bN4tR6yL0pV5cH2j`,
       created: '2026-06-12T00:00:00.000Z',
       lastUsed: '2026-06-24T00:00:00.000Z',
     },
@@ -347,7 +348,10 @@ export function ApiKeysSection() {
           </p>
           <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-muted-foreground text-pretty">
             Production keys are prefixed{' '}
-            <span className="font-mono text-foreground">pv_sk_live_…</span> and
+            <span className="font-mono text-foreground">
+              {keyPrefixFor('production')}…
+            </span>{' '}
+            and
             appear only after production is activated. For security, a
             production key is shown{' '}
             <span className="font-medium text-foreground">once</span> at

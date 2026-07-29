@@ -252,6 +252,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [projectId, projectName, patients.length],
   )
 
+  // Active environment for the whole console. Declared here (above `session`)
+  // because `session.currentEnv` mirrors it — see below.
+  const [currentEnv, setCurrentEnv] = useState<ApiEnv>('staging')
+
   const session = useMemo<Session>(
     () => ({
       user: sessionUser,
@@ -260,9 +264,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       partner,
       freeCeiling,
       environment: 'development',
-      currentEnv: 'staging',
+      // Mirrors the `currentEnv` state rather than a hardcoded value, so the
+      // many components that read `session.currentEnv` (inspector, analytics,
+      // settings, audit, export) observe environment switches too.
+      currentEnv,
     }),
-    [sessionUser, currentProject, projectId, partner, freeCeiling],
+    [sessionUser, currentProject, projectId, partner, freeCeiling, currentEnv],
   )
 
   // --- patient reads ---
@@ -419,7 +426,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // --- static-screen shims ---
   const setCurrentProjectId = useCallback(() => {}, [])
-  const [currentEnv, setCurrentEnv] = useState<ApiEnv>('staging')
   const [productionMaskedKey, setProductionMaskedKey] = useState<string | null>(
     null,
   )
