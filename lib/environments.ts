@@ -26,7 +26,12 @@ export type EnvironmentRecord = {
   /** Display name. Lowercased, this is the environment's `ApiEnv` id. */
   name: string
   status: EnvironmentStatus
-  /** Prefix on API keys issued for this environment. */
+  /**
+   * Prefix on secret API keys issued for this environment, including the
+   * trailing underscore so it can be concatenated directly with a key body.
+   * This is the single source of truth for key prefixes — surfaces should read
+   * it from here rather than hardcoding their own.
+   */
   keyPrefix: string
 }
 
@@ -35,8 +40,8 @@ export type EnvironmentRecord = {
  * the safe default the console falls back to.
  */
 export const ENVIRONMENTS: EnvironmentRecord[] = [
-  { name: 'Staging', status: 'active', keyPrefix: 'pv_stg' },
-  { name: 'Production', status: 'none', keyPrefix: 'pv_live' },
+  { name: 'Staging', status: 'active', keyPrefix: 'pv_sk_test_' },
+  { name: 'Production', status: 'none', keyPrefix: 'pv_sk_live_' },
 ]
 
 /** `{ name: 'Staging' }` -> `'staging'`, the id held in session state. */
@@ -46,6 +51,17 @@ export function environmentId(env: EnvironmentRecord): ApiEnv {
 
 export function findEnvironment(id: ApiEnv): EnvironmentRecord | undefined {
   return ENVIRONMENTS.find((env) => environmentId(env) === id)
+}
+
+/**
+ * Key prefix for an environment id, e.g. `'staging'` -> `'pv_sk_test_'`.
+ *
+ * Falls back to the staging prefix for an unknown id: if the catalog and the
+ * session state ever disagree, showing a test-key prefix is the safe failure
+ * mode, since it cannot imply a live-data credential.
+ */
+export function keyPrefixFor(id: ApiEnv): string {
+  return findEnvironment(id)?.keyPrefix ?? 'pv_sk_test_'
 }
 
 /** Only fully-provisioned environments can be switched into. */

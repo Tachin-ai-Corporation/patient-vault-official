@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { GoLiveFlow } from '@/components/settings/go-live-flow'
+import { EnvBadge } from '@/components/env-badge'
 import { useSession, type ApiEnv } from '@/lib/session-context'
 import {
   ENVIRONMENTS,
@@ -23,14 +24,6 @@ import { cn } from '@/lib/utils'
 const DESCRIPTIONS: Record<ApiEnv, string> = {
   staging: 'Test data. Writes are reversible and unaudited.',
   production: 'Live patient records. Every access is audited.',
-}
-
-// Environment identity colors: amber for staging, green for production. Solid
-// fills with fixed dark ink so contrast holds in both light and dark themes.
-function badgeClasses(env: ApiEnv): string {
-  return env === 'production'
-    ? 'bg-success text-[#202833]'
-    : 'bg-warning text-[#202833]'
 }
 
 // The dot encodes provisioning status. An `active` environment takes its
@@ -166,14 +159,7 @@ export function EnvironmentSelector() {
           <span className="max-w-[12ch] truncate font-medium text-foreground sm:max-w-[20ch]">
             {currentProject.name}
           </span>
-          <span
-            className={cn(
-              'shrink-0 rounded-tag px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider',
-              badgeClasses(currentEnv),
-            )}
-          >
-            {currentEnv}
-          </span>
+          <EnvBadge env={currentEnv} />
           <ChevronDown
             aria-hidden
             className="h-4 w-4 shrink-0 text-muted-foreground"
