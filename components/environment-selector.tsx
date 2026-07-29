@@ -1,23 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, ChevronDown, Database } from 'lucide-react'
+import { Check, ChevronDown, Database, ExternalLink } from 'lucide-react'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { GoLiveFlow } from '@/components/settings/go-live-flow'
 import { EnvBadge } from '@/components/env-badge'
+import { useTheme } from '@/components/theme-provider'
+import { withAuthParams } from '@/lib/auth-branding'
 import { useSession, type ApiEnv } from '@/lib/session-context'
 import {
   ENVIRONMENTS,
   environmentId,
-  isSelectable,
   type EnvironmentRecord,
   type EnvironmentStatus,
 } from '@/lib/environments'
-import { useProductionStatus } from '@/lib/production-status'
 import { cn } from '@/lib/utils'
 
 // One-line row copy. Kept here rather than in the mocked data module so that
@@ -43,113 +42,85 @@ function dotClasses(env: ApiEnv, status: EnvironmentStatus): string {
   }
 }
 
-// Trailing affordance for environments that cannot be selected yet.
-function trailingLabel(status: EnvironmentStatus): string | null {
-  switch (status) {
-    case 'none':
-      return 'Set up'
-    case 'pending':
-      return 'Pending'
-    case 'suspended':
-      return 'Suspended'
-    default:
-      return null
-  }
-}
-
 function EnvironmentRow({
   env,
   selected,
-  onSelect,
-  onSetUp,
+  signInUrl,
 }: {
   env: EnvironmentRecord
   selected: boolean
-  onSelect: (id: ApiEnv) => void
-  onSetUp: () => void
+  signInUrl: string
 }) {
   const id = environmentId(env)
-  const selectable = isSelectable(env)
-  const label = trailingLabel(env.status)
-  // `none` is actionable (it starts go-live); pending/suspended are inert.
-  const actionable = selectable || env.status === 'none'
 
   return (
-    <button
-      type="button"
+    <div
       role="option"
       aria-selected={selected}
-      disabled={!actionable}
-      onClick={() => (selectable ? onSelect(id) : onSetUp())}
       className={cn(
-        'flex w-full items-start gap-2.5 rounded-input px-2 py-2 text-left transition-colors',
-        actionable ? 'hover:bg-muted/60' : 'cursor-default opacity-60',
+        'flex w-full items-start gap-2.5 rounded-input px-2 py-2 text-left',
+        !selected && 'bg-muted/30',
       )}
     >
       <span
         aria-hidden
         className={cn(
           'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-          dotClasses(id, env.status),
+          selected ? dotClasses(id, 'active') : 'bg-muted-foreground/40',
         )}
       />
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-foreground">
-          {env.name}
+        <span className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-foreground">{env.name}</span>
+          {selected && (
+            <Check
+              className="h-4 w-4 shrink-0 text-teal"
+              aria-label="Selected"
+            />
+          )}
         </span>
         <span className="block text-xs leading-relaxed text-muted-foreground text-pretty">
-          {DESCRIPTIONS[id]}
+          {selected
+            ? DESCRIPTIONS[id]
+            : `Sign in to ${env.name} to access this environment.`}
         </span>
+        {!selected && (
+          <a
+            href={signInUrl}
+            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
+          >
+            Sign in to {env.name}
+            <ExternalLink aria-hidden className="h-3 w-3" />
+          </a>
+        )}
       </span>
-
-      {selected && selectable && (
-        <Check
-          className="mt-0.5 h-4 w-4 shrink-0 text-teal"
-          aria-label="Selected"
-        />
-      )}
-      {label && (
-        <span
-          className={cn(
-            'mt-0.5 shrink-0 rounded-tag px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider',
-            env.status === 'none'
-              ? 'bg-teal/15 text-teal'
-              : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {label}
-        </span>
-      )}
-    </button>
+    </div>
   )
 }
 
 /**
  * Vault + environment selector for the console header. Renders a bordered pill
  * showing the vault name and the active environment, and opens a menu listing
- * every environment from the mocked catalog.
- *
- * Switching is pure app state (`setCurrentEnv`) — no navigation, no loading.
+ * every environment from the catalog. The authenticated backend environment
+ * is selected; the other row starts a sign-in to that environment.
  */
 export function EnvironmentSelector() {
-  const { currentProject, currentEnv, setCurrentEnv } = useSession()
+  const { currentProject, currentEnv } = useSession()
   const [open, setOpen] = useState(false)
-  const [goLiveOpen, setGoLiveOpen] = useState(false)
-  const productionStatus = useProductionStatus()
-
-  function select(id: ApiEnv) {
-    setCurrentEnv(id)
-    setOpen(false)
-  }
-
-  function startSetUp() {
-    setOpen(false)
-    setGoLiveOpen(true)
+  const { theme } = useTheme()
+  const signInUrls: Record<ApiEnv, string> = {
+    staging: withAuthParams(
+      'https://1health.demo.1health.io/login?openApp=Patient%20Vault',
+      theme,
+    ),
+    production: withAuthParams(
+      'https://1health.app.1health.io/login?openApp=Patient%20Vault',
+      theme,
+    ),
   }
 
   return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           aria-label={`Environment: ${currentEnv}. Change environment`}
           className={cn(
@@ -177,26 +148,20 @@ export function EnvironmentSelector() {
           </div>
           <div role="listbox" aria-label="Environment" className="p-1.5">
             {ENVIRONMENTS.map((environment) => {
-              const env =
-                environmentId(environment) === 'production'
-                  ? { ...environment, status: productionStatus }
-                  : environment
+              const id = environmentId(environment)
+              const selected = id === currentEnv
 
               return (
-              <EnvironmentRow
-                key={env.name}
-                env={env}
-                selected={environmentId(env) === currentEnv}
-                onSelect={select}
-                onSetUp={startSetUp}
-              />
+                <EnvironmentRow
+                  key={environment.name}
+                  env={environment}
+                  selected={selected}
+                  signInUrl={signInUrls[id]}
+                />
               )
             })}
           </div>
         </PopoverContent>
       </Popover>
-
-      <GoLiveFlow open={goLiveOpen} onClose={() => setGoLiveOpen(false)} />
-    </>
   )
 }

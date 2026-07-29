@@ -175,7 +175,9 @@ function ApiKeyPanel({
 
 export function ConsoleApiKey() {
   const { currentEnv } = useSession()
-  const productionStatus = useProductionStatus()
+  const catalogProductionStatus = useProductionStatus()
+  const productionStatus =
+    currentEnv === 'production' ? 'active' : catalogProductionStatus
 
   // Each environment's key lives in its own explicitly named state. They are
   // deliberately NOT collapsed into a `Record<ApiEnv, ...>` or swapped through

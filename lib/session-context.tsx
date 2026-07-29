@@ -19,6 +19,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -26,6 +27,7 @@ import {
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { fetchMyself, type UserInfo } from '@/lib/api/user'
+import { getOneHealthBaseUrl, hasOneHealthSession } from '@/lib/auth-client'
 import { fetchTenantConfig, type TenantConfig } from '@/lib/api/tenant'
 import {
   fetchPatientGrid,
@@ -153,6 +155,18 @@ function deriveInitials(first: string, last: string): string {
   return `${a}${b}`.toUpperCase() || 'U'
 }
 
+function environmentFromBackendHost(baseUrl: string): ApiEnv | null {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase()
+    if (hostname === 'demo.1health.io') return 'staging'
+    if (hostname === 'app.1health.io') return 'production'
+  } catch {
+    return null
+  }
+
+  return null
+}
+
 function toSessionUser(u: UserInfo | null): SessionUser {
   if (!u) {
     return { first_name: '', last_name: '', name: 'Loading…', initials: 'U', email: '' }
@@ -252,9 +266,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [projectId, projectName, patients.length],
   )
 
-  // Active environment for the whole console. Declared here (above `session`)
-  // because `session.currentEnv` mirrors it — see below.
-  const [currentEnv, setCurrentEnv] = useState<ApiEnv>('staging')
+  // The authenticated backend host is authoritative. Local selector state is
+  // retained only so we can detect and report a UI/backend disagreement.
+  const backendEnv = useMemo<ApiEnv>(() => {
+    if (!hasOneHealthSession()) return 'staging'
+    return environmentFromBackendHost(getOneHealthBaseUrl()) ?? 'staging'
+  }, [user, tenant])
+  const [selectedEnv, setSelectedEnv] = useState<ApiEnv>(backendEnv)
+
+  useEffect(() => {
+    if (selectedEnv !== backendEnv) {
+      console.warn(
+        `[v0] Environment selector (${selectedEnv}) differs from authenticated backend (${backendEnv}); rendering ${backendEnv}.`,
+      )
+    }
+  }, [backendEnv, selectedEnv])
+
+  const currentEnv = backendEnv
+  const setCurrentEnv = useCallback((env: ApiEnv) => {
+    setSelectedEnv(env)
+  }, [])
 
   const session = useMemo<Session>(
     () => ({
@@ -263,10 +294,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       currentProjectId: projectId,
       partner,
       freeCeiling,
-      environment: 'development',
-      // Mirrors the `currentEnv` state rather than a hardcoded value, so the
-      // many components that read `session.currentEnv` (inspector, analytics,
-      // settings, audit, export) observe environment switches too.
+      environment: currentEnv === 'production' ? 'production' : 'development',
       currentEnv,
     }),
     [sessionUser, currentProject, projectId, partner, freeCeiling, currentEnv],
