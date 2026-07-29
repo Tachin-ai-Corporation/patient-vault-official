@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation'
-import { getDefaultSlug } from '@/lib/docs'
+import { DocsView } from '@/components/docs/docs-view'
 
-// The Documentation tab defaults to the first resource in the manifest.
 export default function DocumentationPage() {
-  redirect(`/documentation/${getDefaultSlug()}`)
+  return <DocsView />
 }
