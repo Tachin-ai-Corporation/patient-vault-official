@@ -42,6 +42,7 @@
 "use client"
 
 import { recordApiCall, type BusApiMethod } from "@/lib/api-inspector-bus"
+import { buildIdpLogoutUrl, currentAuthMode, type IdpEnv } from "@/lib/auth-branding"
 
 // ============================================================================
 // COOKIE UTILITIES
@@ -182,11 +183,22 @@ async function platformLogout(): Promise<void> {
  *      variants as a fast, belt-and-suspenders clear.
  *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
  *
- * NOTE: relaunching from 1health while its own platform SSO session is still
- * active can still mint fresh tokens; that broader SSO session is separate and
- * may require the platform's own logout UI to fully end.
+ * Returns the hosted 1health logout URL the caller MUST navigate to next. That
+ * page ends the platform's browser SSO session — which lives on the sibling
+ * host `1health.<env>.1health.io` and is unreachable from our cookie clearing —
+ * and then redirects back to the Patient Vault marketing page. Without this
+ * hop, relaunching from 1health silently re-mints fresh tokens (the SSO session
+ * is session-scoped, which is why only fully closing the browser "logs out").
  */
-export async function signOut(): Promise<void> {
+export async function signOut(): Promise<string> {
+  // Capture the target environment BEFORE any teardown, while the
+  // `onehealth_base_url` cookie is still present, so we log out of the same
+  // 1health host the user launched from. Also snapshot the return URL + theme.
+  const idpEnv = currentIdpEnv()
+  const returnUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/` : "/"
+  const idpLogoutUrl = buildIdpLogoutUrl(idpEnv, returnUrl, currentAuthMode())
+
   // 0. Invalidate the server-side platform session while we still hold a token.
   await platformLogout()
 
@@ -240,6 +252,23 @@ export async function signOut(): Promise<void> {
   } catch {
     // Storage may be unavailable (private mode / SSR) — safe to ignore.
   }
+
+  // 4. Hand the caller the hosted 1health logout URL to navigate to, which ends
+  //    the SSO session and returns to the marketing page.
+  return idpLogoutUrl
+}
+
+/**
+ * Which hosted 1health environment the user launched from, derived from the
+ * session's base-URL cookie (falling back to the explicit environment cookie).
+ * Prod maps to `app.1health.io`; everything else (including missing) is `demo`,
+ * the safe default. Read this BEFORE teardown clears the cookies.
+ */
+function currentIdpEnv(): IdpEnv {
+  const base = getCookie("onehealth_base_url") ?? ""
+  if (base.includes("app.1health.io")) return "prod"
+  if (base.includes("demo.1health.io")) return "demo"
+  return getCookie("onehealth_environment") === "prod" ? "prod" : "demo"
 }
 
 // ============================================================================

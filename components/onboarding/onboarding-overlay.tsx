@@ -115,11 +115,13 @@ export function OnboardingOverlay({
 
   const handleSignOut = useCallback(async () => {
     setSigningOut(true)
-    // Clear this app's session server + client side, then hard-navigate to the
-    // public page so the user is never trapped in the setup gate. `replace`
-    // drops this authenticated page from history so Back can't restore it.
-    await signOut()
-    window.location.replace('/')
+    // Clear this app's session, then navigate to the hosted 1health logout page
+    // returned by signOut() — it ends the platform SSO session (unreachable from
+    // our cookie clearing) and returns to the marketing page, so the user is
+    // never trapped in the setup gate. `replace` drops this authenticated page
+    // from history so Back can't restore it.
+    const logoutUrl = await signOut()
+    window.location.replace(logoutUrl)
   }, [])
 
   const setStatus = useCallback((id: StepId, status: StepStatus) => {

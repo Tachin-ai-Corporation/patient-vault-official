@@ -21,23 +21,20 @@ export function UserMenu() {
     if (label === 'Sign out') {
       // Clear THIS app's session: invalidate the platform token server-side,
       // then drop cookies/storage (incl. the /api/logout route, which handles
-      // parent-domain + HttpOnly + partitioned cookies).
-      await signOut()
+      // parent-domain + HttpOnly + partitioned cookies). signOut() returns the
+      // hosted 1health logout URL to navigate to next.
+      const logoutUrl = await signOut()
 
-      // Land on the public marketing page rather than /auth.
+      // Navigate to the hosted 1health logout page. This ends the platform SSO
+      // session — which our cookie clearing can't reach, as it lives on the
+      // sibling `1health.<env>.1health.io` host — and then redirects back to the
+      // Patient Vault marketing page. Without this hop the next "Sign in"
+      // silently re-mints a session (only closing the browser ended it before).
       //
-      // `replace` (a full document load, not a client-side route change) is
-      // required here: "/" is a server component that redirects authenticated
-      // visitors to /patients based on the access_token cookie, so the browser
-      // must re-request it and have the server observe the now-cleared cookies.
-      // A router.push would reuse the current client cache and could bounce the
-      // user straight back into the console. `replace` (vs `assign`) also drops
-      // the authenticated page from history so Back can't restore it.
-      window.location.replace('/')
-
-      // Note: the 1health *platform* SSO session is separate from this app's
-      // tokens, so relaunching from 1health while it is still active can mint a
-      // fresh session without re-prompting for credentials.
+      // A full document `replace` (not router.push) is required so the SSO host
+      // observes the navigation; `replace` (vs `assign`) also drops the
+      // authenticated page from history so Back can't restore it.
+      window.location.replace(logoutUrl)
     }
   }
 
