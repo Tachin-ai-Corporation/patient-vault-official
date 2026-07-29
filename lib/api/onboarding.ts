@@ -388,34 +388,53 @@ export async function createApiToken(name: string): Promise<ApiTokenResult> {
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/token`
 
-    const response = await authFetch(url, {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    })
+    // A token's value is only returned at creation and can never be read back.
+    // So when a returning developer's vault already has a token with this name,
+    // the platform responds 400 "already exists" and we cannot recover the old
+    // value. Mirror createTenant(): retry with a unique suffixed name so the
+    // developer always ends up with a fresh, viewable key instead of a dead end.
+    const MAX_ATTEMPTS = 5
+    let tokenName = name
 
-    if (!response.ok) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const response = await authFetch(url, {
+        method: "POST",
+        body: JSON.stringify({ name: tokenName }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const tokenValue = data?.token?.tokenValue ?? data?.tokenValue
+
+        if (!tokenValue) {
+          return { success: false, error: "API key created but no token value was returned" }
+        }
+
+        return {
+          success: true,
+          token: {
+            id: data.id,
+            name: data.name,
+            tokenValue,
+            createdAt: data.createdAt ?? data?.token?.issuedAt,
+            expiresAt: data?.token?.expiresAt,
+          },
+        }
+      }
+
       const errorText = await response.text()
+
+      // Name collision: append a fresh random suffix and try again.
+      if (isNameTakenError(response.status, errorText) && attempt < MAX_ATTEMPTS) {
+        tokenName = `${name} ${randomSuffix()}`
+        continue
+      }
+
       console.error("[1health API] createApiToken error:", response.status, errorText)
       return { success: false, error: `Failed to create API key: ${response.status}` }
     }
 
-    const data = await response.json()
-    const tokenValue = data?.token?.tokenValue ?? data?.tokenValue
-
-    if (!tokenValue) {
-      return { success: false, error: "API key created but no token value was returned" }
-    }
-
-    return {
-      success: true,
-      token: {
-        id: data.id,
-        name: data.name,
-        tokenValue,
-        createdAt: data.createdAt ?? data?.token?.issuedAt,
-        expiresAt: data?.token?.expiresAt,
-      },
-    }
+    return { success: false, error: "Could not find an available API key name" }
   } catch (error) {
     console.error("[1health API] createApiToken exception:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }

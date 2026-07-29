@@ -6,6 +6,7 @@ import {
   Check,
   KeyRound,
   Loader2,
+  LogOut,
   RefreshCw,
   ShieldAlert,
   Vault,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
+import { signOut } from '@/lib/auth-client'
 import type { UserInfo } from '@/lib/api/user'
 import {
   createApiToken,
@@ -80,7 +82,16 @@ export function OnboardingOverlay({
   const [apiKey, setApiKey] = useState<ApiToken | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [debug, setDebug] = useState<string | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
   const startedRef = useRef(false)
+
+  const handleSignOut = useCallback(async () => {
+    setSigningOut(true)
+    // Clear this app's session server + client side, then hard-navigate to the
+    // public page so the user is never trapped in the setup gate.
+    await signOut()
+    window.location.assign('/')
+  }, [])
 
   const setStatus = useCallback((id: StepId, status: StepStatus) => {
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)))
@@ -230,15 +241,29 @@ export function OnboardingOverlay({
             )}
           </div>
 
-          {/* Footer */}
-          {apiKey && (
-            <div className="flex items-center justify-end border-t border-border px-6 py-4">
+          {/* Footer — a sign-out escape hatch is always available so the user is
+              never trapped in the setup gate, alongside the contextual action. */}
+          <div className="flex items-center justify-between gap-3 border-t border-border px-6 py-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" data-icon="inline-start" />
+              ) : (
+                <LogOut className="h-3.5 w-3.5" data-icon="inline-start" />
+              )}
+              Sign out
+            </Button>
+            {apiKey && (
               <Button onClick={onDone}>
                 <Check className="h-4 w-4" data-icon="inline-start" />
                 I&apos;ve saved my key
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
