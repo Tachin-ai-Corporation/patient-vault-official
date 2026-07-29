@@ -8,6 +8,7 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { EnvBadge } from '@/components/env-badge'
 import { useSession, type ApiEnv } from '@/lib/session-context'
 import { keyPrefixFor } from '@/lib/environments'
+import { useProductionStatus } from '@/lib/production-status'
 
 // ---- MOCK key model --------------------------------------------------------
 // SWAP POINT: in production the secret is issued server-side. Generation
@@ -174,6 +175,7 @@ function ApiKeyPanel({
 
 export function ConsoleApiKey() {
   const { currentEnv } = useSession()
+  const productionStatus = useProductionStatus()
 
   // Each environment's key lives in its own explicitly named state. They are
   // deliberately NOT collapsed into a `Record<ApiEnv, ...>` or swapped through
@@ -188,11 +190,7 @@ export function ConsoleApiKey() {
     }),
   )
   const [productionKeyRecord, setProductionKeyRecord] =
-    useState<MaskedKey | null>(() => ({
-      id: 'key_production_default',
-      masked: mask(keyPrefixFor('production')),
-      created: '2026-07-03T00:00:00.000Z',
-    }))
+    useState<MaskedKey | null>(null)
 
   // Likewise for the one-time reveals: a full secret is only ever written to
   // the variable belonging to the environment that issued it.
@@ -202,6 +200,27 @@ export function ConsoleApiKey() {
   const [productionOneTimeSecret, setProductionOneTimeSecret] = useState<
     string | null
   >(null)
+
+  // Production starts without a key while provisioning is absent or pending.
+  // Once provisioning becomes active, seed the masked steady state without ever
+  // introducing full credential material into client state.
+  useEffect(() => {
+    if (productionStatus === 'active') {
+      setProductionKeyRecord((record) =>
+        record ?? {
+          id: 'key_production_default',
+          masked: mask(keyPrefixFor('production')),
+          created: '2026-07-03T00:00:00.000Z',
+        },
+      )
+      return
+    }
+
+    if (productionStatus === 'none' || productionStatus === 'pending') {
+      setProductionKeyRecord(null)
+      setProductionOneTimeSecret(null)
+    }
+  }, [productionStatus])
 
   // Leaving an environment ends its one-time reveal. Without this, a full
   // secret issued in one environment stays rendered and would still be on
