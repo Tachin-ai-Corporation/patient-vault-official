@@ -17,6 +17,7 @@ import {
   type EnvironmentRecord,
   type EnvironmentStatus,
 } from '@/lib/environments'
+import { useProductionStatus } from '@/lib/production-status'
 import { cn } from '@/lib/utils'
 
 // One-line row copy. Kept here rather than in the mocked data module so that
@@ -134,6 +135,7 @@ export function EnvironmentSelector() {
   const { currentProject, currentEnv, setCurrentEnv } = useSession()
   const [open, setOpen] = useState(false)
   const [goLiveOpen, setGoLiveOpen] = useState(false)
+  const productionStatus = useProductionStatus()
 
   function select(id: ApiEnv) {
     setCurrentEnv(id)
@@ -174,7 +176,13 @@ export function EnvironmentSelector() {
             </p>
           </div>
           <div role="listbox" aria-label="Environment" className="p-1.5">
-            {ENVIRONMENTS.map((env) => (
+            {ENVIRONMENTS.map((environment) => {
+              const env =
+                environmentId(environment) === 'production'
+                  ? { ...environment, status: productionStatus }
+                  : environment
+
+              return (
               <EnvironmentRow
                 key={env.name}
                 env={env}
@@ -182,7 +190,8 @@ export function EnvironmentSelector() {
                 onSelect={select}
                 onSetUp={startSetUp}
               />
-            ))}
+              )
+            })}
           </div>
         </PopoverContent>
       </Popover>

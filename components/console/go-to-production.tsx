@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
   ArrowRight,
+  AlertCircle,
   Check,
+  Clock3,
   FileCheck2,
   FileSliders,
+  RefreshCw,
   ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -22,8 +25,17 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Drawer } from '@/components/ui/drawer'
 import { Field, TextInput } from '@/components/ui/field'
-import { findEnvironment } from '@/lib/environments'
+import {
+  findEnvironment,
+  keyPrefixFor,
+  type EnvironmentStatus,
+} from '@/lib/environments'
 import { MOCK_CUSTOM_FIELD_NAMES } from '@/lib/mock-custom-fields'
+import {
+  refreshProductionStatus,
+  useProductionStatus,
+} from '@/lib/production-status'
+import { useSession } from '@/lib/session-context'
 
 const MOCK_OPAQUE_ACTIVATION_STATE = 'pv_state_7f4c29a1e6b8430db52a'
 const TOTAL_STEPS = 3
@@ -91,14 +103,189 @@ function SummaryItem({
   )
 }
 
+const MOCK_BAA_ACCEPTED_DATE = 'July 29, 2026'
+const MAX_PENDING_POLLS = 24
+const PENDING_POLL_INTERVAL_MS = 5_000
+
+function ProductionStatusCard({
+  status,
+  showManualRefresh,
+  onRefresh,
+}: {
+  status: Exclude<EnvironmentStatus, 'none'>
+  showManualRefresh: boolean
+  onRefresh: () => void
+}) {
+  if (status === 'active') {
+    return (
+      <Card className="border-success/40 bg-success/5 shadow-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="text-success" aria-hidden="true" />
+            Production is active
+          </CardTitle>
+          <CardDescription>
+            Live access is ready for audited patient records and documents.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1 rounded-lg border border-border bg-background p-4">
+            <span className="text-xs text-muted-foreground">Live key reference</span>
+            <code className="font-mono text-sm text-foreground">
+              {keyPrefixFor('production')}••••••••
+            </code>
+          </div>
+          <div className="flex flex-col gap-1 rounded-lg border border-border bg-background p-4">
+            <span className="text-xs text-muted-foreground">BAA accepted</span>
+            <span className="text-sm font-medium text-foreground">
+              {MOCK_BAA_ACCEPTED_DATE}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (status === 'pending') {
+    return (
+      <Card className="border-warning/50 bg-warning/10 shadow-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock3 className="text-warning-foreground" aria-hidden="true" />
+            Finishing setup
+          </CardTitle>
+          <CardDescription>
+            1health is finishing your production environment. This page checks
+            the status every five seconds.
+          </CardDescription>
+        </CardHeader>
+        {showManualRefresh && (
+          <CardFooter className="justify-end border-t">
+            <Button type="button" variant="outline" onClick={onRefresh}>
+              <RefreshCw data-icon="inline-start" aria-hidden="true" />
+              Refresh status
+            </Button>
+          </CardFooter>
+        )}
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="border-destructive/50 bg-destructive/10 shadow-none">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base text-destructive">
+          <AlertCircle aria-hidden="true" />
+          Production access suspended
+        </CardTitle>
+        <CardDescription>
+          Production access is unavailable. Contact support to review your
+          account and restore access.
+        </CardDescription>
+      </CardHeader>
+      <CardFooter className="justify-end border-t">
+        <Button variant="outline" render={<a href="mailto:hello@patient-vault.com" />}>
+          Contact support
+        </Button>
+      </CardFooter>
+    </Card>
+  )
+}
+
 export function GoToProduction() {
   const production = findEnvironment('production')
+  const productionStatus = useProductionStatus()
+  const {
+    activateProductionForProject,
+    setCurrentEnv,
+  } = useSession()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>(1)
   const [agreementAccepted, setAgreementAccepted] = useState(false)
   const [legalEntityName, setLegalEntityName] = useState('')
+  const [callbackChecked, setCallbackChecked] = useState(false)
+  const [showManualRefresh, setShowManualRefresh] = useState(false)
+  const callbackReturn = useRef(false)
+  const activatedFromCallback = useRef(false)
 
-  if (production?.status !== 'none') return null
+  useEffect(() => {
+    const currentUrl = new URL(window.location.href)
+    callbackReturn.current = currentUrl.searchParams.has('state')
+
+    if (callbackReturn.current) {
+      currentUrl.searchParams.delete('state')
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+      )
+      refreshProductionStatus()
+    }
+
+    setCallbackChecked(true)
+  }, [])
+
+  useEffect(() => {
+    if (
+      !callbackChecked ||
+      !callbackReturn.current ||
+      productionStatus !== 'active' ||
+      activatedFromCallback.current
+    ) {
+      return
+    }
+
+    activatedFromCallback.current = true
+    activateProductionForProject(`${keyPrefixFor('production')}••••••••`)
+    setCurrentEnv('production')
+  }, [
+    activateProductionForProject,
+    callbackChecked,
+    productionStatus,
+    setCurrentEnv,
+  ])
+
+  useEffect(() => {
+    if (
+      !callbackChecked ||
+      !callbackReturn.current ||
+      productionStatus !== 'pending'
+    ) {
+      return
+    }
+
+    let pollCount = 0
+    setShowManualRefresh(false)
+
+    const interval = window.setInterval(() => {
+      pollCount += 1
+      const nextStatus = refreshProductionStatus()
+
+      if (nextStatus !== 'pending') {
+        window.clearInterval(interval)
+        return
+      }
+
+      if (pollCount >= MAX_PENDING_POLLS) {
+        window.clearInterval(interval)
+        setShowManualRefresh(true)
+      }
+    }, PENDING_POLL_INTERVAL_MS)
+
+    return () => window.clearInterval(interval)
+  }, [callbackChecked, productionStatus])
+
+  if (!callbackChecked) return null
+
+  if (productionStatus !== 'none') {
+    return (
+      <ProductionStatusCard
+        status={productionStatus}
+        showManualRefresh={showManualRefresh}
+        onRefresh={refreshProductionStatus}
+      />
+    )
+  }
 
   const canContinueToConfirm =
     agreementAccepted && legalEntityName.trim().length >= 2
