@@ -82,14 +82,16 @@ function EnvironmentRow({
         <span className="block text-xs leading-relaxed text-muted-foreground text-pretty">
           {selected
             ? DESCRIPTIONS[id]
-            : `Sign in to ${env.name} to access this environment.`}
+            : 'Each environment signs in separately.'}
         </span>
         {!selected && (
           <a
             href={signInUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
           >
-            Sign in to {env.name}
+            Open {env.name} Patient Vault
             <ExternalLink aria-hidden className="h-3 w-3" />
           </a>
         )}
@@ -143,7 +145,7 @@ export function EnvironmentSelector() {
           <div className="border-b border-border px-3 py-2.5">
             <p className="text-sm font-medium text-foreground">Environment</p>
             <p className="text-xs text-muted-foreground">
-              Choose which vault this console reads and writes.
+              This console reflects your authenticated environment.
             </p>
           </div>
           <div role="listbox" aria-label="Environment" className="p-1.5">
