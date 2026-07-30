@@ -391,23 +391,57 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
 // Step 3 — Issue the long-lived API key
 // ============================================================================
 
-/** Patient Vault access-control role IDs are different in each 1health system. */
-const PATIENT_VAULT_ROLE_ID_BY_HOST: Readonly<Record<string, number>> = {
-  "demo.1health.io": 493888,
-  "app.1health.io": 3984215,
+const PATIENT_VAULT_ROLE_NAME = "Patient Vault"
+
+type AccessControlRole = {
+  acRoleId?: unknown
+  roleName?: unknown
 }
 
 /**
- * Resolve the Patient Vault role from the exact API host. Fail closed for an
- * unknown host rather than omitting `acRoleIds`, which makes 1health default a
- * newly provisioned key to System Admin access.
+ * Normalize the access-control API response. The endpoint has returned both a
+ * direct array and wrapped lists across 1health deployments, so accept those
+ * known shapes while keeping the role validation itself strict.
  */
-function patientVaultRoleId(baseUrl: string): number {
-  const hostname = new URL(baseUrl).hostname.toLowerCase()
-  const roleId = PATIENT_VAULT_ROLE_ID_BY_HOST[hostname]
-  if (!roleId) {
-    throw new Error(`Unsupported 1health environment for Patient Vault key provisioning: ${hostname}`)
+function accessControlRoles(payload: unknown): AccessControlRole[] {
+  if (Array.isArray(payload)) return payload as AccessControlRole[]
+  if (!payload || typeof payload !== "object") return []
+
+  const record = payload as Record<string, unknown>
+  const candidates = [record.roles, record.data, record.content, record.items]
+  const list = candidates.find(Array.isArray)
+  return (list ?? []) as AccessControlRole[]
+}
+
+/**
+ * Resolve Patient Vault access for the currently active tenant. Role IDs are
+ * tenant-specific and therefore must never be hardcoded or inferred from the
+ * environment. Fail closed if the role endpoint cannot provide the exact role;
+ * omitting `acRoleIds` would make 1health default the key to System Admin.
+ */
+async function fetchPatientVaultRoleId(baseUrl: string): Promise<number> {
+  const url = `${baseUrl}/api/v2/access-control/role/all`
+  const response = await authFetch(url, { method: "GET" })
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(
+      `Failed to load access-control roles: ${response.status}${detail ? ` ${detail}` : ""}`,
+    )
   }
+
+  const roles = accessControlRoles(await response.json())
+  const patientVaultRole = roles.find(
+    (role) => role.roleName === PATIENT_VAULT_ROLE_NAME,
+  )
+  const roleId = patientVaultRole?.acRoleId
+
+  if (typeof roleId !== "number" || !Number.isInteger(roleId) || roleId <= 0) {
+    throw new Error(
+      `Access-control role "${PATIENT_VAULT_ROLE_NAME}" was not found for the active tenant`,
+    )
+  }
+
   return roleId
 }
 
@@ -415,7 +449,9 @@ export async function createApiToken(name: string): Promise<ApiTokenResult> {
   try {
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/token`
-    const acRoleIds = [patientVaultRoleId(baseUrl)]
+    // Resolve after switching tenants: access-control role IDs are unique to the
+    // active tenant, even within the same demo or production environment.
+    const acRoleIds = [await fetchPatientVaultRoleId(baseUrl)]
 
     // A token's value is only returned at creation and can never be read back.
     // So when a returning developer's vault already has a token with this name,
