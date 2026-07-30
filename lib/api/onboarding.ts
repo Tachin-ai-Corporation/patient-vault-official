@@ -12,7 +12,14 @@
  * through authFetch() and each function returns a { success, ... } result.
  */
 
-import { authFetch, getOneHealthBaseUrl, refreshToken, setCookie } from "@/lib/auth-client"
+import {
+  authFetch,
+  getOneHealthBaseUrl,
+  getPatientVaultApiKey,
+  refreshToken,
+  setCookie,
+  setPatientVaultApiKey,
+} from "@/lib/auth-client"
 import { fetchMyself } from "@/lib/api/user"
 import { fetchAllTenants } from "@/lib/api/tenant"
 
@@ -130,7 +137,8 @@ async function postTenant(
   const form = new FormData()
   form.append("dto", JSON.stringify(dto))
 
-  const response = await authFetch(url, { method: "POST", body: form })
+  // Bootstrap call (outside the Patient Vault allow-list) — use the login token.
+  const response = await authFetch(url, { method: "POST", body: form }, { platform: true })
   if (!response.ok) {
     return { ok: false, status: response.status, body: await response.text() }
   }
@@ -306,7 +314,8 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
     // still run the refresh grant below to obtain the org-scoped token.
     const url = `${baseUrl}/api/v2/user/switch-tenant/${tenantId}?revokeToken=false`
 
-    const response = await authFetch(url, { method: "GET" })
+    // Bootstrap call (outside the Patient Vault allow-list) — use the login token.
+    const response = await authFetch(url, { method: "GET" }, { platform: true })
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -426,7 +435,8 @@ async function fetchPatientVaultRoleId(baseUrl: string): Promise<number> {
     excludeSystemRoles: "false",
   })
   const url = `${baseUrl}/api/v2/access-control/role/all?${query}`
-  const response = await authFetch(url, { method: "GET" })
+  // Bootstrap call (outside the Patient Vault allow-list) — use the login token.
+  const response = await authFetch(url, { method: "GET" }, { platform: true })
 
   if (!response.ok) {
     const detail = await response.text()
@@ -452,8 +462,39 @@ async function fetchPatientVaultRoleId(baseUrl: string): Promise<number> {
   return roleId
 }
 
+/**
+ * How long to keep the restricted key cookie, in seconds. Derived from the
+ * platform's `expiresAt` when it is a parseable future time (ISO string or epoch
+ * in seconds/ms); otherwise a conservative 12h fallback. If the server-side key
+ * expires sooner, authFetch surfaces the 401 as a session expiry (no re-mint).
+ */
+function pvApiKeyMaxAgeSeconds(expiresAt: unknown): number {
+  const FALLBACK = 60 * 60 * 12
+  let epochMs: number | null = null
+
+  if (typeof expiresAt === "number" && Number.isFinite(expiresAt)) {
+    // Tolerate epochs expressed in seconds by scaling values that look too small.
+    epochMs = expiresAt < 1e12 ? expiresAt * 1000 : expiresAt
+  } else if (typeof expiresAt === "string") {
+    const parsed = Date.parse(expiresAt)
+    if (!Number.isNaN(parsed)) epochMs = parsed
+  }
+
+  if (epochMs === null) return FALLBACK
+  const seconds = Math.floor((epochMs - Date.now()) / 1000)
+  return seconds > 0 ? seconds : FALLBACK
+}
+
 export async function createApiToken(name: string): Promise<ApiTokenResult> {
   try {
+    // Mint the restricted key only once. A token's value can never be read back
+    // from the platform, so if this browser already holds a Patient Vault key we
+    // reuse it instead of creating a duplicate token on the tenant.
+    const existingKey = getPatientVaultApiKey()
+    if (existingKey) {
+      return { success: true, token: { id: 0, name, tokenValue: existingKey } }
+    }
+
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/token`
     // Resolve after switching tenants: access-control role IDs are unique to the
@@ -469,12 +510,18 @@ export async function createApiToken(name: string): Promise<ApiTokenResult> {
     let tokenName = name
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const response = await authFetch(url, {
-        method: "POST",
-        // Always include the environment-specific Patient Vault role. Keep it
-        // on every collision retry so no request can fall back to System Admin.
-        body: JSON.stringify({ name: tokenName, acRoleIds }),
-      })
+      const response = await authFetch(
+        url,
+        {
+          method: "POST",
+          // Always include the environment-specific Patient Vault role. Keep it
+          // on every collision retry so no request can fall back to System Admin.
+          body: JSON.stringify({ name: tokenName, acRoleIds }),
+        },
+        // Minting the key is itself a platform call — it must use the full-access
+        // login token, not the restricted key it is about to create.
+        { platform: true },
+      )
 
       if (response.ok) {
         const data = await response.json()
@@ -483,6 +530,10 @@ export async function createApiToken(name: string): Promise<ApiTokenResult> {
         if (!tokenValue) {
           return { success: false, error: "API key created but no token value was returned" }
         }
+
+        // Store the restricted key so authFetch sends it as the Bearer on every
+        // subsequent Patient Vault call, replacing the full-access login token.
+        setPatientVaultApiKey(tokenValue, pvApiKeyMaxAgeSeconds(data?.token?.expiresAt))
 
         return {
           success: true,

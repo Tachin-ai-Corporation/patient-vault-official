@@ -28,6 +28,7 @@ const SESSION_COOKIES = [
   "onehealth_environment",
   "user_org_id",
   "user_id",
+  "pv_api_key",
 ] as const
 
 /**

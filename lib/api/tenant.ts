@@ -122,7 +122,9 @@ export async function fetchAllTenants(): Promise<AllTenantsResult> {
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/tenant/all`
 
-    const response = await authFetch(url, { method: "GET" })
+    // Platform lookup outside the Patient Vault role's allow-list — must use the
+    // full-access login token, not the restricted key.
+    const response = await authFetch(url, { method: "GET" }, { platform: true })
 
     if (!response.ok) {
       const errorText = await response.text()
