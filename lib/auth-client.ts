@@ -118,7 +118,6 @@ const SESSION_COOKIES = [
   "onehealth_environment",
   "user_org_id",
   "user_id",
-  "pv_api_key",
 ] as const
 
 /** True if the access token is missing or past (or within 30s of) its expiry. */
@@ -253,36 +252,6 @@ export async function signOut(): Promise<void> {
  */
 export function getAccessToken(): string | null {
   return getCookie("access_token")
-}
-
-/** Cookie holding the role-restricted "Patient Vault" API key. */
-export const PV_API_KEY_COOKIE = "pv_api_key"
-
-/**
- * Gets the role-restricted "Patient Vault" API key minted during onboarding
- * (POST /api/v2/token with the Patient Vault acRoleId). When present, this key —
- * not the full-access login token — is the Bearer sent for every non-platform
- * 1health request (see authFetch), so the app is confined to the Patient Vault
- * endpoints and any out-of-scope call returns an authorization error.
- */
-export function getPatientVaultApiKey(): string | null {
-  return getCookie(PV_API_KEY_COOKIE)
-}
-
-/** Persists the restricted Patient Vault key so authFetch sends it thereafter. */
-export function setPatientVaultApiKey(value: string, maxAgeSeconds: number): void {
-  setCookie(PV_API_KEY_COOKIE, value, maxAgeSeconds)
-}
-
-/** Extra options for authFetch beyond the standard fetch RequestInit. */
-export interface AuthFetchOptions {
-  /**
-   * Force the full-access OAuth login token instead of the restricted Patient
-   * Vault key. Set only for platform/bootstrap calls that live outside the
-   * Patient Vault role's allow-list (tenant create/switch, role listing, token
-   * minting, tenant listing).
-   */
-  platform?: boolean
 }
 
 /**
@@ -618,27 +587,11 @@ function publishInspectorCall(
  * })
  * const data = await response.json()
  */
-export async function authFetch(
-  url: string,
-  options: RequestInit = {},
-  auth: AuthFetchOptions = {},
-): Promise<Response> {
-  // Platform/bootstrap calls (create + switch tenant, list roles, mint token,
-  // list all tenants) are NOT part of the Patient Vault role's allow-list, so
-  // they must keep using the full-access login token. Every other call sends
-  // the role-restricted Patient Vault key once onboarding has minted it.
-  const restrictedKey = auth.platform ? null : getPatientVaultApiKey()
-  const usingRestrictedKey = restrictedKey !== null
+export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  let accessToken = getAccessToken()
 
-  let accessToken = restrictedKey ?? getAccessToken()
-
-  // No token available. Only the OAuth login token can be refreshed — the
-  // restricted key has no refresh grant (see the "no re-mint" policy), so a
-  // missing restricted key means the session is over.
+  // No access token - try to refresh first
   if (!accessToken) {
-    if (usingRestrictedKey) {
-      throw new SessionExpiredError()
-    }
     const refreshed = await refreshToken()
     if (!refreshed) {
       throw new SessionExpiredError()
@@ -711,15 +664,7 @@ export async function authFetch(
     publishInspectorCall(url, method, options.body, response.status, responseBody, duration)
   }
 
-  // Handle 401 Unauthorized - attempt token refresh and retry.
-  // Skip this entirely when the restricted Patient Vault key is in use: it has
-  // no refresh path, and silently refreshing would swap in a full-access login
-  // token — exactly the over-privileged behavior we're removing. A 401 here
-  // means the key expired, so surface it as a session expiry (no re-mint).
-  if (response.status === 401 && usingRestrictedKey) {
-    throw new SessionExpiredError()
-  }
-
+  // Handle 401 Unauthorized - attempt token refresh and retry
   if (response.status === 401) {
     console.log("[auth-client] Received 401, attempting token refresh...")
     const refreshed = await refreshToken()
