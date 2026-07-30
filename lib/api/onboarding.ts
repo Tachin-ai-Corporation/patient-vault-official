@@ -391,10 +391,31 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
 // Step 3 — Issue the long-lived API key
 // ============================================================================
 
+/** Patient Vault access-control role IDs are different in each 1health system. */
+const PATIENT_VAULT_ROLE_ID_BY_HOST: Readonly<Record<string, number>> = {
+  "demo.1health.io": 493888,
+  "app.1health.io": 3984215,
+}
+
+/**
+ * Resolve the Patient Vault role from the exact API host. Fail closed for an
+ * unknown host rather than omitting `acRoleIds`, which makes 1health default a
+ * newly provisioned key to System Admin access.
+ */
+function patientVaultRoleId(baseUrl: string): number {
+  const hostname = new URL(baseUrl).hostname.toLowerCase()
+  const roleId = PATIENT_VAULT_ROLE_ID_BY_HOST[hostname]
+  if (!roleId) {
+    throw new Error(`Unsupported 1health environment for Patient Vault key provisioning: ${hostname}`)
+  }
+  return roleId
+}
+
 export async function createApiToken(name: string): Promise<ApiTokenResult> {
   try {
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/token`
+    const acRoleIds = [patientVaultRoleId(baseUrl)]
 
     // A token's value is only returned at creation and can never be read back.
     // So when a returning developer's vault already has a token with this name,
@@ -407,7 +428,9 @@ export async function createApiToken(name: string): Promise<ApiTokenResult> {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const response = await authFetch(url, {
         method: "POST",
-        body: JSON.stringify({ name: tokenName }),
+        // Always include the environment-specific Patient Vault role. Keep it
+        // on every collision retry so no request can fall back to System Admin.
+        body: JSON.stringify({ name: tokenName, acRoleIds }),
       })
 
       if (response.ok) {
