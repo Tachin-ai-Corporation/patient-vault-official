@@ -19,14 +19,22 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { fetchMyself, type UserInfo } from '@/lib/api/user'
-import { getOneHealthBaseUrl, hasOneHealthSession } from '@/lib/auth-client'
+import {
+  getOneHealthBaseUrl,
+  getRestrictedApiKey,
+  getRestrictedApiKeyTenant,
+  hasOneHealthSession,
+} from '@/lib/auth-client'
+import { ensureRestrictedApiKey } from '@/lib/api/onboarding'
 import { fetchTenantConfig, type TenantConfig } from '@/lib/api/tenant'
 import {
   fetchPatientGrid,
@@ -147,6 +155,12 @@ type SessionContextValue = {
 
 // ---- helpers ----------------------------------------------------------------
 
+// The shared bootstrap tenant every developer launches on before their own
+// Patient Vault is provisioned. On this tenant the onboarding overlay owns the
+// setup flow (including minting the role-scoped key), so the session provider
+// does not fetch tenant data or mint a key for it.
+const BOOTSTRAP_TENANT_ID = 1
+
 function deriveInitials(first: string, last: string): string {
   const a = first.charAt(0)
   const b = last.charAt(0)
@@ -213,8 +227,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 2000 },
   )
   const tenantId = user?.tenantContext?.id ?? null
+
+  // --- role-scoped API key gate ---
+  // Every data-plane call must be sent with the role-scoped restricted key, not
+  // the broad 1health login token. The key is minted per session AFTER we know
+  // the active tenant (role IDs are tenant-specific). Onboarding mints it for
+  // the launch path; this is the safety net for a session that lands directly
+  // on a real vault tenant (no onboarding overlay). We do NOT fetch tenant/
+  // patient data until the key is ready, so those calls never leak onto the
+  // broad token.
+  const onBootstrap = tenantId === BOOTSTRAP_TENANT_ID
+  const [keyReadyTenant, setKeyReadyTenant] = useState<number | null>(null)
+  const mintingRef = useRef<number | null>(null)
+  const dataReady = tenantId != null && !onBootstrap && keyReadyTenant === tenantId
+
   const { data: tenant, isLoading: tenantLoading, mutate: mutateTenant } = useSWR(
-    tenantId ? `session:tenant:${tenantId}` : null,
+    dataReady ? `session:tenant:${tenantId}` : null,
     () => tenantFetcher(tenantId!),
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 2000 },
   )
@@ -225,7 +253,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     isLoading: patientsLoading,
     mutate: mutatePatients,
   } = useSWR(
-    user ? 'patients:list' : null,
+    dataReady ? 'patients:list' : null,
     async () => {
       const page = await fetchPatientGrid({ page: 0, size: 200 })
       return (page.data ?? []).map(gridRowToPatient)
@@ -233,7 +261,53 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   )
 
-  const isLoading = userLoading || (!!tenantId && tenantLoading)
+  // Mint the restricted key when a real-tenant session doesn't already have one.
+  useEffect(() => {
+    if (tenantId == null || tenantId === BOOTSTRAP_TENANT_ID) return
+
+    // Already have a session key scoped to this tenant (e.g. onboarding minted
+    // it) — just unlock data fetching.
+    if (getRestrictedApiKey() && getRestrictedApiKeyTenant() === tenantId) {
+      setKeyReadyTenant(tenantId)
+      return
+    }
+
+    // Guard against React double-invoke / re-renders minting duplicate keys.
+    if (mintingRef.current === tenantId) return
+    mintingRef.current = tenantId
+
+    let cancelled = false
+    ensureRestrictedApiKey(tenantId)
+      .then((res) => {
+        if (cancelled) return
+        if (res.success) {
+          setKeyReadyTenant(tenantId)
+          // Re-fetch under the restricted key now that it's active.
+          void mutatePatients()
+          void mutateTenant()
+        } else {
+          // Fail open so the app isn't bricked: allow data to load on the login
+          // token (myself/grid/sys-config are allowed for it too). The console
+          // still works; it just isn't scoped down for this session.
+          console.error('[session] Failed to mint restricted API key:', res.error)
+          setKeyReadyTenant(tenantId)
+        }
+      })
+      .finally(() => {
+        if (mintingRef.current === tenantId) mintingRef.current = null
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [tenantId, mutatePatients, mutateTenant])
+
+  const isLoading =
+    userLoading ||
+    // On a real tenant, stay in the loading splash until the key is ready…
+    (tenantId != null && !onBootstrap && keyReadyTenant !== tenantId) ||
+    // …then until the tenant config finishes its first load.
+    (dataReady && tenantLoading)
   const error = userError ? (userError as Error).message : null
 
   const refresh = useCallback(async () => {

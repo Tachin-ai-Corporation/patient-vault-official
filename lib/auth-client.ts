@@ -302,6 +302,74 @@ export function getUserId(): number | null {
 }
 
 // ============================================================================
+// RESTRICTED API KEY (role-scoped Patient Vault key)
+// ============================================================================
+
+/**
+ * The Patient Vault app must NOT act with the broad login (OAuth) token that
+ * 1health issues at launch — that token can reach every 1health API. Instead,
+ * onboarding mints a role-scoped API key (restricted to the "Patient Vault"
+ * access-control role) and the app sends THAT key as the Bearer for all
+ * data-plane calls. This limits the app to the Patient Vault endpoints plus the
+ * handful the role explicitly allows (myself, grid/patient, sys-config).
+ *
+ * The generated key is a static value that can only be read once at creation,
+ * so we hold it in sessionStorage (per browser session / launch, matching the
+ * "mint a fresh key each session" policy) rather than a cookie. It is scoped to
+ * a specific tenant because access-control role IDs are tenant-specific, so we
+ * store the tenant id alongside it and only trust the key for that tenant.
+ */
+const RESTRICTED_KEY_STORAGE = "pv_restricted_api_key"
+const RESTRICTED_KEY_TENANT_STORAGE = "pv_restricted_api_key_tenant"
+
+/** The current session's role-scoped API key, or null if none minted yet. */
+export function getRestrictedApiKey(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    return window.sessionStorage.getItem(RESTRICTED_KEY_STORAGE)
+  } catch {
+    return null
+  }
+}
+
+/** The tenant id the stored restricted key is scoped to, or null. */
+export function getRestrictedApiKeyTenant(): number | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.sessionStorage.getItem(RESTRICTED_KEY_TENANT_STORAGE)
+    if (!raw) return null
+    const n = Number.parseInt(raw, 10)
+    return Number.isNaN(n) ? null : n
+  } catch {
+    return null
+  }
+}
+
+/** Persist the role-scoped key for this session, bound to its tenant. */
+export function setRestrictedApiKey(value: string, tenantId: number): void {
+  if (typeof window === "undefined") return
+  try {
+    window.sessionStorage.setItem(RESTRICTED_KEY_STORAGE, value)
+    window.sessionStorage.setItem(RESTRICTED_KEY_TENANT_STORAGE, String(tenantId))
+  } catch {
+    // sessionStorage may be unavailable (private mode / SSR). The app will fall
+    // back to the login token for data calls, which still works — it just isn't
+    // scoped down. Never throw from here.
+  }
+}
+
+/** Drop the stored restricted key (e.g. on sign-out). */
+export function clearRestrictedApiKey(): void {
+  if (typeof window === "undefined") return
+  try {
+    window.sessionStorage.removeItem(RESTRICTED_KEY_STORAGE)
+    window.sessionStorage.removeItem(RESTRICTED_KEY_TENANT_STORAGE)
+  } catch {
+    /* ignore */
+  }
+}
+
+// ============================================================================
 // DEBUG LOGGING
 // ============================================================================
 
@@ -567,15 +635,18 @@ function publishInspectorCall(
  *
  * Use this function for ALL 1health API requests from client components.
  * It automatically:
- *   1. Attaches the Bearer token from cookies
- *   2. Logs request/response to browser console
- *   3. Intercepts 401 Unauthorized responses
- *   4. Attempts to refresh the token
- *   5. Retries the original request with the new token
- *   6. Throws SessionExpiredError if refresh fails
+ *   1. Chooses the Bearer token: the role-scoped restricted key by default, or
+ *      the broad login (OAuth) token when { useLoginToken: true } is passed for
+ *      setup/admin calls (switch-tenant, list roles, generate token).
+ *   2. Logs request/response to browser console.
+ *   3. For the login token only: intercepts 401s, refreshes, and retries once.
+ *      Restricted-key 401/403s are returned as-is so authorization errors from
+ *      out-of-scope endpoints surface instead of escalating to the login token.
+ *   4. Throws SessionExpiredError if a login-token refresh fails.
  *
  * @param url - The 1health API endpoint URL (use getOneHealthBaseUrl() to build it)
  * @param options - Standard fetch options (method, body, headers, etc.)
+ * @param authOptions - Token selection ({ useLoginToken } for setup/admin calls)
  * @returns Promise<Response> - The fetch response
  * @throws SessionExpiredError if token refresh fails
  *
@@ -587,24 +658,30 @@ function publishInspectorCall(
  * })
  * const data = await response.json()
  */
-export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  let accessToken = getAccessToken()
+export interface AuthFetchOptions {
+  /**
+   * Force the broad 1health login (OAuth) token as the Bearer, bypassing the
+   * role-scoped restricted key. This is required for the setup/admin calls the
+   * restricted key is intentionally NOT allowed to make — switching tenants,
+   * listing access-control roles, and generating the token itself. Every
+   * data-plane call omits this and gets the restricted key.
+   */
+  useLoginToken?: boolean
+}
 
-  // No access token - try to refresh first
-  if (!accessToken) {
-    const refreshed = await refreshToken()
-    if (!refreshed) {
-      throw new SessionExpiredError()
-    }
-    accessToken = getAccessToken()
-    if (!accessToken) {
-      throw new SessionExpiredError()
-    }
-  }
-
-  // Build headers with Authorization
+/**
+ * Perform a single authenticated request with the given Bearer token, logging
+ * the request/response to the console (and returning the read body so the
+ * caller can publish it to the API Inspector). Never retries — retry/refresh
+ * policy is decided by authFetch, which differs by token type.
+ */
+async function performFetch(
+  url: string,
+  options: RequestInit,
+  bearer: string,
+): Promise<{ response: Response; responseBody: string; duration: number; method: string }> {
   const headers = new Headers(options.headers)
-  headers.set("Authorization", `Bearer ${accessToken}`)
+  headers.set("Authorization", `Bearer ${bearer}`)
 
   // FormData requires the browser to set Content-Type with boundary
   const isFormData = options.body instanceof FormData
@@ -619,22 +696,10 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     ? `[FormData with ${Array.from((options.body as FormData).keys()).length} field(s)]`
     : options.body
 
-  // Log request
-  logApiCall("request", {
-    url,
-    method,
-    headers: headersObj,
-    body: logBody as string | undefined,
-  })
+  logApiCall("request", { url, method, headers: headersObj, body: logBody as string | undefined })
 
   const startTime = Date.now()
-
-  // Make the request
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
-
+  const response = await fetch(url, { ...options, headers })
   const duration = Date.now() - startTime
 
   // Clone response to read body for logging without consuming it
@@ -646,7 +711,6 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     responseBody = "[Unable to read response body]"
   }
 
-  // Log response
   logApiCall("response", {
     url,
     method,
@@ -657,73 +721,65 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     duration,
   })
 
-  // Publish to the in-app API Inspector — but only when this is the final
-  // outcome. A 401 here is followed by a token refresh + retry below; we record
-  // the retry's result instead so the inspector shows the effective call.
-  if (response.status !== 401) {
+  return { response, responseBody, duration, method }
+}
+
+export async function authFetch(
+  url: string,
+  options: RequestInit = {},
+  authOptions: AuthFetchOptions = {},
+): Promise<Response> {
+  // Default: send the role-scoped restricted key for data-plane calls. Only the
+  // explicit setup/admin calls opt into the broad login token.
+  const restrictedKey = authOptions.useLoginToken ? null : getRestrictedApiKey()
+
+  if (restrictedKey) {
+    // Restricted-key path. This key is a static, role-scoped credential — NOT an
+    // OAuth token — so refreshing the OAuth session would not change it. A
+    // 401/403 here means the endpoint is outside the Patient Vault role's
+    // allow-list (or the key is invalid); we surface that authorization error to
+    // the caller rather than silently escalating to the broad login token, which
+    // is the entire point of scoping the key down.
+    const { response, responseBody, duration, method } = await performFetch(url, options, restrictedKey)
     publishInspectorCall(url, method, options.body, response.status, responseBody, duration)
+    return response
   }
 
-  // Handle 401 Unauthorized - attempt token refresh and retry
-  if (response.status === 401) {
-    console.log("[auth-client] Received 401, attempting token refresh...")
+  // Login-token path (setup/admin calls, or before a restricted key exists).
+  // Keeps the original refresh-on-401 + single retry behavior.
+  let accessToken = getAccessToken()
+  if (!accessToken) {
     const refreshed = await refreshToken()
-
     if (!refreshed) {
       throw new SessionExpiredError()
     }
-
-    // Get the new token and retry
-    const newAccessToken = getAccessToken()
-    if (!newAccessToken) {
+    accessToken = getAccessToken()
+    if (!accessToken) {
       throw new SessionExpiredError()
     }
-
-    headers.set("Authorization", `Bearer ${newAccessToken}`)
-
-    console.log("[auth-client] Retrying request with new token...")
-
-    const retryHeaders = Object.fromEntries(headers.entries())
-
-    logApiCall("request", {
-      url,
-      method,
-      headers: retryHeaders,
-      body: logBody as string | undefined,
-    })
-
-    const retryStartTime = Date.now()
-
-    const retryResponse = await fetch(url, {
-      ...options,
-      headers,
-    })
-
-    const retryDuration = Date.now() - retryStartTime
-
-    // Log retry response
-    const retryClone = retryResponse.clone()
-    let retryBody: string
-    try {
-      retryBody = await retryClone.text()
-    } catch {
-      retryBody = "[Unable to read response body]"
-    }
-
-    logApiCall("response", {
-      url,
-      method,
-      headers: retryHeaders,
-      status: retryResponse.status,
-      statusText: retryResponse.statusText,
-      responseBody: retryBody,
-      duration: retryDuration,
-    })
-
-    publishInspectorCall(url, method, options.body, retryResponse.status, retryBody, retryDuration)
-
-    return retryResponse
   }
 
-  return response
+  const first = await performFetch(url, options, accessToken)
+
+  // Publish now unless a 401 refresh + retry is about to supersede this result.
+  if (first.response.status !== 401) {
+    publishInspectorCall(url, first.method, options.body, first.response.status, first.responseBody, first.duration)
+    return first.response
+  }
+
+  console.log("[auth-client] Received 401, attempting token refresh...")
+  const refreshed = await refreshToken()
+  if (!refreshed) {
+    throw new SessionExpiredError()
+  }
+
+  const newAccessToken = getAccessToken()
+  if (!newAccessToken) {
+    throw new SessionExpiredError()
+  }
+
+  console.log("[auth-client] Retrying request with new token...")
+  const retry = await performFetch(url, options, newAccessToken)
+  publishInspectorCall(url, retry.method, options.body, retry.response.status, retry.responseBody, retry.duration)
+  return retry.response
 }

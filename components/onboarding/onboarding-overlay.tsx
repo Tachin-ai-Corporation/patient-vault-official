@@ -17,8 +17,8 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { signOut } from '@/lib/auth-client'
 import type { UserInfo } from '@/lib/api/user'
 import {
-  createApiToken,
   createTenant,
+  ensureRestrictedApiKey,
   findExistingVaultId,
   matchExistingVaultId,
   switchTenant,
@@ -143,6 +143,11 @@ export function OnboardingOverlay({
         return
       }
       setStatus('switch', 'done')
+      // Mint a fresh role-scoped key for this session and store it so every
+      // data-plane call uses the restricted key instead of the broad login
+      // token. Best-effort: if it fails, the session provider retries, so we
+      // still drop the developer into the console rather than trapping them.
+      await ensureRestrictedApiKey(returningVaultId)
       // Session now points at the real vault — leave the setup gate.
       onDone()
       return
@@ -179,9 +184,12 @@ export function OnboardingOverlay({
     }
     setStatus('switch', 'done')
 
-    // Step 3 — create API key
+    // Step 3 — create API key. ensureRestrictedApiKey mints the role-scoped key
+    // AND stores it as this session's Bearer for data-plane calls, so the app
+    // never acts with the broad login token. The returned value is revealed to
+    // the developer once, below.
     setStatus('key', 'active')
-    const key = await createApiToken('Patient Vault API Key')
+    const key = await ensureRestrictedApiKey(tenantId, 'Patient Vault API Key')
     if (!key.success || !key.token) {
       setStatus('key', 'error')
       setError(key.error ?? 'Could not generate your API key.')

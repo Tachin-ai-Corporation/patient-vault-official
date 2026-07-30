@@ -12,7 +12,15 @@
  * through authFetch() and each function returns a { success, ... } result.
  */
 
-import { authFetch, getOneHealthBaseUrl, refreshToken, setCookie } from "@/lib/auth-client"
+import {
+  authFetch,
+  getOneHealthBaseUrl,
+  getRestrictedApiKey,
+  getRestrictedApiKeyTenant,
+  refreshToken,
+  setCookie,
+  setRestrictedApiKey,
+} from "@/lib/auth-client"
 import { fetchMyself } from "@/lib/api/user"
 import { fetchAllTenants } from "@/lib/api/tenant"
 
@@ -130,7 +138,9 @@ async function postTenant(
   const form = new FormData()
   form.append("dto", JSON.stringify(dto))
 
-  const response = await authFetch(url, { method: "POST", body: form })
+  // Setup call — must use the broad login token; the restricted key cannot
+  // create tenants (and does not exist yet at this point anyway).
+  const response = await authFetch(url, { method: "POST", body: form }, { useLoginToken: true })
   if (!response.ok) {
     return { ok: false, status: response.status, body: await response.text() }
   }
@@ -306,7 +316,9 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
     // still run the refresh grant below to obtain the org-scoped token.
     const url = `${baseUrl}/api/v2/user/switch-tenant/${tenantId}?revokeToken=false`
 
-    const response = await authFetch(url, { method: "GET" })
+    // Setup call — switching tenants is an identity operation on the login
+    // (OAuth) token; the role-scoped restricted key is not allowed to do it.
+    const response = await authFetch(url, { method: "GET" }, { useLoginToken: true })
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -426,7 +438,10 @@ async function fetchPatientVaultRoleId(baseUrl: string): Promise<number> {
     excludeSystemRoles: "false",
   })
   const url = `${baseUrl}/api/v2/access-control/role/all?${query}`
-  const response = await authFetch(url, { method: "GET" })
+  // Setup call (access-control-resource/listRoles) — must use the broad login
+  // token. Listing roles is deliberately NOT one of the endpoints the Patient
+  // Vault role allows, so the restricted key would be rejected here.
+  const response = await authFetch(url, { method: "GET" }, { useLoginToken: true })
 
   if (!response.ok) {
     const detail = await response.text()
@@ -469,12 +484,18 @@ export async function createApiToken(name: string): Promise<ApiTokenResult> {
     let tokenName = name
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const response = await authFetch(url, {
-        method: "POST",
-        // Always include the environment-specific Patient Vault role. Keep it
-        // on every collision retry so no request can fall back to System Admin.
-        body: JSON.stringify({ name: tokenName, acRoleIds }),
-      })
+      const response = await authFetch(
+        url,
+        {
+          method: "POST",
+          // Always include the environment-specific Patient Vault role. Keep it
+          // on every collision retry so no request can fall back to System Admin.
+          body: JSON.stringify({ name: tokenName, acRoleIds }),
+        },
+        // Setup call (token-resource/generate) — must use the broad login token;
+        // the restricted key cannot mint tokens.
+        { useLoginToken: true },
+      )
 
       if (response.ok) {
         const data = await response.json()
@@ -513,4 +534,40 @@ export async function createApiToken(name: string): Promise<ApiTokenResult> {
     console.error("[1health API] createApiToken exception:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
+}
+
+// ============================================================================
+// Step 4 — Ensure a role-scoped key is active for the session
+// ============================================================================
+
+/**
+ * Guarantee the app has a role-scoped restricted key for `tenantId` and make it
+ * the active Bearer for all data-plane calls (via sessionStorage, read by
+ * authFetch). Call this AFTER switching into the target tenant, because
+ * access-control role IDs — and therefore the minted key — are tenant-specific.
+ *
+ * Idempotent within a session: if a key scoped to this tenant already exists we
+ * reuse it instead of minting another. Otherwise we generate a fresh key
+ * (`token-resource/generate`, restricted to the Patient Vault role) and persist
+ * it. The generated value is returned so first-run onboarding can reveal it to
+ * the developer once; returning sessions can ignore the value and just rely on
+ * it being stored.
+ */
+export async function ensureRestrictedApiKey(
+  tenantId: number,
+  name = "Patient Vault API Key",
+): Promise<ApiTokenResult> {
+  // Reuse a key already minted for this tenant in the current session.
+  const existing = getRestrictedApiKey()
+  if (existing && getRestrictedApiKeyTenant() === tenantId) {
+    return { success: true, token: { id: 0, name, tokenValue: existing } }
+  }
+
+  const result = await createApiToken(name)
+  if (result.success && result.token) {
+    // Persist the freshly minted, role-scoped key so authFetch sends it as the
+    // Bearer for every subsequent data-plane request this session.
+    setRestrictedApiKey(result.token.tokenValue, tenantId)
+  }
+  return result
 }
