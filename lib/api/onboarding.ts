@@ -394,7 +394,7 @@ export async function switchTenant(tenantId: number): Promise<SwitchTenantResult
 const PATIENT_VAULT_ROLE_NAME = "Patient Vault"
 
 type AccessControlRole = {
-  acRoleId?: unknown
+  id?: unknown
   roleName?: unknown
 }
 
@@ -420,7 +420,12 @@ function accessControlRoles(payload: unknown): AccessControlRole[] {
  * omitting `acRoleIds` would make 1health default the key to System Admin.
  */
 async function fetchPatientVaultRoleId(baseUrl: string): Promise<number> {
-  const url = `${baseUrl}/api/v2/access-control/role/all`
+  const query = new URLSearchParams({
+    page: "0",
+    limit: "200",
+    excludeSystemRoles: "false",
+  })
+  const url = `${baseUrl}/api/v2/access-control/role/all?${query}`
   const response = await authFetch(url, { method: "GET" })
 
   if (!response.ok) {
@@ -434,7 +439,9 @@ async function fetchPatientVaultRoleId(baseUrl: string): Promise<number> {
   const patientVaultRole = roles.find(
     (role) => role.roleName === PATIENT_VAULT_ROLE_NAME,
   )
-  const roleId = patientVaultRole?.acRoleId
+  // The role-list endpoint returns the tenant-specific access-control role
+  // identifier as `id`; the token endpoint expects that value in `acRoleIds`.
+  const roleId = patientVaultRole?.id
 
   if (typeof roleId !== "number" || !Number.isInteger(roleId) || roleId <= 0) {
     throw new Error(
