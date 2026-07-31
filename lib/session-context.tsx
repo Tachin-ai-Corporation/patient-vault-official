@@ -81,6 +81,10 @@ export type SessionUser = {
 
 export type Environment = 'development' | 'production'
 export type ApiEnv = 'staging' | 'production'
+export type ProductionAccountState =
+  | 'not_registered'
+  | 'registered_signed_out'
+  | 'active_session'
 
 export type Session = {
   user: SessionUser
@@ -138,6 +142,7 @@ type SessionContextValue = {
   freeCeiling: number
   claimPartner: (code: string) => void
   isProductionActivated: boolean
+  productionAccountState: ProductionAccountState
   currentEnv: ApiEnv
   activeEnvironment: SessionEnvironment
   environmentSessions: Record<SessionEnvironment, boolean>
@@ -207,6 +212,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => ({ demo: hasEnvironmentSession('demo'), prod: hasEnvironmentSession('prod') }),
     [activeEnvironment, sessionVersion],
   )
+  const { data: productionRegistration } = useSWR<{ registered: boolean }>(
+    environmentSessions.demo ? '/api/production-registration' : null,
+    async (url: string) => {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to load production registration state')
+      return response.json()
+    },
+    { revalidateOnFocus: false, revalidateOnReconnect: false },
+  )
+  const productionAccountState: ProductionAccountState = environmentSessions.prod
+    ? 'active_session'
+    : productionRegistration?.registered
+      ? 'registered_signed_out'
+      : 'not_registered'
 
   const searchParams = useSearchParams()
   const dcpParam = searchParams.get('dcp')
@@ -515,6 +534,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       freeCeiling,
       claimPartner,
       isProductionActivated,
+      productionAccountState,
       currentEnv,
       activeEnvironment,
       environmentSessions,
@@ -564,6 +584,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       environmentSessions,
       setActiveEnvironment,
       isProductionActivated,
+      productionAccountState,
       updateUserName,
       createProject,
       renameCurrentProject,

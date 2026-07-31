@@ -46,12 +46,14 @@ function EnvironmentRow({
   env,
   selected,
   signInUrl,
+  actionLabel,
   available,
   onSelect,
 }: {
   env: EnvironmentRecord
   selected: boolean
   signInUrl: string
+  actionLabel: string
   available: boolean
   onSelect: () => void
 }) {
@@ -107,7 +109,7 @@ function EnvironmentRow({
             rel="noopener noreferrer"
             className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
           >
-            Open {env.name} Patient Vault
+            {actionLabel}
             <ExternalLink aria-hidden className="h-3 w-3" />
           </a>
         )}
@@ -127,6 +129,7 @@ export function EnvironmentSelector() {
     currentProject,
     currentEnv,
     environmentSessions,
+    productionAccountState,
     setActiveEnvironment,
   } = useSession()
   const [open, setOpen] = useState(false)
@@ -137,7 +140,9 @@ export function EnvironmentSelector() {
       theme,
     ),
     production: withAuthParams(
-      'https://1health.app.1health.io/login?openApp=Patient%20Vault',
+      productionAccountState === 'not_registered'
+        ? 'https://1health.app.1health.io/register?openApp=Patient%20Vault'
+        : 'https://1health.app.1health.io/login?openApp=Patient%20Vault',
       theme,
     ),
   }
@@ -181,6 +186,11 @@ export function EnvironmentSelector() {
                   selected={selected}
                   available={environmentSessions[id === 'production' ? 'prod' : 'demo']}
                   signInUrl={signInUrls[id]}
+                  actionLabel={
+                    id === 'production' && productionAccountState === 'not_registered'
+                      ? 'Create production account'
+                      : `Sign in to ${environment.name}`
+                  }
                   onSelect={() => {
                     void setActiveEnvironment(id === 'production' ? 'prod' : 'demo')
                     setOpen(false)

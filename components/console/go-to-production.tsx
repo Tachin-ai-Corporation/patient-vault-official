@@ -26,10 +26,17 @@ function buildRegistrationUrl(mode: 'dark' | 'light'): string {
 
 export function GoToProduction() {
   const { theme } = useTheme()
-  const { currentEnv } = useSession()
+  const { currentEnv, productionAccountState } = useSession()
 
   function createProductionAccount() {
     window.location.assign(buildRegistrationUrl(theme))
+  }
+
+  if (
+    currentEnv === 'staging' &&
+    productionAccountState !== 'not_registered'
+  ) {
+    return null
   }
 
   if (currentEnv === 'production') {
