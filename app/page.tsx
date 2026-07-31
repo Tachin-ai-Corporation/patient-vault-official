@@ -97,13 +97,15 @@ const jsonLdArticle = {
 }
 
 export default async function PatientVaultPage() {
-  // Preserve prior behavior: authenticated visitors land in the console, not the
-  // public marketing page. Detected via the non-httpOnly access_token cookie set
-  // during the OAuth exchange — no API call and no auth logic touched here.
-  const token = (await cookies()).get('access_token')?.value
-  if (token) {
-    redirect('/patients')
-  }
+  // Either environment slot is sufficient to enter the console. The client
+  // session provider validates expiry and falls back to the other valid slot.
+  const cookieStore = await cookies()
+  const hasSession = Boolean(
+    cookieStore.get('demo_access_token')?.value ||
+      cookieStore.get('prod_access_token')?.value ||
+      cookieStore.get('access_token')?.value,
+  )
+  if (hasSession) redirect('/patients')
 
   return (
     <>

@@ -59,8 +59,8 @@ function getEnvConfig(environment: Environment) {
 
   const baseUrl =
     environment === "demo"
-      ? "https://demo.1health.io"
-      : "https://app.1health.io"
+      ? "https://1health.demo.1health.io"
+      : "https://1health.app.1health.io"
 
   const appId =
     environment === "demo"
@@ -171,27 +171,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required field: lpl is required" }, { status: 400 })
     }
 
-    const environment: Environment = body.environment === "prod" ? "prod" : "demo"
-    const { secretKey, baseUrl } = getEnvConfig(environment)
-
-    // Store the environment and base URL in cookies
-    cookieStore.set("onehealth_environment", environment, {
-      ...cookieOpts,
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-    })
-
-    cookieStore.set("onehealth_base_url", baseUrl, {
-      ...cookieOpts,
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-    })
-
-    if (!secretKey) {
-      return NextResponse.json(
-        { error: `Server configuration error: missing secret key for ${environment} environment` },
-        { status: 500 },
-      )
-    }
-
     let lpl: Buffer
     try {
       lpl = Buffer.from(body.lpl, "base64")
@@ -212,15 +191,35 @@ export async function POST(req: Request) {
     const tag = ciphertext.subarray(ciphertext.length - TAG_LENGTH)
     const encryptedData = ciphertext.subarray(0, ciphertext.length - TAG_LENGTH)
 
-    // Derive encryption key from the JWT API key using HKDF-SHA256
-    const key = deriveKey(secretKey)
+    // The key that successfully decrypts the launch payload is the authority for
+    // its destination session slot. Never trust client state for this decision.
+    let environment: Environment | null = null
+    let secretKey: string | undefined
+    let baseUrl = ""
+    let decryptedString = ""
 
-    let decryptedString: string
-    try {
-      decryptedString = decryptAesGcm({ iv, tag, encryptedData, key })
-    } catch (err) {
+    for (const candidate of ["prod", "demo"] as const) {
+      const config = getEnvConfig(candidate)
+      if (!config.secretKey) continue
+      try {
+        decryptedString = decryptAesGcm({
+          iv,
+          tag,
+          encryptedData,
+          key: deriveKey(config.secretKey),
+        })
+        environment = candidate
+        secretKey = config.secretKey
+        baseUrl = config.baseUrl
+        break
+      } catch {
+        // Try the other environment key.
+      }
+    }
+
+    if (!environment || !secretKey) {
       return NextResponse.json(
-        { error: "Invalid LPL: decryption failed. The payload may be corrupted or encrypted with a different key." },
+        { error: "Invalid LPL: decryption failed for both production and demo." },
         { status: 400 },
       )
     }
@@ -280,16 +279,17 @@ export async function POST(req: Request) {
       )
     }
 
-    // Set cookies for access_token and refresh_token
+    // Write only the detected environment's slot; preserve the other session.
+    const prefix = environment
     const accessTokenMaxAge = authData.expires_in
-    const refreshTokenMaxAge = accessTokenMaxAge * 2
+    const refreshTokenMaxAge = authData.refresh_token_expires_in ?? accessTokenMaxAge * 2
 
-    cookieStore.set("access_token", authData.access_token, {
+    cookieStore.set(`${prefix}_access_token`, authData.access_token, {
       ...cookieOpts,
       maxAge: accessTokenMaxAge,
     })
 
-    cookieStore.set("refresh_token", authData.refresh_token, {
+    cookieStore.set(`${prefix}_refresh_token`, authData.refresh_token, {
       ...cookieOpts,
       maxAge: refreshTokenMaxAge,
     })
@@ -297,12 +297,12 @@ export async function POST(req: Request) {
     const tokenExpiresAt = Math.floor(Date.now() / 1000) + accessTokenMaxAge
     const refreshExpiresAt = Math.floor(Date.now() / 1000) + refreshTokenMaxAge
 
-    cookieStore.set("refresh_token_expires_at", String(refreshExpiresAt), {
+    cookieStore.set(`${prefix}_refresh_token_expires_at`, String(refreshExpiresAt), {
       ...cookieOpts,
       maxAge: refreshTokenMaxAge,
     })
 
-    cookieStore.set("token_expires_at", String(tokenExpiresAt), {
+    cookieStore.set(`${prefix}_token_expires_at`, String(tokenExpiresAt), {
       ...cookieOpts,
       maxAge: refreshTokenMaxAge,
     })
@@ -323,14 +323,14 @@ export async function POST(req: Request) {
 
         // Store tenant org ID in cookie for client-side access
         if (tenantData.organization?.id) {
-          cookieStore.set("user_org_id", String(tenantData.organization.id), {
+          cookieStore.set(`${prefix}_user_org_id`, String(tenantData.organization.id), {
             ...cookieOpts,
             maxAge: refreshTokenMaxAge,
           })
         }
 
         // Store user ID from the decrypted payload
-        cookieStore.set("user_id", String(payload.required.user.id), {
+        cookieStore.set(`${prefix}_user_id`, String(payload.required.user.id), {
           ...cookieOpts,
           maxAge: refreshTokenMaxAge,
         })
@@ -339,7 +339,12 @@ export async function POST(req: Request) {
       // Non-fatal - continue with token response
     }
 
-    return NextResponse.json(authData)
+    cookieStore.set("active_environment", environment, {
+      ...cookieOpts,
+      maxAge: 60 * 60 * 24 * 30,
+    })
+
+    return NextResponse.json({ ...authData, environment })
   } catch (err: any) {
     return NextResponse.json(
       {

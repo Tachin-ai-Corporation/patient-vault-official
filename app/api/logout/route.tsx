@@ -19,15 +19,22 @@ import { NextResponse } from "next/server"
  * domain-scope × partition-variant so no variant can survive.
  */
 
-const SESSION_COOKIES = [
+const SESSION_FIELDS = [
   "access_token",
   "refresh_token",
   "token_expires_at",
   "refresh_token_expires_at",
-  "onehealth_base_url",
-  "onehealth_environment",
   "user_org_id",
   "user_id",
+] as const
+const SESSION_COOKIES = [
+  "active_environment",
+  "onehealth_base_url",
+  "onehealth_environment",
+  ...SESSION_FIELDS,
+  ...(["demo", "prod"] as const).flatMap((env) =>
+    SESSION_FIELDS.map((field) => `${env}_${field}`),
+  ),
 ] as const
 
 /**
@@ -96,13 +103,14 @@ function readCookie(req: Request, name: string): string | null {
  * credentialed cross-origin call. Best-effort: any failure is logged and
  * swallowed so the cookie-clearing response is never affected.
  */
-async function platformLogout(req: Request): Promise<void> {
+async function platformLogout(req: Request, env: "demo" | "prod"): Promise<void> {
   try {
-    const accessToken = readCookie(req, "access_token")
-    const baseUrl = readCookie(req, "onehealth_base_url")
-    if (!accessToken || !baseUrl) return
+    const accessToken = readCookie(req, `${env}_access_token`)
+    if (!accessToken) return
 
-    const root = baseUrl.replace(/\/api\/?$/, "")
+    const root = env === "demo"
+      ? "https://1health.demo.1health.io"
+      : "https://1health.app.1health.io"
     const incomingCookies = req.headers.get("cookie")
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
     if (incomingCookies) headers.Cookie = incomingCookies
@@ -121,7 +129,10 @@ async function platformLogout(req: Request): Promise<void> {
 async function handle(req: Request): Promise<NextResponse> {
   // Invalidate the server-side platform session first, while the forwarded
   // access token is still valid. Best-effort — never blocks the cookie clear.
-  await platformLogout(req)
+  await Promise.allSettled([
+    platformLogout(req, "demo"),
+    platformLogout(req, "prod"),
+  ])
 
   const host = req.headers.get("host") ?? ""
   // Derive the protocol from the forwarded header — behind Vercel's proxy the

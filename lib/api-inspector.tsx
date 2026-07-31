@@ -12,7 +12,7 @@ import {
 } from 'react'
 import { useSession, type ApiEnv } from '@/lib/session-context'
 import { subscribeApiCalls } from '@/lib/api-inspector-bus'
-import { keyPrefixFor } from '@/lib/environments'
+import { getAccessToken } from '@/lib/auth-client'
 
 // ============================================================================
 // API Inspector — a shared, in-memory record of the API calls behind every
@@ -118,11 +118,12 @@ export function scopeKeyFor(projectId: string, env: ApiEnv) {
   return `${projectId}::${env}`
 }
 
-// Masked-but-structured bearer value. The environment-specific prefix is
-// visible; the secret body is masked.
-export function maskedAuthValue(env: ApiEnv): string {
-  const prefix = keyPrefixFor(env)
-  return `${prefix}${'•'.repeat(24)}`
+// Show only enough of the actual bearer token to identify which credential was
+// used. The full token is never stored in the Inspector's in-memory call log.
+export function maskedAuthValue(token: string | null): string {
+  if (!token) return '••••••••••••••••••••••••'
+  const visible = token.slice(0, 6)
+  return `${visible}${'•'.repeat(24)}`
 }
 
 export function ApiInspectorProvider({ children }: { children: ReactNode }) {
@@ -206,7 +207,8 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
       method: input.method,
       path: input.path,
       requestHeaders: {
-        Authorization: `Bearer ${input.authValue ?? maskedAuthValue(input.env)}`,
+        // Mask immediately: only the first six characters enter Inspector state.
+        Authorization: `Bearer ${input.authValue ?? maskedAuthValue(getAccessToken())}`,
         ...(input.requestBody !== undefined
           ? { 'Content-Type': 'application/json' }
           : {}),
