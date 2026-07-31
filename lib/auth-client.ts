@@ -423,8 +423,7 @@ function logApiCall(type: "request" | "response", info: ApiDebugInfo): void {
 // TOKEN REFRESH
 // ============================================================================
 
-let isRefreshing = false
-let refreshPromise: Promise<boolean> | null = null
+const refreshPromises: Partial<Record<SessionEnvironment, Promise<boolean>>> = {}
 
 /**
  * Refreshes the access token using the refresh token.
@@ -432,18 +431,16 @@ let refreshPromise: Promise<boolean> | null = null
  * Returns true if successful, false if refresh failed.
  */
 export async function refreshToken(env: SessionEnvironment = getActiveEnvironment()): Promise<boolean> {
-  // Prevent concurrent refresh attempts
-  if (isRefreshing && refreshPromise) {
-    return refreshPromise
-  }
+  // Coalesce refreshes only within the same environment. Demo and production
+  // refresh independently and can never share credentials.
+  const inFlight = refreshPromises[env]
+  if (inFlight) return inFlight
 
-  isRefreshing = true
-  refreshPromise = (async () => {
+  const refreshPromise = (async () => {
     const currentRefreshToken = getRefreshToken(env)
 
     if (!currentRefreshToken) {
       console.error("[auth-client] No refresh token available")
-      isRefreshing = false
       return false
     }
 
@@ -452,7 +449,6 @@ export async function refreshToken(env: SessionEnvironment = getActiveEnvironmen
       baseUrl = getOneHealthBaseUrl(env)
     } catch {
       console.error("[auth-client] No 1health base URL available")
-      isRefreshing = false
       return false
     }
 
@@ -498,7 +494,6 @@ export async function refreshToken(env: SessionEnvironment = getActiveEnvironmen
 
       if (!response.ok) {
         console.error("[auth-client] Token refresh failed:", response.status, responseText)
-        isRefreshing = false
         return false
       }
 
@@ -523,16 +518,19 @@ export async function refreshToken(env: SessionEnvironment = getActiveEnvironmen
       )
 
       console.log("[auth-client] Token refreshed successfully")
-      isRefreshing = false
       return true
     } catch (error) {
       console.error("[auth-client] Token refresh error:", error)
-      isRefreshing = false
       return false
     }
   })()
 
-  return refreshPromise
+  refreshPromises[env] = refreshPromise
+  try {
+    return await refreshPromise
+  } finally {
+    delete refreshPromises[env]
+  }
 }
 
 // ============================================================================

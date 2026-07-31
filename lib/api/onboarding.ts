@@ -12,7 +12,14 @@
  * through authFetch() and each function returns a { success, ... } result.
  */
 
-import { authFetch, getOneHealthBaseUrl, refreshToken, setCookie } from "@/lib/auth-client"
+import {
+  authFetch,
+  getActiveEnvironment,
+  getOneHealthBaseUrl,
+  refreshToken,
+  setCookie,
+} from "@/lib/auth-client"
+import { sessionCookieName } from "@/lib/session-environments"
 import { fetchMyself } from "@/lib/api/user"
 import { fetchAllTenants } from "@/lib/api/tenant"
 
@@ -221,12 +228,19 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
 
 /** Persist an access token (and optional refresh token) to cookies. */
 function persistTokens(accessToken: string, refreshTok: string | null, expiresIn: number): void {
-  setCookie("access_token", accessToken, expiresIn)
-  if (refreshTok) setCookie("refresh_token", refreshTok, expiresIn * 2)
+  const env = getActiveEnvironment()
+  setCookie(sessionCookieName(env, "access_token"), accessToken, expiresIn)
+  if (refreshTok) {
+    setCookie(sessionCookieName(env, "refresh_token"), refreshTok, expiresIn * 2)
+  }
 
   const now = Math.floor(Date.now() / 1000)
-  setCookie("token_expires_at", String(now + expiresIn), expiresIn)
-  setCookie("refresh_token_expires_at", String(now + expiresIn * 2), expiresIn * 2)
+  setCookie(sessionCookieName(env, "token_expires_at"), String(now + expiresIn), expiresIn)
+  setCookie(
+    sessionCookieName(env, "refresh_token_expires_at"),
+    String(now + expiresIn * 2),
+    expiresIn * 2,
+  )
 }
 
 /** A JWT is three base64url segments separated by dots. */

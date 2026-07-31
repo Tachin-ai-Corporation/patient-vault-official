@@ -163,18 +163,6 @@ function deriveInitials(first: string, last: string): string {
   return `${a}${b}`.toUpperCase() || 'U'
 }
 
-function environmentFromBackendHost(baseUrl: string): ApiEnv | null {
-  try {
-    const hostname = new URL(baseUrl).hostname.toLowerCase()
-    if (hostname === 'demo.1health.io') return 'staging'
-    if (hostname === 'app.1health.io') return 'production'
-  } catch {
-    return null
-  }
-
-  return null
-}
-
 function toSessionUser(u: UserInfo | null): SessionUser {
   if (!u) {
     return { first_name: '', last_name: '', name: 'Loading…', initials: 'U', email: '' }
