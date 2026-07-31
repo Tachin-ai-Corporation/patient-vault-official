@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server"
 import { createDecipheriv, createHmac } from "crypto"
 import { cookies } from "next/headers"
+import { markProductionRegistered } from "@/lib/production-registration"
 
 interface AuthResponse {
   id: string
@@ -337,6 +338,23 @@ export async function POST(req: Request) {
       }
     } catch (tenantErr) {
       // Non-fatal - continue with token response
+    }
+
+    if (environment === "prod") {
+      const stagingUserId = cookieStore.get("demo_user_id")?.value
+      if (stagingUserId) {
+        try {
+          await markProductionRegistered(
+            stagingUserId,
+            String(payload.required.user.id),
+          )
+        } catch (registrationError) {
+          console.error(
+            "[production-registration] Failed to persist registration state",
+            registrationError,
+          )
+        }
+      }
     }
 
     cookieStore.set("active_environment", environment, {
