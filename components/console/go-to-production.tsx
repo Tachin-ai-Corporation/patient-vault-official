@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useTheme } from '@/components/theme-provider'
-import { BRANDING_ID } from '@/lib/auth-branding'
+import { BRANDING_ID, withAuthParams } from '@/lib/auth-branding'
 import { useSession } from '@/lib/session-context'
 
 function buildRegistrationUrl(mode: 'dark' | 'light'): string {
@@ -34,9 +34,49 @@ export function GoToProduction() {
 
   if (
     currentEnv === 'staging' &&
-    productionAccountState !== 'not_registered'
+    productionAccountState === 'registered_signed_out'
   ) {
-    return null
+    const productionLoginUrl = withAuthParams(
+      'https://1health.app.1health.io/login?openApp=Patient%20Vault',
+      theme,
+    )
+
+    return (
+      <section aria-labelledby="production-account-exists-title">
+        <Card className="border-primary/30 bg-primary/5 shadow-none">
+          <CardHeader className="gap-3">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <ShieldCheck aria-hidden="true" />
+            </div>
+            <CardTitle
+              id="production-account-exists-title"
+              className="text-xl text-balance"
+            >
+              Your production account is ready
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="max-w-3xl text-sm leading-relaxed text-foreground text-pretty">
+              A production account is already associated with this staging
+              account. Sign in to production to start a separate production
+              session, then use the environment menu to switch between them.
+            </p>
+            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground text-pretty">
+              Staging and production data remain completely separate.
+            </p>
+          </CardContent>
+          <CardFooter className="justify-end border-t">
+            <Button
+              type="button"
+              onClick={() => window.location.assign(productionLoginUrl)}
+            >
+              Sign in to production
+              <ArrowRight data-icon="inline-end" aria-hidden="true" />
+            </Button>
+          </CardFooter>
+        </Card>
+      </section>
+    )
   }
 
   if (currentEnv === 'production') {
