@@ -48,6 +48,16 @@ function statusClass(status: number): string {
   return 'text-success'
 }
 
+function environmentBadge(env: ApiCall['env']) {
+  const isProduction = env === 'production'
+  return {
+    label: isProduction ? 'Production' : 'Test',
+    className: isProduction
+      ? 'border-warning/40 bg-warning/10 text-warning'
+      : 'border-accent/40 bg-accent/10 text-accent',
+  }
+}
+
 function formatTime(ts: number): string {
   const d = new Date(ts)
   return d.toLocaleTimeString([], {
@@ -485,11 +495,21 @@ function CallDetail({ call }: { call: ApiCall | null }) {
             {call.path}
           </code>
         </div>
-        <div className="mt-3">
-          <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             Headers
           </p>
-          <pre className="overflow-x-auto rounded-input border border-border bg-muted/40 p-2.5 font-mono text-[12px] leading-relaxed text-foreground">
+          <span
+            className={cn(
+              'rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide',
+              environmentBadge(call.env).className,
+            )}
+          >
+            {environmentBadge(call.env).label}
+          </span>
+        </div>
+        <pre className="overflow-x-auto rounded-input border border-border bg-muted/40 p-2.5 font-mono text-[12px] leading-relaxed text-foreground">
             {Object.entries(call.requestHeaders)
               .map(([k, v]) => `${k}: ${v}`)
               .join('\n')}
