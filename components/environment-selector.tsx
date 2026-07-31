@@ -46,10 +46,14 @@ function EnvironmentRow({
   env,
   selected,
   signInUrl,
+  available,
+  onSelect,
 }: {
   env: EnvironmentRecord
   selected: boolean
   signInUrl: string
+  available: boolean
+  onSelect: () => void
 }) {
   const id = environmentId(env)
 
@@ -57,9 +61,19 @@ function EnvironmentRow({
     <div
       role="option"
       aria-selected={selected}
+      aria-disabled={!available}
+      onClick={available && !selected ? onSelect : undefined}
+      onKeyDown={(event) => {
+        if (available && !selected && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault()
+          onSelect()
+        }
+      }}
+      tabIndex={available && !selected ? 0 : -1}
       className={cn(
         'flex w-full items-start gap-2.5 rounded-input px-2 py-2 text-left',
         !selected && 'bg-muted/30',
+        available && !selected && 'cursor-pointer hover:bg-muted',
       )}
     >
       <span
@@ -82,9 +96,11 @@ function EnvironmentRow({
         <span className="block text-xs leading-relaxed text-muted-foreground text-pretty">
           {selected
             ? DESCRIPTIONS[id]
-            : 'Each environment signs in separately.'}
+            : available
+              ? 'Active session available. Select to switch.'
+              : 'Sign in required. Each environment signs in separately.'}
         </span>
-        {!selected && (
+        {!available && (
           <a
             href={signInUrl}
             target="_blank"
@@ -107,7 +123,12 @@ function EnvironmentRow({
  * is selected; the other row starts a sign-in to that environment.
  */
 export function EnvironmentSelector() {
-  const { currentProject, currentEnv } = useSession()
+  const {
+    currentProject,
+    currentEnv,
+    environmentSessions,
+    setActiveEnvironment,
+  } = useSession()
   const [open, setOpen] = useState(false)
   const { theme } = useTheme()
   const signInUrls: Record<ApiEnv, string> = {
@@ -158,7 +179,12 @@ export function EnvironmentSelector() {
                   key={environment.name}
                   env={environment}
                   selected={selected}
+                  available={environmentSessions[id === 'production' ? 'prod' : 'demo']}
                   signInUrl={signInUrls[id]}
+                  onSelect={() => {
+                    void setActiveEnvironment(id === 'production' ? 'prod' : 'demo')
+                    setOpen(false)
+                  }}
                 />
               )
             })}

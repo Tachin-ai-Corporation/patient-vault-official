@@ -42,6 +42,15 @@
 "use client"
 
 import { recordApiCall, type BusApiMethod } from "@/lib/api-inspector-bus"
+import {
+  ENVIRONMENT_CONFIG,
+  SESSION_ENVIRONMENTS,
+  SESSION_FIELDS,
+  isSessionEnvironment,
+  sessionCookieName,
+  sessionIsUnexpired,
+  type SessionEnvironment,
+} from "@/lib/session-environments"
 
 // ============================================================================
 // COOKIE UTILITIES
@@ -109,7 +118,7 @@ export function deleteCookie(name: string): void {
  * All cookies written during the 1health launch/auth flow. Kept in one place so
  * sign-out can fully clear the session.
  */
-const SESSION_COOKIES = [
+const LEGACY_SESSION_COOKIES = [
   "access_token",
   "refresh_token",
   "token_expires_at",
@@ -119,15 +128,49 @@ const SESSION_COOKIES = [
   "user_org_id",
   "user_id",
 ] as const
+const SESSION_COOKIES = [
+  "active_environment",
+  ...LEGACY_SESSION_COOKIES,
+  ...SESSION_ENVIRONMENTS.flatMap((env) => SESSION_FIELDS.map((field) => sessionCookieName(env, field))),
+] as const
 
-/** True if the access token is missing or past (or within 30s of) its expiry. */
-function accessTokenLooksExpired(): boolean {
-  if (!getAccessToken()) return true
-  const at = getCookie("token_expires_at")
-  if (!at) return false // no timestamp -> assume usable; let the call decide
-  const expiresAt = Number.parseInt(at, 10)
-  if (Number.isNaN(expiresAt)) return false
-  return Math.floor(Date.now() / 1000) >= expiresAt - 30
+export function getActiveEnvironment(): SessionEnvironment {
+  const selected = getCookie("active_environment")
+  if (isSessionEnvironment(selected) && hasEnvironmentSession(selected)) return selected
+  return SESSION_ENVIRONMENTS.find(hasEnvironmentSession) ?? "demo"
+}
+
+export function setActiveEnvironment(env: SessionEnvironment): boolean {
+  if (!hasEnvironmentSession(env)) return false
+  setCookie("active_environment", env, 60 * 60 * 24 * 30)
+  return true
+}
+
+export function hasEnvironmentSession(env: SessionEnvironment): boolean {
+  return sessionIsUnexpired(env, getCookie)
+}
+
+/** Migrate the old single cookie set once, without replacing an existing slot. */
+export function migrateLegacySession(): void {
+  const legacyToken = getCookie("access_token")
+  if (!legacyToken) return
+  const legacyEnv = getCookie("onehealth_environment") === "prod" ||
+    getCookie("onehealth_base_url")?.includes("1health.app.1health.io")
+    ? "prod"
+    : "demo"
+  if (!getCookie(sessionCookieName(legacyEnv, "access_token"))) {
+    for (const field of SESSION_FIELDS) {
+      const value = getCookie(field)
+      if (value) setCookie(sessionCookieName(legacyEnv, field), value, 60 * 60 * 24 * 30)
+    }
+  }
+  setCookie("active_environment", legacyEnv, 60 * 60 * 24 * 30)
+  for (const name of LEGACY_SESSION_COOKIES) deleteCookie(name)
+}
+
+/** True if the selected slot is missing or near expiry. */
+function accessTokenLooksExpired(env: SessionEnvironment): boolean {
+  return !hasEnvironmentSession(env)
 }
 
 /**
@@ -140,17 +183,17 @@ function accessTokenLooksExpired(): boolean {
  * the base URL with a trailing `/api` stripped — the same convention
  * `refreshToken()` uses for `/auth/oauth2/token`.
  */
-async function platformLogout(): Promise<void> {
+async function platformLogout(env: SessionEnvironment): Promise<void> {
   try {
     // Refresh once if the access token is (near) expired, so the Bearer we send
     // is valid and the server-side invalidation actually lands.
-    if (accessTokenLooksExpired() && getRefreshToken()) {
-      await refreshToken()
+    if (accessTokenLooksExpired(env) && getRefreshToken(env)) {
+      await refreshToken(env)
     }
-    const token = getAccessToken()
+    const token = getAccessToken(env)
     if (!token) return // nothing to invalidate
 
-    const root = getOneHealthBaseUrl().replace(/\/api\/?$/, "")
+    const root = ENVIRONMENT_CONFIG[env].apiRoot.replace(/\/api\/?$/, "")
     const res = await fetch(`${root}/auth/user/logout`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -189,7 +232,7 @@ async function platformLogout(): Promise<void> {
  */
 export async function signOut(): Promise<void> {
   // 0. Invalidate the server-side platform session while we still hold a token.
-  await platformLogout()
+  await Promise.allSettled(SESSION_ENVIRONMENTS.map((env) => platformLogout(env)))
 
   // 1. Authoritative server-side clear (handles parent-domain + HttpOnly).
   try {
@@ -250,26 +293,26 @@ export async function signOut(): Promise<void> {
 /**
  * Gets the current access token from cookies
  */
-export function getAccessToken(): string | null {
-  return getCookie("access_token")
+export function getAccessToken(env: SessionEnvironment = getActiveEnvironment()): string | null {
+  return getCookie(sessionCookieName(env, "access_token"))
 }
 
 /**
  * Gets the current refresh token from cookies
  */
-export function getRefreshToken(): string | null {
-  return getCookie("refresh_token")
+export function getRefreshToken(env: SessionEnvironment = getActiveEnvironment()): string | null {
+  return getCookie(sessionCookieName(env, "refresh_token"))
 }
 
 /**
  * Gets the 1health base URL from cookies.
  * The URL is set per-environment (demo/prod) during authentication.
  */
-export function getOneHealthBaseUrl(): string {
-  const cookieUrl = getCookie("onehealth_base_url")
-  if (cookieUrl) return cookieUrl
-
-  throw new Error("No 1health base URL available. User must authenticate via /auth first.")
+export function getOneHealthBaseUrl(env: SessionEnvironment = getActiveEnvironment()): string {
+  if (!hasEnvironmentSession(env)) {
+    throw new Error(`No valid ${env} 1health session. User must authenticate via /auth first.`)
+  }
+  return ENVIRONMENT_CONFIG[env].apiRoot
 }
 
 /**
@@ -277,15 +320,15 @@ export function getOneHealthBaseUrl(): string {
  * the "not authenticated yet" state without triggering the thrown error above,
  * so unauthenticated loads stay quiet instead of surfacing as runtime errors.
  */
-export function hasOneHealthSession(): boolean {
-  return getCookie("onehealth_base_url") !== null
+export function hasOneHealthSession(env: SessionEnvironment = getActiveEnvironment()): boolean {
+  return hasEnvironmentSession(env)
 }
 
 /**
  * Gets the user's organization ID from cookies
  */
-export function getOrganizationId(): number | null {
-  const orgIdCookie = getCookie("user_org_id")
+export function getOrganizationId(env: SessionEnvironment = getActiveEnvironment()): number | null {
+  const orgIdCookie = getCookie(sessionCookieName(env, "user_org_id"))
   if (!orgIdCookie) return null
   const orgId = Number.parseInt(orgIdCookie, 10)
   return Number.isNaN(orgId) ? null : orgId
@@ -294,8 +337,8 @@ export function getOrganizationId(): number | null {
 /**
  * Gets the current user ID from cookies
  */
-export function getUserId(): number | null {
-  const userIdCookie = getCookie("user_id")
+export function getUserId(env: SessionEnvironment = getActiveEnvironment()): number | null {
+  const userIdCookie = getCookie(sessionCookieName(env, "user_id"))
   if (!userIdCookie) return null
   const userId = Number.parseInt(userIdCookie, 10)
   return Number.isNaN(userId) ? null : userId
@@ -388,7 +431,7 @@ let refreshPromise: Promise<boolean> | null = null
  * Makes a direct call to 1health OAuth endpoint.
  * Returns true if successful, false if refresh failed.
  */
-export async function refreshToken(): Promise<boolean> {
+export async function refreshToken(env: SessionEnvironment = getActiveEnvironment()): Promise<boolean> {
   // Prevent concurrent refresh attempts
   if (isRefreshing && refreshPromise) {
     return refreshPromise
@@ -396,7 +439,7 @@ export async function refreshToken(): Promise<boolean> {
 
   isRefreshing = true
   refreshPromise = (async () => {
-    const currentRefreshToken = getRefreshToken()
+    const currentRefreshToken = getRefreshToken(env)
 
     if (!currentRefreshToken) {
       console.error("[auth-client] No refresh token available")
@@ -406,7 +449,7 @@ export async function refreshToken(): Promise<boolean> {
 
     let baseUrl: string
     try {
-      baseUrl = getOneHealthBaseUrl()
+      baseUrl = getOneHealthBaseUrl(env)
     } catch {
       console.error("[auth-client] No 1health base URL available")
       isRefreshing = false
@@ -464,16 +507,20 @@ export async function refreshToken(): Promise<boolean> {
       const refreshTokenMaxAge = accessTokenMaxAge * 2
 
       // Update cookies with new tokens
-      setCookie("access_token", data.access_token, accessTokenMaxAge)
+      setCookie(sessionCookieName(env, "access_token"), data.access_token, accessTokenMaxAge)
       if (data.refresh_token) {
-        setCookie("refresh_token", data.refresh_token, refreshTokenMaxAge)
+        setCookie(sessionCookieName(env, "refresh_token"), data.refresh_token, refreshTokenMaxAge)
       }
 
-      // Set expiration timestamps
+      // Set expiration timestamps only in the refreshed environment slot.
       const tokenExpiresAt = Math.floor(Date.now() / 1000) + accessTokenMaxAge
       const refreshTokenExpiresAt = Math.floor(Date.now() / 1000) + refreshTokenMaxAge
-      setCookie("token_expires_at", tokenExpiresAt.toString(), accessTokenMaxAge)
-      setCookie("refresh_token_expires_at", refreshTokenExpiresAt.toString(), refreshTokenMaxAge)
+      setCookie(sessionCookieName(env, "token_expires_at"), tokenExpiresAt.toString(), accessTokenMaxAge)
+      setCookie(
+        sessionCookieName(env, "refresh_token_expires_at"),
+        refreshTokenExpiresAt.toString(),
+        refreshTokenMaxAge,
+      )
 
       console.log("[auth-client] Token refreshed successfully")
       isRefreshing = false
@@ -588,15 +635,19 @@ function publishInspectorCall(
  * const data = await response.json()
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  let accessToken = getAccessToken()
+  // Bind the request to its URL's environment so a UI switch during an in-flight
+  // refresh cannot attach credentials from the other slot.
+  const env: SessionEnvironment = url.startsWith(ENVIRONMENT_CONFIG.prod.apiRoot) ? "prod" :
+    url.startsWith(ENVIRONMENT_CONFIG.demo.apiRoot) ? "demo" : getActiveEnvironment()
+  let accessToken = getAccessToken(env)
 
   // No access token - try to refresh first
   if (!accessToken) {
-    const refreshed = await refreshToken()
+    const refreshed = await refreshToken(env)
     if (!refreshed) {
       throw new SessionExpiredError()
     }
-    accessToken = getAccessToken()
+    accessToken = getAccessToken(env)
     if (!accessToken) {
       throw new SessionExpiredError()
     }
@@ -667,14 +718,14 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   // Handle 401 Unauthorized - attempt token refresh and retry
   if (response.status === 401) {
     console.log("[auth-client] Received 401, attempting token refresh...")
-    const refreshed = await refreshToken()
+    const refreshed = await refreshToken(env)
 
     if (!refreshed) {
       throw new SessionExpiredError()
     }
 
-    // Get the new token and retry
-    const newAccessToken = getAccessToken()
+    // Get the new token from the same request slot and retry.
+    const newAccessToken = getAccessToken(env)
     if (!newAccessToken) {
       throw new SessionExpiredError()
     }

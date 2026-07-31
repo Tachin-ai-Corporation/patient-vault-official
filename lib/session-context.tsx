@@ -19,6 +19,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -26,7 +27,13 @@ import {
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { fetchMyself, type UserInfo } from '@/lib/api/user'
-import { getOneHealthBaseUrl, hasOneHealthSession } from '@/lib/auth-client'
+import {
+  getActiveEnvironment,
+  hasEnvironmentSession,
+  migrateLegacySession,
+  setActiveEnvironment as persistActiveEnvironment,
+} from '@/lib/auth-client'
+import { toUiEnvironment, type SessionEnvironment } from '@/lib/session-environments'
 import { fetchTenantConfig, type TenantConfig } from '@/lib/api/tenant'
 import {
   fetchPatientGrid,
@@ -132,6 +139,9 @@ type SessionContextValue = {
   claimPartner: (code: string) => void
   isProductionActivated: boolean
   currentEnv: ApiEnv
+  activeEnvironment: SessionEnvironment
+  environmentSessions: Record<SessionEnvironment, boolean>
+  setActiveEnvironment: (env: SessionEnvironment) => Promise<boolean>
   // Developer-platform shims. These back the static Console/Settings screens.
   // The 1health API surface used here (myself + tenant + patients) has no
   // project-management or key-provisioning endpoints, so these are local-only
@@ -196,6 +206,20 @@ async function tenantFetcher(tenantId: number): Promise<TenantConfig | null> {
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const [activeEnvironment, setActiveEnvironmentState] = useState<SessionEnvironment>('demo')
+  const [sessionVersion, setSessionVersion] = useState(0)
+
+  useEffect(() => {
+    migrateLegacySession()
+    setActiveEnvironmentState(getActiveEnvironment())
+    setSessionVersion((version) => version + 1)
+  }, [])
+
+  const environmentSessions = useMemo(
+    () => ({ demo: hasEnvironmentSession('demo'), prod: hasEnvironmentSession('prod') }),
+    [activeEnvironment, sessionVersion],
+  )
+
   const searchParams = useSearchParams()
   const dcpParam = searchParams.get('dcp')
   const [claimedPartner, setClaimedPartner] = useState<string | null>(dcpParam)
@@ -208,13 +232,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // --- identity + tenant ---
   const { data: user, error: userError, isLoading: userLoading, mutate: mutateUser } = useSWR(
-    'session:user',
+    environmentSessions[activeEnvironment] ? `session:user:${activeEnvironment}` : null,
     userFetcher,
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 2000 },
   )
   const tenantId = user?.tenantContext?.id ?? null
   const { data: tenant, isLoading: tenantLoading, mutate: mutateTenant } = useSWR(
-    tenantId ? `session:tenant:${tenantId}` : null,
+    tenantId ? `session:tenant:${activeEnvironment}:${tenantId}` : null,
     () => tenantFetcher(tenantId!),
     { revalidateOnFocus: false, revalidateOnReconnect: false, dedupingInterval: 2000 },
   )
@@ -225,7 +249,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     isLoading: patientsLoading,
     mutate: mutatePatients,
   } = useSWR(
-    user ? 'patients:list' : null,
+    user ? `patients:list:${activeEnvironment}` : null,
     async () => {
       const page = await fetchPatientGrid({ page: 0, size: 200 })
       return (page.data ?? []).map(gridRowToPatient)
@@ -264,11 +288,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [projectId, projectName, patients.length],
   )
 
-  // The authenticated backend host is the sole authority for environment.
-  const currentEnv = useMemo<ApiEnv>(() => {
-    if (!hasOneHealthSession()) return 'staging'
-    return environmentFromBackendHost(getOneHealthBaseUrl()) ?? 'staging'
-  }, [user, tenant])
+  const currentEnv = toUiEnvironment(activeEnvironment)
+
+  const setActiveEnvironment = useCallback(
+    async (env: SessionEnvironment) => {
+      if (!persistActiveEnvironment(env)) return false
+      setActiveEnvironmentState(env)
+      setSessionVersion((version) => version + 1)
+      return true
+    },
+    [],
+  )
 
   const session = useMemo<Session>(
     () => ({
@@ -440,7 +470,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [productionMaskedKey, setProductionMaskedKey] = useState<string | null>(
     null,
   )
-  const [isProductionActivated, setIsProductionActivated] = useState(false)
+  const isProductionActivated = environmentSessions.prod
 
   // Locally override the displayed developer name (no user-write endpoint is
   // used here — this only updates the in-memory SWR cache for the session).
@@ -461,7 +491,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const projectReferenceCount = useCallback(() => 0, [])
   const activateProductionForProject = useCallback((maskedKey: string) => {
     setProductionMaskedKey(maskedKey)
-    setIsProductionActivated(true)
   }, [])
 
   const value = useMemo<SessionContextValue>(
@@ -499,6 +528,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       claimPartner,
       isProductionActivated,
       currentEnv,
+      activeEnvironment,
+      environmentSessions,
+      setActiveEnvironment,
       updateUserName,
       createProject,
       renameCurrentProject,
@@ -540,6 +572,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       freeCeiling,
       claimPartner,
       currentEnv,
+      activeEnvironment,
+      environmentSessions,
+      setActiveEnvironment,
       isProductionActivated,
       updateUserName,
       createProject,

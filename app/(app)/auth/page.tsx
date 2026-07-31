@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { withAuthParams } from "@/lib/auth-branding"
 import { useTheme } from "@/components/theme-provider"
-import { setCookie } from "@/lib/auth-client"
 
 type AuthState = "idle" | "loading" | "success" | "error" | "manual-entry"
 type Environment = "demo" | "prod"
@@ -20,14 +19,6 @@ type Environment = "demo" | "prod"
 interface AuthError {
   title: string
   message: string
-}
-
-// API host per environment — written to the `onehealth_base_url` cookie and used
-// for all API calls. Do NOT repurpose these for the outbound "log in via 1health"
-// links; those point at the Patient Vault login page (see LOGIN_BASES).
-const ENV_URLS: Record<Environment, string> = {
-  demo: "https://demo.1health.io",
-  prod: "https://app.1health.io",
 }
 
 // User-facing 1health login pages that deep-link straight into the Patient Vault
@@ -140,27 +131,17 @@ function AuthContent() {
     }
   }, [])
 
-  // Persist environment choice to cookie. Uses the shared setCookie helper so
-  // these cookies get the same iframe-compatible attributes
-  // (SameSite=None; Secure; Partitioned) as the rest of the session.
+  // The server detects an LPL's environment by decrypting it with both keys.
   useEffect(() => {
-    if (!environment) return
-    const THIRTY_DAYS = 60 * 60 * 24 * 30
-    setCookie("onehealth_environment", environment, THIRTY_DAYS)
-    setCookie("onehealth_base_url", ENV_URLS[environment], THIRTY_DAYS)
-  }, [environment])
-
-  // Process LPL when ready
-  useEffect(() => {
-    if (environment && lpl) {
-      processLpl(lpl)
-    } else if (environment && !lpl) {
+    if (lpl) {
+      void processLpl(lpl)
+    } else if (environment) {
       setAuthState("manual-entry")
     }
   }, [environment, lpl])
 
   async function processLpl(lplValue: string) {
-    if (!lplValue || !environment) return
+    if (!lplValue) return
 
     setAuthState("loading")
 
@@ -168,7 +149,7 @@ function AuthContent() {
       const res = await fetch("/api/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lpl: lplValue, environment }),
+        body: JSON.stringify({ lpl: lplValue }),
       })
 
       const data = await res.json()
@@ -191,6 +172,9 @@ function AuthContent() {
         return
       }
 
+      if (data.environment === "demo" || data.environment === "prod") {
+        setEnvironment(data.environment)
+      }
       setAuthState("success")
       const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/"
 
