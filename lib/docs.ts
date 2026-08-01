@@ -34,7 +34,7 @@ type IndexedDoc = DocNavItem & { sourcePath: string }
 
 const DOCS_ORIGIN = 'https://mcp.dev.1hdev.io'
 const INDEX_PATH = '/agents-docs-index/patient'
-const DOC_PATH_RE = /^\/agents-docs\/agents\/(dev|demo|prod)\/v3\/patient(?:\/[A-Za-z0-9_-]+)*\/agents\.md$/
+const DOC_PATH_RE = /^\/agents-docs\/(dev|demo|prod)\/v3\/patient(?:\/[A-Za-z0-9_-]+)*\/agents\.md$/
 const ENDPOINT_RE = new RegExp(`^##\\s+(${HTTP_METHODS.join('|')})\\s+(.+?)\\s*$`)
 
 function stripLeadingH1Stack(raw: string): string {
@@ -67,7 +67,7 @@ function parseEndpoints(body: string): DocEndpoint[] {
 
 function routeFromSourcePath(sourcePath: string): string {
   return sourcePath
-    .replace(/^\/agents-docs\/agents\/(?:dev|demo|prod)/, '')
+    .replace(/^\/agents-docs\/(?:dev|demo|prod)/, '')
     .replace(/\/agents\.md$/, '')
     .split('/')
     .map((segment) => {
@@ -121,7 +121,8 @@ async function fetchIndex(environment: DocsEnvironment): Promise<IndexedDoc[]> {
   const uniquePaths = new Set<string>()
   for (const value of data.files) {
     if (typeof value !== 'string') continue
-    const sourcePath = sourcePathForEnvironment(value, environment)
+    const normalized = value.replace(/^\/agents-docs\/agents\//, '/agents-docs/')
+    const sourcePath = sourcePathForEnvironment(normalized, environment)
     if (sourcePath) uniquePaths.add(sourcePath)
   }
 
