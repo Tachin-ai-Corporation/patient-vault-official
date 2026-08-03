@@ -127,15 +127,37 @@ function slugFromSourcePath(sourcePath: string): string {
     .join('-')}`
 }
 
-function titleFromRoute(route: string): string {
-  if (route === '/v3/patient') return 'Patients'
-  const parts = route.split('/').filter(Boolean).slice(2)
-  return parts
-    .map((part) => {
-      if (part.startsWith('{')) return part
-      return part.charAt(0).toUpperCase() + part.slice(1)
-    })
-    .join(' / ')
+function titleCaseSegment(segment: string): string {
+  // Split camelCase / snake_case / kebab-case into words, then Title Case.
+  return segment
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+// Turn a route like "/v3/patient/{patientId}/address/{addressId}" into a
+// human-readable nav label. Placeholder segments (the noisy "{patientId}" bits)
+// are dropped from the title; the trailing id param is returned separately so
+// the UI can show it as a compact hint and still distinguish an item endpoint
+// from its collection.
+function describeRoute(route: string): { title: string; param?: string } {
+  const segments = route.split('/').filter(Boolean)
+  const rest = segments.slice(2) // drop the "/v3/patient" prefix
+  if (rest.length === 0) return { title: 'Patients' }
+
+  const named = rest.filter((segment) => !segment.startsWith('{'))
+  const lastSegment = rest[rest.length - 1]
+  const param = lastSegment.startsWith('{')
+    ? lastSegment.replace(/[{}]/g, '')
+    : undefined
+
+  const title =
+    named.length > 0 ? named.map(titleCaseSegment).join(' / ') : 'Patient'
+
+  return { title, param }
 }
 
 function sourcePathForEnvironment(
@@ -168,9 +190,11 @@ async function fetchIndex(environment: DocsEnvironment): Promise<IndexedDoc[]> {
   return Array.from(uniquePaths)
     .map((sourcePath) => {
       const route = routeFromSourcePath(sourcePath)
+      const { title, param } = describeRoute(route)
       return {
         slug: slugFromSourcePath(sourcePath),
-        title: titleFromRoute(route),
+        title,
+        param,
         file: sourcePath,
         sourcePath,
         status: 'live' as const,
