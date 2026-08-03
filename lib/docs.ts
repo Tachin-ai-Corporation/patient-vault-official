@@ -34,8 +34,47 @@ type IndexedDoc = DocNavItem & { sourcePath: string }
 
 const DOCS_ORIGIN = 'https://mcp.dev.1hdev.io'
 const INDEX_PATH = '/agents-docs-index/patient'
-const DOC_PATH_RE = /^\/agents-docs\/(dev|demo|prod)\/v3\/patient(?:\/[A-Za-z0-9_-]+)*\/agents\.md$/
+const DOC_PATH_RE =
+  /^\/agents-docs\/(dev|demo|prod)\/v\d+\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/agents\.md$/
 const ENDPOINT_RE = new RegExp(`^##\\s+(${HTTP_METHODS.join('|')})\\s+(.+?)\\s*$`)
+
+// Standalone docs that are not published in the patient index but should still
+// appear in the documentation navigation. Each path is environment-aware; a
+// doc that 404s for the active environment is skipped rather than failing the
+// whole page.
+const EXTRA_DOC_DEFINITIONS: Array<{
+  buildPath: (environment: DocsEnvironment) => string
+  slug: string
+  title: string
+  summary: string
+}> = [
+  {
+    buildPath: (environment) => `/agents-docs/${environment}/v3/health/grid/patient/agents.md`,
+    slug: 'health-grid-patient',
+    title: 'Health Grid / Patient',
+    summary: '/v3/health/grid/patient endpoint reference.',
+  },
+  {
+    buildPath: (environment) => `/agents-docs/${environment}/v2/user/myself/agents.md`,
+    slug: 'user-myself',
+    title: 'User / Myself',
+    summary: '/v2/user/myself endpoint reference.',
+  },
+]
+
+function buildExtraDocs(environment: DocsEnvironment): IndexedDoc[] {
+  return EXTRA_DOC_DEFINITIONS.map((definition) => {
+    const sourcePath = definition.buildPath(environment)
+    return {
+      slug: definition.slug,
+      title: definition.title,
+      file: sourcePath,
+      sourcePath,
+      status: 'live' as const,
+      summary: definition.summary,
+    }
+  })
+}
 
 function stripLeadingH1Stack(raw: string): string {
   const lines = raw.split('\n')
@@ -179,12 +218,35 @@ export async function loadDocs(
   requestedSlug?: string,
 ): Promise<DocsPayload> {
   const indexedDocs = await fetchIndex(environment)
-  const nav: DocNavItem[] = indexedDocs.map(({ sourcePath: _sourcePath, ...item }) => item)
-  const selected = requestedSlug
-    ? indexedDocs.find((item) => item.slug === requestedSlug)
-    : indexedDocs[0]
+  const extraDocs = buildExtraDocs(environment)
+  const allDocs = [...indexedDocs, ...extraDocs]
 
-  const loadedDocs = await Promise.all(indexedDocs.map((item) => fetchDocument(item, indexedDocs)))
+  // Indexed docs are required; a failure here surfaces as an error. Extra docs
+  // are optional per environment, so a fetch failure just drops that entry.
+  const loadedIndexed = await Promise.all(
+    indexedDocs.map((item) => fetchDocument(item, allDocs)),
+  )
+  const settledExtras = await Promise.allSettled(
+    extraDocs.map((item) => fetchDocument(item, allDocs)),
+  )
+
+  const availableExtras: IndexedDoc[] = []
+  const loadedExtras: LoadedDoc[] = []
+  settledExtras.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      availableExtras.push(extraDocs[index])
+      loadedExtras.push(result.value)
+    }
+  })
+
+  const availableDocs = [...indexedDocs, ...availableExtras]
+  const loadedDocs = [...loadedIndexed, ...loadedExtras]
+
+  const nav: DocNavItem[] = availableDocs.map(({ sourcePath: _sourcePath, ...item }) => item)
+  const selected = requestedSlug
+    ? availableDocs.find((item) => item.slug === requestedSlug)
+    : availableDocs[0]
+
   const endpoints: GlobalEndpoint[] = loadedDocs.flatMap((doc) =>
     doc.endpoints.map((endpoint) => ({
       ...endpoint,
