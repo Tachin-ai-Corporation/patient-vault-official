@@ -169,14 +169,20 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     if (!body.lpl) {
-      return NextResponse.json({ error: "Missing required field: lpl is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Missing required field: lpl is required", retryable: false },
+        { status: 400 },
+      )
     }
 
     let lpl: Buffer
     try {
       lpl = Buffer.from(body.lpl, "base64")
     } catch (err) {
-      return NextResponse.json({ error: "Invalid LPL format: not valid base64" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid LPL format: not valid base64", retryable: false },
+        { status: 400 },
+      )
     }
 
     // Structure: IV (12 bytes) + ciphertext + tag (16 bytes)
@@ -184,7 +190,10 @@ export async function POST(req: Request) {
     const TAG_LENGTH = 16
 
     if (lpl.length < IV_LENGTH + TAG_LENGTH) {
-      return NextResponse.json({ error: "Invalid LPL format: payload too short" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid LPL format: payload too short", retryable: false },
+        { status: 400 },
+      )
     }
 
     const iv = lpl.subarray(0, IV_LENGTH)
@@ -220,7 +229,7 @@ export async function POST(req: Request) {
 
     if (!environment || !secretKey) {
       return NextResponse.json(
-        { error: "Invalid LPL: decryption failed for both production and demo." },
+        { error: "Invalid LPL: decryption failed for both production and demo.", retryable: false },
         { status: 400 },
       )
     }
@@ -229,7 +238,10 @@ export async function POST(req: Request) {
     try {
       payload = JSON.parse(decryptedString)
     } catch (err) {
-      return NextResponse.json({ error: "Invalid payload format: decrypted data is not valid JSON" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid payload format: decrypted data is not valid JSON", retryable: false },
+        { status: 400 },
+      )
     }
 
     if (
@@ -238,7 +250,10 @@ export async function POST(req: Request) {
       !payload.required.user?.id ||
       !payload.required.oneTimeCode?.value
     ) {
-      return NextResponse.json({ error: "Invalid launch payload: missing required fields" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid launch payload: missing required fields", retryable: false },
+        { status: 400 },
+      )
     }
 
     // Generate HMAC-SHA256 signature using the ORIGINAL secret key (not derived)

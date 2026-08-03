@@ -102,11 +102,23 @@ function AnimatedLogo({ state }: { state: "idle" | "loading" | "success" }) {
   )
 }
 
+// Login confirmation with 1health can lag by a moment on the first attempt
+// (the one-time code needs to propagate on their side), so a transient failure
+// is expected rather than a real error. We quietly retry a few times before
+// ever surfacing the error screen.
+const MAX_AUTH_ATTEMPTS = 5
+const AUTH_RETRY_DELAY_MS = 1500
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 function AuthContent() {
   const [authState, setAuthState] = useState<AuthState>("idle")
   const [error, setError] = useState<AuthError | null>(null)
   const [manualLpl, setManualLpl] = useState("")
   const [environment, setEnvironment] = useState<Environment | null>(null)
+  // True once we've had to retry at least once, so we can reassure the user
+  // that the wait is normal instead of implying something went wrong.
+  const [isConfirming, setIsConfirming] = useState(false)
   const searchParams = useSearchParams()
   const { theme } = useTheme()
 
@@ -144,55 +156,72 @@ function AuthContent() {
     if (!lplValue) return
 
     setAuthState("loading")
+    setIsConfirming(false)
 
-    try {
-      const res = await fetch("/api/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lpl: lplValue }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setAuthState("error")
-        setError({
-          title: "Authentication Failed",
-          message: data.error || "Unable to authenticate. Please return to 1health and try again.",
-        })
-        return
-      }
-
-      if (!data.access_token) {
-        setAuthState("error")
-        setError({
-          title: "Invalid Response",
-          message: "No access token received. Please return to 1health and try again.",
-        })
-        return
-      }
-
-      if (data.environment === "demo" || data.environment === "prod") {
-        setEnvironment(data.environment)
-      }
-      setAuthState("success")
-      const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/"
-
-      setTimeout(() => {
-        // Hard navigation (not router.push): a full-page load discards any
-        // in-memory SWR caches from a previous session so identity, tenant, and
-        // the patient list all re-bootstrap from the freshly written cookies.
-        // This fixes stale previous-user patients and makes the onboarding gate
-        // evaluate immediately without a manual hard refresh.
-        window.location.assign(redirectRoute)
-      }, 1200) // Allow time for success animation
-    } catch {
-      setAuthState("error")
-      setError({
-        title: "Connection Error",
-        message: "Unable to connect to the authentication service. Please check your connection and try again.",
-      })
+    let lastError: AuthError = {
+      title: "Authentication Failed",
+      message: "Unable to authenticate. Please return to 1health and try again.",
     }
+
+    for (let attempt = 1; attempt <= MAX_AUTH_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch("/api/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lpl: lplValue }),
+        })
+
+        const data = await res.json()
+
+        if (res.ok && data.access_token) {
+          if (data.environment === "demo" || data.environment === "prod") {
+            setEnvironment(data.environment)
+          }
+          setIsConfirming(false)
+          setAuthState("success")
+          const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/"
+
+          setTimeout(() => {
+            // Hard navigation (not router.push): a full-page load discards any
+            // in-memory SWR caches from a previous session so identity, tenant, and
+            // the patient list all re-bootstrap from the freshly written cookies.
+            // This fixes stale previous-user patients and makes the onboarding gate
+            // evaluate immediately without a manual hard refresh.
+            window.location.assign(redirectRoute)
+          }, 1200) // Allow time for success animation
+          return
+        }
+
+        // Record why this attempt failed so we can show it if all retries fail.
+        lastError = res.ok
+          ? {
+              title: "Invalid Response",
+              message: "No access token received. Please return to 1health and try again.",
+            }
+          : {
+              title: "Authentication Failed",
+              message: data.error || "Unable to authenticate. Please return to 1health and try again.",
+            }
+
+        // Some failures are permanent (bad/expired payload) — no point retrying.
+        if (data?.retryable === false) break
+      } catch {
+        lastError = {
+          title: "Connection Error",
+          message: "Unable to connect to the authentication service. Please check your connection and try again.",
+        }
+      }
+
+      // Still have attempts left: reassure the user and wait before retrying.
+      if (attempt < MAX_AUTH_ATTEMPTS) {
+        setIsConfirming(true)
+        await delay(AUTH_RETRY_DELAY_MS)
+      }
+    }
+
+    setIsConfirming(false)
+    setAuthState("error")
+    setError(lastError)
   }
 
   function handleManualSubmit(e: React.FormEvent) {
@@ -297,9 +326,13 @@ function AuthContent() {
         <div className="mt-6 text-center">
           {authState === "loading" && (
             <>
-              <h2 className="text-xl font-semibold text-foreground">Authenticating...</h2>
+              <h2 className="text-xl font-semibold text-foreground">
+                {isConfirming ? "Confirming your login..." : "Authenticating..."}
+              </h2>
               <p className="text-muted-foreground mt-1">
-                Connecting to {environment === "demo" ? "Demo" : "Production"} environment
+                {isConfirming
+                  ? "This can take a moment. Please wait while we finish confirming your login."
+                  : `Connecting to ${environment === "demo" ? "Demo" : "Production"} environment`}
               </p>
             </>
           )}
