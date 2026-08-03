@@ -102,13 +102,18 @@ function Sidebar({
                     href={`/documentation/${entry.slug}`}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex items-center rounded-button border px-2.5 py-2 text-sm transition-colors',
+                      'flex items-center gap-2 rounded-button border px-2.5 py-2 text-sm transition-colors',
                       active
                         ? 'border-teal/40 bg-teal/10 font-medium text-foreground'
                         : 'border-transparent text-foreground/90 hover:bg-muted',
                     )}
                   >
                     <span className="truncate">{entry.title}</span>
+                    {entry.param && (
+                      <span className="ml-auto shrink-0 rounded-tag bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {`{${entry.param}}`}
+                      </span>
+                    )}
                   </Link>
                 </li>
               )

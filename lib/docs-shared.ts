@@ -10,6 +10,9 @@ export type DocNavItem = {
   file: string
   status: DocStatus
   summary: string
+  // Trailing path parameter for item endpoints (e.g. "addressId"). Undefined
+  // for collection endpoints. Used to render a compact hint in the nav.
+  param?: string
 }
 
 export type DocManifest = {
