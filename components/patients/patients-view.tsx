@@ -289,6 +289,8 @@ export function PatientsView() {
           projectName={currentProject.name}
           onSeed={handleSeedSample}
           onAdd={() => setAddOpen(true)}
+          onList={handleListGet}
+          listing={listing}
         />
       ) : (
         <>

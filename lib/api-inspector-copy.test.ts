@@ -26,7 +26,7 @@ test('cURL uses connected base URL when UI environment disagrees', () => {
   }
   const command = buildCurl(call)
 
-  assert.match(command, /https:\/\/1health\.demo\.1health\.io\/v3\/patient\?limit=1/)
+  assert.match(command, /https:\/\/1health\.demo\.1health\.io\/api\/v3\/patient\?limit=1/)
   assert.doesNotMatch(command, /api\.1health\.io/)
   assert.match(command, /Authorization: Bearer \$PV_API_KEY/)
   assert.match(command, /Content-Type: application\/json/)
@@ -41,7 +41,7 @@ test('write cURL includes method, escaped JSON body, and public v3 suffix', () =
   })
 
   assert.match(command, /^curl --request POST/)
-  assert.match(command, /\/v3\/patient'/)
+  assert.match(command, /\/api\/v3\/patient'/)
   assert.match(command, /--data/)
   assert.match(command, /D'"'"'Arcy/)
 })

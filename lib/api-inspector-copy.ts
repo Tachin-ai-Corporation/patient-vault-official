@@ -35,7 +35,7 @@ export function versionedPath(path: string): string {
 
 export function buildCurl(call: CopyableApiCall): string {
   const connectedBase = call.baseUrl.replace(/\/+$/, '')
-  const url = `${connectedBase}${versionedPath(call.path)}`
+  const url = `${connectedBase}/api${versionedPath(call.path)}`
   const lines: string[] = [
     `curl --request ${call.method} ${shellQuote(url)}`,
     '  --header "Authorization: Bearer $PV_API_KEY"',
