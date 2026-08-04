@@ -17,7 +17,7 @@ const faqs = [
   },
   {
     q: 'How does the BAA work?',
-    a: `Staging signup is instant and requires no BAA. You can start building and make authenticated staging calls right away.\n\nWhen you activate production, you click to accept Patient Vault's standard Business Associate Agreement. Patient Vault's signature is already on it, so your acceptance executes the agreement — no negotiation and no countersignature.\n\nThe full document is public at /baa, so you and your legal team can review it anytime before production activation. The terms are standard and do not change based on review.\n\nAfter activation, the executed BAA is downloadable as a PDF from your dashboard settings.`,
+    a: `Staging access is instant and requires no BAA. You can start building and make authenticated staging calls right away.\n\nWhen you activate production, you click to accept Patient Vault's standard Business Associate Agreement. Patient Vault's signature is already on it, so your acceptance executes the agreement — no negotiation and no countersignature.\n\nThe full document is public at /baa, so you and your legal team can review it anytime before production activation. The terms are standard and do not change based on review.\n\nAfter activation, the executed BAA is downloadable as a PDF from your dashboard settings.`,
   },
   {
     q: 'What does it cost?',
@@ -79,7 +79,20 @@ export function Faq() {
                 </span>
               </summary>
               <dd className="px-6 pb-6 text-[15px] leading-relaxed text-[--color-mist] whitespace-pre-line">
-                {item.a}
+                {item.q === 'How does the BAA work?' ? (
+                  <>
+                    {item.a.split('/baa')[0]}
+                    <a
+                      href="/baa"
+                      className="font-medium text-[--color-network-teal] underline underline-offset-4 hover:text-[--color-cloud] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-network-teal]"
+                    >
+                      /baa
+                    </a>
+                    {item.a.split('/baa')[1]}
+                  </>
+                ) : (
+                  item.a
+                )}
               </dd>
             </details>
           ))}
