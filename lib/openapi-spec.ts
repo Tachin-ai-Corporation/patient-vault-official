@@ -81,7 +81,7 @@ export const spec = {
     title: 'Patient Vault',
     version: '2.2',
     description:
-      'The patient database for your healthcare app. A canonical, HIPAA-compliant patient record exposed as a simple REST API, built on four primitives — Store, Attach, Find, Echo (SAFE). SOC 2 Type II; BAA executed at signup. Free for your first 1,000 patients.',
+      'The patient database for your healthcare app. A canonical, HIPAA-compliant patient record exposed as a simple REST API, built on four primitives — Store, Attach, Find, Echo (SAFE). SOC 2 Type II; BAA executed at production activation. Free for your first 1,000 patients.',
     contact: {
       name: '1health Developer Relations',
       url: 'https://dev.1health.io',

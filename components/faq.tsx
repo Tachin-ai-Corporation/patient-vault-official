@@ -13,11 +13,11 @@ const faqs = [
   },
   {
     q: 'Is this HIPAA-compliant out of the box?',
-    a: "Yes. SOC 2 Type II and HIPAA-compliant from day one. The Business Associate Agreement between you and Patient Vault is executed at signup — click to accept, no negotiation, no countersignature step. Patient Vault's signature is already on the document; your acceptance executes the agreement. Every read and write is logged to an audit trail your compliance reviewer can defend.",
+    a: "Yes. Staging access is instant and requires no BAA. When you activate production, you click to accept the standard Business Associate Agreement. Patient Vault's signature is already on it, so there is no negotiation or countersignature step. Every read and write is logged to an audit trail your compliance reviewer can defend.",
   },
   {
     q: 'How does the BAA work?',
-    a: `Patient Vault has a standard Business Associate Agreement. Same terms for every customer. The full document is public at /baa — read it before you sign up.\n\nDuring signup, you click to accept the BAA. Patient Vault's signature is already on it; your acceptance executes the agreement. No back-and-forth, no countersignature.\n\nIf your legal team wants to review the BAA, the document is public and stable — we don't change terms based on review, and we don't negotiate carve-outs. Your team can review on whatever timeline they need; the document will be the same when they're done.\n\nThe executed BAA is downloadable as a PDF from your dashboard settings. Bring it when your first covered entity customer asks to see your BAA chain.`,
+    a: `Staging signup is instant and requires no BAA. You can start building and make authenticated staging calls right away.\n\nWhen you activate production, you click to accept Patient Vault's standard Business Associate Agreement. Patient Vault's signature is already on it, so your acceptance executes the agreement — no negotiation and no countersignature.\n\nThe full document is public at /baa, so you and your legal team can review it anytime before production activation. The terms are standard and do not change based on review.\n\nAfter activation, the executed BAA is downloadable as a PDF from your dashboard settings.`,
   },
   {
     q: 'What does it cost?',
@@ -37,7 +37,7 @@ const faqs = [
   },
   {
     q: 'Is the free tier a limited version of the product?',
-    a: "No — it's the full product, not a stripped-down tier. From your first patient you get every endpoint and full API access, with the BAA executed at signup. Nothing in the API is gated. Your first 1,000 patients are free; at patient 1,001 you start paying $1 per patient per year. It's metered, not freemium — you're never on a lesser Patient Vault. Support moves from community to 1-business-day email once you're on the paid plan. Reads on existing patients keep working even if you stop paying.",
+    a: "No — it's the full product, not a stripped-down tier. From your first patient you get every endpoint and full staging API access with no BAA required. The BAA executes when you activate production. Nothing in the API is gated. Your first 1,000 patients are free; at patient 1,001 you start paying $1 per patient per year. It's metered, not freemium — you're never on a lesser Patient Vault. Support moves from community to 1-business-day email once you're on the paid plan. Reads on existing patients keep working even if you stop paying.",
   },
   {
     q: 'What kind of files can I attach?',

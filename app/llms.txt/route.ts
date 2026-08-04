@@ -29,7 +29,7 @@ export async function GET() {
   const body = `# Patient Vault
 
 > The patient database for your healthcare app. A canonical, HIPAA-compliant
-> patient record exposed as a simple API. SOC 2 Type II. BAA executed at signup.
+> patient record exposed as a simple API. SOC 2 Type II. BAA executed at production activation.
 > Free for your first 1,000 patients, then $1/patient/year.
 
 Patient Vault is the developer-facing patient database service of 1health.

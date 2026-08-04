@@ -7,7 +7,7 @@ import { RegisterLink } from '@/components/register-link'
 export const metadata: Metadata = {
   title: 'Business Associate Agreement — Patient Vault',
   description:
-    'The HIPAA Business Associate Agreement for Patient Vault, executed at signup.',
+    'The HIPAA Business Associate Agreement for Patient Vault, executed at production activation.',
   alternates: { canonical: 'https://pv.1health.io/baa' },
 }
 

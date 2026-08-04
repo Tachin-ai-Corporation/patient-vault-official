@@ -21,7 +21,7 @@ import type { Metadata } from 'next'
 
 const PAGE_TITLE = 'Patient Vault — The patient database for your healthcare app'
 const PAGE_DESCRIPTION =
-  'The patient database for your healthcare app. SOC 2 Type II, HIPAA — BAA executed at signup. Free to start.'
+  'The patient database for your healthcare app. SOC 2 Type II, HIPAA — BAA executed at production activation. Free to start.'
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -50,7 +50,7 @@ const jsonLdSoftwareApp = {
   operatingSystem: 'Web',
   url: 'https://pv.1health.io',
   description:
-    'The patient database for your healthcare app. SOC 2 Type II, HIPAA — BAA executed at signup. Free to start.',
+    'The patient database for your healthcare app. SOC 2 Type II, HIPAA — BAA executed at production activation. Free to start.',
   author: {
     '@type': 'Organization',
     name: '1health',
