@@ -22,9 +22,9 @@ Path parameters (`{id}`, `{patientId}`, etc.) become underscore-delimited folder
 
 | Route | URL |
 |---|---|
-| `/v3/patient/find` | `https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/find/agents.md` |
-| `/v3/patient/{id}` | `https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/_id_/agents.md` |
-| `/v3/patient/{patientId}/address/{addressId}` | `https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/_patientId_/address/_addressId_/agents.md` |
+| `/v3/patient/find` | [https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/find/agents.md](https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/find/agents.md) |
+| `/v3/patient/{id}` | [https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/_id_/agents.md](https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/_id_/agents.md) |
+| `/v3/patient/{patientId}/address/{addressId}` | [https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/_patientId_/address/_addressId_/agents.md](https://mcp.dev.1hdev.io/agents-docs/demo/v3/patient/_patientId_/address/_addressId_/agents.md) |
 
 **Not sure which route you need?** Start at the index and drill down:
 
@@ -38,7 +38,7 @@ It lists every route group (`/v2`, `/v3`, `/admin`, …) with links. You can als
 https://mcp.<host-env>.1hdev.io/agents-docs-index/<group>
 ```
 
-e.g. `https://mcp.dev.1hdev.io/agents-docs-index/patient` shows only patient-related routes. Each `agents.md` file also ends with a **Child Routes** table linking one level deeper, so you can navigate from a parent route down to the exact endpoint you're integrating with.
+e.g. [https://mcp.dev.1hdev.io/agents-docs-index/patient](https://mcp.dev.1hdev.io/agents-docs-index/patient) shows only patient-related routes. Each `agents.md` file also ends with a **Child Routes** table linking one level deeper, so you can navigate from a parent route down to the exact endpoint you're integrating with.
 
 ---
 
