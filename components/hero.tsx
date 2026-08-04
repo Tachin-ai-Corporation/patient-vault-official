@@ -74,10 +74,53 @@ export function Hero() {
           >
             Patient Vault
           </h1>
-          <p className="text-[18px] md:text-[20px] text-[--color-mist] leading-relaxed max-w-[760px] mb-10 text-pretty">
-            The patient database for your healthcare app. SOC 2 Type II, HIPAA — BAA executed at signup.
-            Skip the six months of plumbing. Spend that time on the product your users actually came for.
-          </p>
+          <section aria-labelledby="three-verbs-heading" className="mb-10">
+            <h2
+              id="three-verbs-heading"
+              className="mb-6 font-sans text-2xl font-semibold tracking-tight text-[--color-cloud] text-balance md:text-3xl"
+            >
+              Three verbs. The whole record.
+            </h2>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                {
+                  verb: 'STORE',
+                  description:
+                    'The patient record and everything that hangs off it — demographics, addresses, contacts, aliases, external identifiers, deceased status. A compliant PHI datastore you never have to build.',
+                  href: '/documentation/patient',
+                },
+                {
+                  verb: 'ATTACH',
+                  description:
+                    'Documents bound to the patient record — consents, results, files. Attached once, retrievable with the record.',
+                  href: '/documentation/patient-patientid-attach',
+                },
+                {
+                  verb: 'FIND',
+                  description:
+                    'Query patients by demographic criteria. Matching and retrieval without building search infrastructure over PHI.',
+                  href: '/documentation/patient-find',
+                },
+              ].map((card) => (
+                <a
+                  key={card.verb}
+                  href={card.href}
+                  className="group flex min-h-64 flex-col rounded-[10px] border border-[--color-slate]/30 bg-[--color-charcoal]/60 p-6 transition-colors hover:border-[--color-network-teal]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-network-teal]"
+                >
+                  <h3 className="font-mono text-sm font-semibold tracking-[0.16em] text-[--color-network-teal]">
+                    {card.verb}
+                  </h3>
+                  <p className="mt-5 text-base leading-relaxed text-[--color-mist] text-pretty">
+                    {card.description}
+                  </p>
+                  <span className="mt-auto pt-6 text-sm font-semibold text-[--color-cloud] transition-colors group-hover:text-[--color-network-teal]">
+                    View the endpoints →
+                  </span>
+                </a>
+              ))}
+            </div>
+          </section>
 
           <div className="flex flex-col gap-3 mb-12">
             <div className="flex flex-wrap items-center gap-4">
