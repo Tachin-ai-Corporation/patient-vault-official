@@ -300,6 +300,14 @@ export async function POST(req: Request) {
     const accessTokenMaxAge = authData.expires_in
     const refreshTokenMaxAge = authData.refresh_token_expires_in ?? accessTokenMaxAge * 2
 
+    // Persist the exact launch-connected host with the environment session.
+    // Requests, labels, API-key context, and Inspector copies must all follow
+    // this value rather than reconstructing a host from client UI state.
+    cookieStore.set(`${prefix}_base_url`, baseUrl, {
+      ...cookieOpts,
+      maxAge: refreshTokenMaxAge,
+    })
+
     cookieStore.set(`${prefix}_access_token`, authData.access_token, {
       ...cookieOpts,
       maxAge: accessTokenMaxAge,
@@ -375,6 +383,11 @@ export async function POST(req: Request) {
     cookieStore.set("active_environment", environment, {
       ...cookieOpts,
       maxAge: 60 * 60 * 24 * 30,
+    })
+    // Keep the legacy active-session cookie synchronized for older consumers.
+    cookieStore.set("onehealth_base_url", baseUrl, {
+      ...cookieOpts,
+      maxAge: refreshTokenMaxAge,
     })
 
     return NextResponse.json({ ...authData, environment })

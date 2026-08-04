@@ -22,6 +22,7 @@ export const ENVIRONMENT_CONFIG: Record<
 }
 
 export const SESSION_FIELDS = [
+  'base_url',
   'access_token',
   'refresh_token',
   'token_expires_at',
@@ -34,6 +35,18 @@ export type SessionField = (typeof SESSION_FIELDS)[number]
 
 export function sessionCookieName(env: SessionEnvironment, field: SessionField): string {
   return `${env}_${field}`
+}
+
+/** Resolve the exact URL stored by the launch flow for an environment slot. */
+export function connectedBaseUrlFor(
+  env: SessionEnvironment,
+  readCookie: (name: string) => string | null,
+): string | null {
+  const scopedBaseUrl = readCookie(sessionCookieName(env, 'base_url'))
+  const activeBaseUrl = readCookie('active_environment') === env
+    ? readCookie('onehealth_base_url')
+    : null
+  return (scopedBaseUrl ?? activeBaseUrl)?.replace(/\/+$/, '') ?? null
 }
 
 export function isSessionEnvironment(value: unknown): value is SessionEnvironment {
