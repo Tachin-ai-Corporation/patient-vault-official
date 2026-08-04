@@ -348,88 +348,13 @@ export function useApiEmitter() {
   )
 }
 
-// ============================================================================
-// Attachment (upload) helpers
-//
-// A POST to a path containing "/attach" whose JSON body carries a base64 `data`
-// field is a file upload. The base64 payload can be megabytes, so it is
-// truncated at publish time (see lib/api-inspector-bus.ts) — the stored body
-// already holds the shortened `data` and the entry records the original size in
-// `uploadOriginalSizeKb`. Rendering shows the stored body verbatim; the copy
-// helpers below swap in a placeholder (cURL) or append a size note (JSON).
-// ============================================================================
-
-// True when the call is a document upload (POST /…/attach with a `data` field).
-// Accepts the minimal shape so it works on both ApiCall and bus rows.
-export function isUploadCall(
-  call: Pick<ApiCall, 'method' | 'path' | 'requestBody'>,
-): boolean {
-  return (
-    call.method === 'POST' &&
-    call.path.includes('/attach') &&
-    !!call.requestBody &&
-    typeof call.requestBody === 'object' &&
-    typeof (call.requestBody as Record<string, unknown>).data === 'string'
-  )
-}
-
-// The literal cURL placeholder standing in for the omitted base64 payload.
-export const CURL_DATA_PLACEHOLDER = '<BASE64_FILE_CONTENT>'
-
-// Quote arbitrary text as one POSIX shell argument. Single quotes are safest
-// for JSON; embedded apostrophes are represented by closing the quote, adding
-// an escaped apostrophe, and reopening it.
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`
-}
-
-// Captured URLs include the platform's internal `/api` prefix, while Inspector
-// rows intentionally display the public versioned path beginning at `/v3`.
-export function versionedPath(path: string): string {
-  const match = path.match(/\/v3(?:\/|\?|$)/)
-  if (!match || match.index === undefined) {
-    throw new Error(`Inspector call does not contain a /v3 path: ${path}`)
-  }
-  return path.slice(match.index)
-}
-
-// Build a runnable cURL command from the exact connected origin captured with
-// the call. The UI environment is deliberately ignored: it can disagree with
-// an in-flight request, but the copied host must never do so.
-export function buildCurl(call: ApiCall): string {
-  const connectedBase = call.baseUrl.replace(/\/+$/, '').replace(/\/api$/, '')
-  const url = `${connectedBase}/api${versionedPath(call.path)}`
-  const lines: string[] = [
-    `curl --request ${call.method} ${shellQuote(url)}`,
-    '  --header "Authorization: Bearer $PV_API_KEY"',
-    "  --header 'Content-Type: application/json'",
-  ]
-
-  if (call.requestBody !== undefined && call.method !== 'GET') {
-    const body = isUploadCall(call)
-      ? {
-          ...(call.requestBody as Record<string, unknown>),
-          data: CURL_DATA_PLACEHOLDER,
-        }
-      : call.requestBody
-    lines.push(`  --data ${shellQuote(JSON.stringify(body))}`)
-  }
-  return lines.join(' \\\n')
-}
-
-// Context-specific JSON serializers. Each action copies exactly the payload
-// beside it, not a request/response envelope.
-export function buildRequestJson(call: ApiCall): string {
-  const body =
-    isUploadCall(call) && call.uploadOriginalSizeKb
-      ? {
-          ...(call.requestBody as Record<string, unknown>),
-          _note: `data truncated — full payload was ${call.uploadOriginalSizeKb} KB base64`,
-        }
-      : (call.requestBody ?? null)
-  return JSON.stringify(body, null, 2)
-}
-
-export function buildResponseJson(call: ApiCall): string {
-  return JSON.stringify(call.responseBody ?? null, null, 2)
-}
+// Copy output is kept in a pure module so its shell and JSON contracts can be
+// regression-tested independently of the React Inspector provider.
+export {
+  buildCurl,
+  buildRequestJson,
+  buildResponseJson,
+  CURL_DATA_PLACEHOLDER,
+  isUploadCall,
+  versionedPath,
+} from '@/lib/api-inspector-copy'

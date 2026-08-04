@@ -565,14 +565,14 @@ function publishInspectorCall(
 ): void {
   try {
     let path: string
-    let baseUrl: string
+    // This is the exact session connection source used to construct API URLs.
+    // It must win even if the UI environment selector is temporarily stale.
+    const baseUrl = getOneHealthBaseUrl()
     try {
       const u = new URL(url)
       path = u.pathname + u.search
-      baseUrl = u.origin
     } catch {
       path = url
-      baseUrl = getOneHealthBaseUrl()
     }
 
     let reqBody: unknown = undefined
