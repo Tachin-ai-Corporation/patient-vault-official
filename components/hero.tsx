@@ -87,19 +87,19 @@ export function Hero() {
                 {
                   verb: 'STORE',
                   description:
-                    'The patient record and everything that hangs off it — demographics, addresses, contacts, aliases, external identifiers, deceased status. A compliant PHI datastore you never have to build.',
+                    'Create and list patient demographic records, with endpoints for addresses, contacts, aliases, external identifiers, and deceased status.',
                   href: '/documentation/patient',
                 },
                 {
                   verb: 'ATTACH',
                   description:
-                    'Documents bound to the patient record — consents, results, files. Attached once, retrievable with the record.',
+                    'Upload and list file attachments linked to a patient record, including consent forms and lab results.',
                   href: '/documentation/patient-patientid-attach',
                 },
                 {
                   verb: 'FIND',
                   description:
-                    'Query patients by demographic criteria. Matching and retrieval without building search infrastructure over PHI.',
+                    'Find patients by demographic criteria using exact or fuzzy matching.',
                   href: '/documentation/patient-find',
                 },
               ].map((card) => (
