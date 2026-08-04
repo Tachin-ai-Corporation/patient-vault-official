@@ -565,11 +565,14 @@ function publishInspectorCall(
 ): void {
   try {
     let path: string
+    let baseUrl: string
     try {
       const u = new URL(url)
       path = u.pathname + u.search
+      baseUrl = u.origin
     } catch {
       path = url
+      baseUrl = getOneHealthBaseUrl()
     }
 
     let reqBody: unknown = undefined
@@ -594,6 +597,7 @@ function publishInspectorCall(
 
     recordApiCall({
       method: method.toUpperCase() as BusApiMethod,
+      baseUrl,
       path,
       requestBody: reqBody,
       status,
