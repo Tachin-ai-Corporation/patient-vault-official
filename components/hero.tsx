@@ -108,7 +108,7 @@ export function Hero() {
               </div>
               <div className="md:px-8">
                 <p className="font-sans text-lg font-bold text-[--color-cloud] mb-1">SOC 2 Type II · HIPAA</p>
-                <p className="text-[13px] text-[--color-slate]">BAA executed at signup</p>
+                <p className="text-[13px] text-[--color-slate]">BAA executed at production activation</p>
               </div>
               <div className="md:pl-8">
                 <p className="font-sans text-3xl font-bold text-[--color-cloud] mb-1">30s</p>
