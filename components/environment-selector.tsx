@@ -14,6 +14,7 @@ import { useSession, type ApiEnv } from '@/lib/session-context'
 import {
   ENVIRONMENTS,
   environmentId,
+  environmentLabel,
   type EnvironmentRecord,
   type EnvironmentStatus,
 } from '@/lib/environments'
@@ -150,7 +151,7 @@ export function EnvironmentSelector() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
-          aria-label={`Environment: ${currentEnv}. Change environment`}
+          aria-label={`Environment: ${environmentLabel(currentEnv)}. Change environment`}
           className={cn(
             'inline-flex shrink-0 items-center gap-2 rounded-button border border-border bg-background px-2.5 py-1.5',
             'text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal',

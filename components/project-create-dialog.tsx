@@ -41,7 +41,7 @@ export function ProjectCreateDialog({
       open={open}
       onClose={handleClose}
       title="Create project"
-      description="A project is an isolated vault for one integration. New projects always start in staging."
+      description="A project is an isolated vault for one integration. New projects always start in Sandbox."
       footer={
         <>
           <Button variant="ghost" onClick={handleClose}>
@@ -75,7 +75,7 @@ export function ProjectCreateDialog({
           )}
         </Field>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground text-pretty">
-          Starts as an empty staging vault — synthetic test data only, no real
+          Starts as an empty Sandbox vault — synthetic test data only, no real
           patient data until you complete the production checkpoint.
         </p>
       </form>

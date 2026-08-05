@@ -22,7 +22,7 @@ export function ProjectOnboarding() {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
           A project is an isolated vault for one integration. Create one to get
-          a staging environment with synthetic test data — no real patient data
+          a Sandbox environment with synthetic test data — no real patient data
           until you complete the production checkpoint.
         </p>
         <Button

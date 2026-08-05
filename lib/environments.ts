@@ -23,7 +23,9 @@ import type { ApiEnv } from '@/lib/session-context'
 export type EnvironmentStatus = 'none' | 'pending' | 'active' | 'suspended'
 
 export type EnvironmentRecord = {
-  /** Display name. Lowercased, this is the environment's `ApiEnv` id. */
+  /** Stable compatibility identifier used by sessions and APIs. */
+  id: ApiEnv
+  /** User-facing display name. */
   name: string
   status: EnvironmentStatus
   /**
@@ -36,21 +38,26 @@ export type EnvironmentRecord = {
 }
 
 /**
- * Staging is always `active` — every account gets a working sandbox, so it is
- * the safe default the console falls back to.
+ * Sandbox retains the stable `staging` id used by sessions and APIs. It is
+ * always active, so it remains the console's safe default environment.
  */
 export const ENVIRONMENTS: EnvironmentRecord[] = [
-  { name: 'Staging', status: 'active', keyPrefix: 'pv_sk_test_' },
-  { name: 'Production', status: 'none', keyPrefix: 'pv_sk_live_' },
+  { id: 'staging', name: 'Sandbox', status: 'active', keyPrefix: 'pv_sk_test_' },
+  { id: 'production', name: 'Production', status: 'none', keyPrefix: 'pv_sk_live_' },
 ]
 
-/** `{ name: 'Staging' }` -> `'staging'`, the id held in session state. */
+/** Returns the stable compatibility id held in session state. */
 export function environmentId(env: EnvironmentRecord): ApiEnv {
-  return env.name.toLowerCase() as ApiEnv
+  return env.id
 }
 
 export function findEnvironment(id: ApiEnv): EnvironmentRecord | undefined {
-  return ENVIRONMENTS.find((env) => environmentId(env) === id)
+  return ENVIRONMENTS.find((env) => env.id === id)
+}
+
+/** Returns the user-facing name for an internal environment id. */
+export function environmentLabel(id: ApiEnv): string {
+  return findEnvironment(id)?.name ?? (id === 'production' ? 'Production' : 'Sandbox')
 }
 
 /**

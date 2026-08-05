@@ -5,7 +5,7 @@ const cards = [
   },
   {
     label: 'FOR FUNDED STARTUPS',
-    body: 'Staging access is instant with no BAA. The BAA executes at production activation. Scale when you scale.',
+    body: 'Sandbox access is instant with no BAA. The BAA executes at production activation. Scale when you scale.',
   },
   {
     label: 'FOR INTERNATIONAL TEAMS COMING TO THE US',

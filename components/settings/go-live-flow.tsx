@@ -30,7 +30,7 @@ type Props = {
 type Phase = 'readiness' | 'steps' | 'success'
 
 const READINESS_ITEMS = [
-  'My staging integration is validated and working end to end.',
+  'My Sandbox integration is validated and working end to end.',
   'I understand production starts empty — no synthetic or test data carries over.',
 ]
 

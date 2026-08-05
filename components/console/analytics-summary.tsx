@@ -1,6 +1,7 @@
 'use client'
 
 import { Users, Contact, Activity } from 'lucide-react'
+import { environmentLabel } from '@/lib/environments'
 import { useSession } from '@/lib/session-context'
 
 function Stat({
@@ -59,7 +60,7 @@ export function AnalyticsSummary() {
       <Stat
         icon={Activity}
         label="environment"
-        value={session.currentEnv}
+        value={environmentLabel(session.currentEnv)}
         sub="active environment for this vault"
       />
     </div>

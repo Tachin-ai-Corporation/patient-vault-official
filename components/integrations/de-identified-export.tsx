@@ -17,6 +17,7 @@ import { useState } from 'react'
 import { ShieldCheck, Lock } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
 import { Button } from '@/components/ui/button'
+import { environmentLabel } from '@/lib/environments'
 import type { Patient } from '@/lib/patient-data'
 
 // A de-identified record keeps only non-identifying, coded fields.
@@ -82,7 +83,7 @@ export function DeidentifiedExport() {
 
       {/* Scope line: current project + environment */}
       <p className="mt-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-        scope: {currentProject.name} · {session.currentEnv}
+        scope: {currentProject.name} · {environmentLabel(session.currentEnv)}
       </p>
 
       {isProduction ? (
@@ -96,7 +97,7 @@ export function DeidentifiedExport() {
           </p>
           <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-muted-foreground text-pretty">
             In production, de-identification runs through a reviewed pipeline
-            before any dataset leaves the vault. Use staging to preview the
+            before any dataset leaves the vault. Use Sandbox to preview the
             de-identified shape against synthetic data.
           </p>
         </div>
@@ -119,7 +120,7 @@ export function DeidentifiedExport() {
             )}
             {patients.length === 0 && (
               <span className="text-sm text-muted-foreground">
-                Seed staging patients to preview an export.
+                Seed Sandbox patients to preview an export.
               </span>
             )}
           </div>

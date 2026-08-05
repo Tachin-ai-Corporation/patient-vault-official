@@ -30,7 +30,7 @@ export function WhatItReplaces() {
             <p className="text-[15px] leading-relaxed text-[--color-mist]">
               Skip the months of BAA negotiation. Patient Vault&apos;s BAA is one standard document, public at{' '}
               <a href="/baa" className="font-medium" style={{ color: 'var(--color-network-teal)' }}>/baa</a>,
-              executed by clickwrap when you activate production. Staging access is instant and requires no BAA. Your legal team can review it on their schedule — the terms don&apos;t change.
+              executed by clickwrap when you activate production. Sandbox access is instant and requires no BAA. Your legal team can review it on their schedule — the terms don&apos;t change.
             </p>
           </div>
         </div>

@@ -9,6 +9,7 @@ import { GoLiveFlow } from '@/components/settings/go-live-flow'
 import { ApiKeysSection } from '@/components/settings/api-keys-section'
 import { ComplianceSection } from '@/components/settings/compliance-section'
 import { DeleteProjectSection } from '@/components/settings/delete-project-section'
+import { environmentLabel } from '@/lib/environments'
 
 function EnvironmentChip({ env }: { env: 'staging' | 'production' }) {
   const isProd = env === 'production'
@@ -25,7 +26,7 @@ function EnvironmentChip({ env }: { env: 'staging' | 'production' }) {
           isProd ? 'bg-success' : 'bg-muted-foreground'
         }`}
       />
-      {env}
+      {environmentLabel(env)}
     </span>
   )
 }
@@ -274,7 +275,7 @@ export function SettingsView() {
       >
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>staging</span>
+            <span>Sandbox</span>
             <span className="text-border">→</span>
             <span className={isProd ? 'text-success' : 'text-foreground'}>
               production

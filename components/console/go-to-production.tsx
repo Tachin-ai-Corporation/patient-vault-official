@@ -57,12 +57,12 @@ export function GoToProduction() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="max-w-3xl text-sm leading-relaxed text-foreground text-pretty">
-              A production account is already associated with this staging
+              A production account is already associated with this Sandbox
               account. Sign in to production to start a separate production
               session, then use the environment menu to switch between them.
             </p>
             <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground text-pretty">
-              Staging and production data remain completely separate.
+              Sandbox and production data remain completely separate.
             </p>
           </CardContent>
           <CardFooter className="justify-end border-t">
@@ -122,7 +122,7 @@ export function GoToProduction() {
 
         <CardContent className="flex flex-col gap-5">
           <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground text-pretty">
-            Staging and production are completely separate systems, firewalled
+            Sandbox and production are completely separate systems, firewalled
             from each other because patient data is regulated. Nothing transfers
             automatically between them, including records, documents, settings,
             or other data.
