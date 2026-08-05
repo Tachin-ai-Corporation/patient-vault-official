@@ -109,8 +109,8 @@ async function platformLogout(req: Request, env: "demo" | "prod"): Promise<void>
     if (!accessToken) return
 
     const root = env === "demo"
-      ? "https://1health.demo.1health.io"
-      : "https://1health.app.1health.io"
+      ? "https://pv.demo.1health.io"
+      : "https://pv.app.1health.io"
     const incomingCookies = req.headers.get("cookie")
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
     if (incomingCookies) headers.Cookie = incomingCookies

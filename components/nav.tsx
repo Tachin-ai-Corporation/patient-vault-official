@@ -8,8 +8,8 @@ import { withAuthParams } from '@/lib/auth-branding'
 
 // Base URLs; brandingId + the active light/dark mode are appended per render so
 // the hosted 1health screen matches the mode selected in this app.
-const REGISTER_BASE = 'https://1health.demo.1health.io/register?openApp=Patient%20Vault'
-const LOGIN_BASE = 'https://1health.demo.1health.io/login?openApp=Patient%20Vault'
+const REGISTER_BASE = 'https://pv.demo.1health.io/register?openApp=Patient%20Vault'
+const LOGIN_BASE = 'https://pv.demo.1health.io/login?openApp=Patient%20Vault'
 
 const NAV_LINKS = [
   { label: 'Pricing', href: '#pricing' },

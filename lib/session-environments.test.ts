@@ -3,12 +3,24 @@ import test from 'node:test'
 
 import {
   connectedBaseUrlFor,
+  ENVIRONMENT_CONFIG,
   // @ts-expect-error Node's strip-types runner requires the runtime extension.
 } from './session-environments.ts'
 
 function cookieReader(values: Record<string, string>) {
   return (name: string) => values[name] ?? null
 }
+
+test('hosted login URLs use the Patient Vault tenant', () => {
+  assert.equal(
+    ENVIRONMENT_CONFIG.demo.loginUrl,
+    'https://pv.demo.1health.io/login?openApp=Patient%20Vault',
+  )
+  assert.equal(
+    ENVIRONMENT_CONFIG.prod.loginUrl,
+    'https://pv.app.1health.io/login?openApp=Patient%20Vault',
+  )
+})
 
 test('connected base URL comes from the launched session, not UI environment state', () => {
   const readCookie = cookieReader({

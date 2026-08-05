@@ -9,13 +9,13 @@ export const ENVIRONMENT_CONFIG: Record<
 > = {
   demo: {
     apiRoot: 'https://1health.demo.1health.io',
-    loginUrl: 'https://1health.demo.1health.io/login?openApp=Patient%20Vault',
+    loginUrl: 'https://pv.demo.1health.io/login?openApp=Patient%20Vault',
     ui: 'staging',
     label: 'Staging',
   },
   prod: {
     apiRoot: 'https://1health.app.1health.io',
-    loginUrl: 'https://1health.app.1health.io/login?openApp=Patient%20Vault',
+    loginUrl: 'https://pv.app.1health.io/login?openApp=Patient%20Vault',
     ui: 'production',
     label: 'Production',
   },
