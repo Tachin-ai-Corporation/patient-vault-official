@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Sparkles, Trash2, Search, X, List } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
@@ -46,6 +46,12 @@ export function PatientsView() {
   const [seedStatus, setSeedStatus] = useState('')
   const [seedDone, setSeedDone] = useState(false)
   const seedRecovery = useSessionRecovery()
+  const addProgressRef = useRef(
+    new WeakMap<
+      NewPatientDraft,
+      { patientId?: string; contactAdded?: boolean; addressAdded?: boolean }
+    >(),
+  )
 
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -168,10 +174,8 @@ export function PatientsView() {
     try {
       await runSeedSample()
     } catch (error) {
-      setSeedStatus(
-        error instanceof Error ? error.message : 'Seeding failed',
-      )
       if (isSessionRequiredError(error)) {
+        setSeedStatus('Authentication required to continue')
         seedRecovery.requireAuthentication(async () => {
           try {
             await runSeedSample()
@@ -190,17 +194,30 @@ export function PatientsView() {
   }
 
   async function handleAdd(draft: NewPatientDraft) {
+    const progress = addProgressRef.current.get(draft) ?? {}
+    addProgressRef.current.set(draft, progress)
+
     try {
-      const created = await createPatientRecord(draft.patient)
-      if (draft.contact) await addPatientContact(created.id, draft.contact)
-      if (draft.address) await addPatientAddress(created.id, draft.address)
+      if (!progress.patientId) {
+        const created = await createPatientRecord(draft.patient)
+        progress.patientId = created.id
+      }
+      if (draft.contact && !progress.contactAdded) {
+        await addPatientContact(progress.patientId, draft.contact)
+        progress.contactAdded = true
+      }
+      if (draft.address && !progress.addressAdded) {
+        await addPatientAddress(progress.patientId, draft.address)
+        progress.addressAdded = true
+      }
+      addProgressRef.current.delete(draft)
       showNotice(
         `Added ${draft.patient.firstName} ${draft.patient.lastName}`,
       )
     } catch (e) {
-      // Surface the real API error and re-throw so the modal stays open instead
-      // of signalling a false success. A patient/contact created before the
-      // failing step still persists, so we reload below to reflect it.
+      // Keep completed write steps attached to this draft. If authentication is
+      // restored, the modal retries only the unfinished step instead of creating
+      // a duplicate patient.
       showNotice((e as Error).message || 'Failed to add patient')
       throw e
     } finally {

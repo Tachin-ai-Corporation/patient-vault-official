@@ -197,25 +197,44 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
       description="Create a single record. Race and ethnicity are stored as the API's validated codes."
       className="max-w-2xl"
       footer={
-        <>
-          <Button
-            variant="ghost"
-            onClick={handleClose}
-            disabled={sessionRecovery.status === 'retrying'}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || sessionRecovery.status !== 'idle'}
-            className="bg-primary text-primary-foreground"
-          >
-            <Plus className="h-4 w-4" data-icon="inline-start" />
-            {submitting || sessionRecovery.status === 'retrying'
-              ? 'Adding…'
-              : 'Add patient'}
-          </Button>
-        </>
+        <div className="flex w-full flex-col gap-3">
+          {sessionRecovery.status !== 'idle' && (
+            <SessionRecoveryNotice
+              status={sessionRecovery.status}
+              message={sessionRecovery.message}
+              environment={sessionRecovery.environment}
+              onAuthenticate={sessionRecovery.openAuthentication}
+              onCheck={() => void sessionRecovery.checkForSession()}
+            />
+          )}
+          {submissionError && sessionRecovery.status === 'idle' && (
+            <div
+              role="alert"
+              className="rounded-input border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-relaxed text-destructive"
+            >
+              {submissionError}
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              variant="ghost"
+              onClick={handleClose}
+              disabled={sessionRecovery.status === 'retrying'}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || sessionRecovery.status !== 'idle'}
+              className="bg-primary text-primary-foreground"
+            >
+              <Plus className="h-4 w-4" data-icon="inline-start" />
+              {submitting || sessionRecovery.status === 'retrying'
+                ? 'Adding…'
+                : 'Add patient'}
+            </Button>
+          </div>
+        </div>
       }
     >
       <div className="flex flex-col gap-6">
