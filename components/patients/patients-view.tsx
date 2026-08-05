@@ -16,6 +16,10 @@ import { PatientsEmptyState } from '@/components/patients/patients-empty-state'
 import { AddPatientModal, type NewPatientDraft } from '@/components/patients/add-patient-modal'
 import { ClearModal } from '@/components/patients/clear-modal'
 import { SeedProgressModal } from '@/components/patients/seed-progress-modal'
+import {
+  isSessionRequiredError,
+  useSessionRecovery,
+} from '@/components/session-recovery'
 
 export function PatientsView() {
   const {
@@ -41,6 +45,7 @@ export function PatientsView() {
   const [seedCreated, setSeedCreated] = useState(0)
   const [seedStatus, setSeedStatus] = useState('')
   const [seedDone, setSeedDone] = useState(false)
+  const seedRecovery = useSessionRecovery()
 
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -143,23 +148,44 @@ export function PatientsView() {
   // Seed a hard-coded batch of synthetic patients against the real vault, with
   // a live progress modal. Each patient's contacts, addresses, and optional
   // deceased marker are created via their own v3 API calls.
-  async function handleSeedSample() {
-    setSeedOpen(true)
+  async function runSeedSample() {
     setSeedDone(false)
-    setSeedCreated(0)
     setSeedStatus('Starting…')
+    const created = await seedSampleData(SEED_PATIENTS, (p: SeedProgress) => {
+      setSeedCreated(p.index)
+      setSeedStatus(p.label)
+    })
+    setSeedCreated(created)
+    setSeedStatus(`Created ${created} patients`)
+    setSeedDone(true)
+    showNotice(`${created} patients created`)
+  }
+
+  async function handleSeedSample() {
+    seedRecovery.reset()
+    setSeedOpen(true)
+    setSeedCreated(0)
     try {
-      const created = await seedSampleData(SEED_PATIENTS, (p: SeedProgress) => {
-        setSeedCreated(p.index)
-        setSeedStatus(p.label)
-      })
-      setSeedCreated(created)
-      setSeedStatus(`Created ${created} patients`)
-      setSeedDone(true)
-      showNotice(`${created} patients created`)
-    } catch (e) {
-      setSeedStatus((e as Error).message || 'Seeding failed')
-      setSeedDone(true)
+      await runSeedSample()
+    } catch (error) {
+      setSeedStatus(
+        error instanceof Error ? error.message : 'Seeding failed',
+      )
+      if (isSessionRequiredError(error)) {
+        seedRecovery.requireAuthentication(async () => {
+          try {
+            await runSeedSample()
+          } catch (retryError) {
+            setSeedStatus(
+              retryError instanceof Error ? retryError.message : 'Seeding failed',
+            )
+            setSeedDone(true)
+            throw retryError
+          }
+        }, error)
+      } else {
+        setSeedDone(true)
+      }
     }
   }
 
@@ -376,7 +402,22 @@ export function PatientsView() {
         created={seedCreated}
         status={seedStatus}
         done={seedDone}
-        onClose={() => setSeedOpen(false)}
+        recovery={
+          seedRecovery.status === 'idle'
+            ? null
+            : {
+                status: seedRecovery.status,
+                message: seedRecovery.message,
+                environment: seedRecovery.environment,
+                onAuthenticate: seedRecovery.openAuthentication,
+                onCheck: () => void seedRecovery.checkForSession(),
+              }
+        }
+        onClose={() => {
+          if (seedRecovery.status === 'retrying') return
+          seedRecovery.reset()
+          setSeedOpen(false)
+        }}
       />
     </div>
   )

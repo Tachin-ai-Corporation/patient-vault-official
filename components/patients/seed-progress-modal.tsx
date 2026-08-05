@@ -3,6 +3,11 @@
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 import { Progress } from '@/components/ui/progress'
+import {
+  SessionRecoveryNotice,
+  type SessionRecoveryStatus,
+} from '@/components/session-recovery'
+import type { SessionEnvironment } from '@/lib/session-environments'
 
 type SeedProgressModalProps = {
   open: boolean
@@ -12,6 +17,13 @@ type SeedProgressModalProps = {
   // Current step label (e.g. "Adding contact for Maria Santos").
   status: string
   done: boolean
+  recovery: {
+    status: Exclude<SessionRecoveryStatus, 'idle'>
+    message: string | null
+    environment: SessionEnvironment
+    onAuthenticate: () => void
+    onCheck: () => void
+  } | null
   onClose: () => void
 }
 
@@ -21,6 +33,7 @@ export function SeedProgressModal({
   created,
   status,
   done,
+  recovery,
   onClose,
 }: SeedProgressModalProps) {
   const pct = total > 0 ? Math.round((created / total) * 100) : 0
@@ -53,6 +66,16 @@ export function SeedProgressModal({
         </div>
 
         <Progress value={pct} aria-label="Seeding progress" />
+
+        {recovery && (
+          <SessionRecoveryNotice
+            status={recovery.status}
+            message={recovery.message}
+            environment={recovery.environment}
+            onAuthenticate={recovery.onAuthenticate}
+            onCheck={recovery.onCheck}
+          />
+        )}
 
         <p className="text-xs leading-relaxed text-muted-foreground">
           {done
