@@ -15,7 +15,7 @@ export const ENVIRONMENT_CONFIG: Record<
   },
   prod: {
     apiRoot: 'https://1health.app.1health.io',
-    loginUrl: 'https://pv.app.1health.io/login?openApp=Patient%20Vault',
+    loginUrl: 'https://1health.app.1health.io/login?openApp=Patient%20Vault',
     ui: 'production',
     label: 'Production',
   },

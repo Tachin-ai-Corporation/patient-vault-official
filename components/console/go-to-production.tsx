@@ -14,7 +14,7 @@ import { BRANDING_ID, withAuthParams } from '@/lib/auth-branding'
 import { useSession } from '@/lib/session-context'
 
 function buildRegistrationUrl(mode: 'dark' | 'light'): string {
-  const registrationUrl = new URL('/register', 'https://pv.app.1health.io')
+  const registrationUrl = new URL('/register', 'https://1health.app.1health.io')
   const parameters = new URLSearchParams({
     openApp: 'Patient Vault',
     brandingId: BRANDING_ID,
@@ -37,7 +37,7 @@ export function GoToProduction() {
     productionAccountState === 'registered_signed_out'
   ) {
     const productionLoginUrl = withAuthParams(
-      'https://pv.app.1health.io/login?openApp=Patient%20Vault',
+      'https://1health.app.1health.io/login?openApp=Patient%20Vault',
       theme,
     )
 
