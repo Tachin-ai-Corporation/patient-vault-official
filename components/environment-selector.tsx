@@ -141,8 +141,8 @@ export function EnvironmentSelector() {
     ),
     production: withAuthParams(
       productionAccountState === 'not_registered'
-        ? 'https://pv.app.1health.io/register?openApp=Patient%20Vault'
-        : 'https://pv.app.1health.io/login?openApp=Patient%20Vault',
+        ? 'https://1health.app.1health.io/register?openApp=Patient%20Vault'
+        : 'https://1health.app.1health.io/login?openApp=Patient%20Vault',
       theme,
     ),
   }

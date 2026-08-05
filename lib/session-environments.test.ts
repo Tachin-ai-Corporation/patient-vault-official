@@ -18,7 +18,7 @@ test('hosted login URLs use the Patient Vault tenant', () => {
   )
   assert.equal(
     ENVIRONMENT_CONFIG.prod.loginUrl,
-    'https://pv.app.1health.io/login?openApp=Patient%20Vault',
+    'https://1health.app.1health.io/login?openApp=Patient%20Vault',
   )
 })
 
