@@ -46,6 +46,7 @@ import {
   ENVIRONMENT_CONFIG,
   SESSION_ENVIRONMENTS,
   SESSION_FIELDS,
+  connectedBaseUrlFor,
   isSessionEnvironment,
   sessionCookieName,
   sessionIsUnexpired,
@@ -134,6 +135,10 @@ const SESSION_COOKIES = [
   ...SESSION_ENVIRONMENTS.flatMap((env) => SESSION_FIELDS.map((field) => sessionCookieName(env, field))),
 ] as const
 
+function getConnectedBaseUrl(env: SessionEnvironment): string | null {
+  return connectedBaseUrlFor(env, getCookie)
+}
+
 export function getActiveEnvironment(): SessionEnvironment {
   const selected = getCookie("active_environment")
   if (isSessionEnvironment(selected) && hasEnvironmentSession(selected)) return selected
@@ -142,7 +147,10 @@ export function getActiveEnvironment(): SessionEnvironment {
 
 export function setActiveEnvironment(env: SessionEnvironment): boolean {
   if (!hasEnvironmentSession(env)) return false
+  const baseUrl = getConnectedBaseUrl(env)
+  if (!baseUrl) return false
   setCookie("active_environment", env, 60 * 60 * 24 * 30)
+  setCookie("onehealth_base_url", baseUrl, 60 * 60 * 24 * 30)
   return true
 }
 
@@ -160,7 +168,8 @@ export function migrateLegacySession(): void {
     : "demo"
   if (!getCookie(sessionCookieName(legacyEnv, "access_token"))) {
     for (const field of SESSION_FIELDS) {
-      const value = getCookie(field)
+      const legacyName = field === "base_url" ? "onehealth_base_url" : field
+      const value = getCookie(legacyName)
       if (value) setCookie(sessionCookieName(legacyEnv, field), value, 60 * 60 * 24 * 30)
     }
   }
@@ -312,7 +321,11 @@ export function getOneHealthBaseUrl(env: SessionEnvironment = getActiveEnvironme
   if (!hasEnvironmentSession(env)) {
     throw new Error(`No valid ${env} 1health session. User must authenticate via /auth first.`)
   }
-  return ENVIRONMENT_CONFIG[env].apiRoot
+  const baseUrl = getConnectedBaseUrl(env)
+  if (!baseUrl) {
+    throw new Error(`No connected base URL for the ${env} 1health session. User must authenticate via /auth again.`)
+  }
+  return baseUrl
 }
 
 /**
@@ -557,6 +570,7 @@ export class SessionExpiredError extends Error {
  */
 function publishInspectorCall(
   url: string,
+  baseUrl: string,
   method: string,
   requestBody: BodyInit | null | undefined,
   status: number,
@@ -594,6 +608,7 @@ function publishInspectorCall(
 
     recordApiCall({
       method: method.toUpperCase() as BusApiMethod,
+      baseUrl,
       path,
       requestBody: reqBody,
       status,
@@ -633,10 +648,15 @@ function publishInspectorCall(
  * const data = await response.json()
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  // Bind the request to its URL's environment so a UI switch during an in-flight
-  // refresh cannot attach credentials from the other slot.
-  const env: SessionEnvironment = url.startsWith(ENVIRONMENT_CONFIG.prod.apiRoot) ? "prod" :
-    url.startsWith(ENVIRONMENT_CONFIG.demo.apiRoot) ? "demo" : getActiveEnvironment()
+  // Bind credentials and Inspector metadata to the launch-connected URL, never
+  // to the environment badge or a hardcoded host. This remains stable if the UI
+  // switches environments while the request is in flight.
+  const env = SESSION_ENVIRONMENTS.find((candidate) => {
+    const connectedBaseUrl = getConnectedBaseUrl(candidate)
+    return connectedBaseUrl !== null &&
+      (url === connectedBaseUrl || url.startsWith(`${connectedBaseUrl}/`))
+  }) ?? getActiveEnvironment()
+  const connectedBaseUrl = getOneHealthBaseUrl(env)
   let accessToken = getAccessToken(env)
 
   // No access token - try to refresh first
@@ -710,7 +730,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   // outcome. A 401 here is followed by a token refresh + retry below; we record
   // the retry's result instead so the inspector shows the effective call.
   if (response.status !== 401) {
-    publishInspectorCall(url, method, options.body, response.status, responseBody, duration)
+    publishInspectorCall(url, connectedBaseUrl, method, options.body, response.status, responseBody, duration)
   }
 
   // Handle 401 Unauthorized - attempt token refresh and retry
@@ -769,7 +789,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
       duration: retryDuration,
     })
 
-    publishInspectorCall(url, method, options.body, retryResponse.status, retryBody, retryDuration)
+    publishInspectorCall(url, connectedBaseUrl, method, options.body, retryResponse.status, retryBody, retryDuration)
 
     return retryResponse
   }

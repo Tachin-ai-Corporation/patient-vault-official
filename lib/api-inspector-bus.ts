@@ -18,6 +18,9 @@ export type BusApiMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 
 export type BusApiCall = {
   method: BusApiMethod
+  // Exact connected API base URL used for this request. Copy helpers use this
+  // instead of UI environment state, which may change while a call is in flight.
+  baseUrl: string
   // Pathname (+ query) of the request, e.g. "/api/v3/patient".
   path: string
   requestBody?: unknown

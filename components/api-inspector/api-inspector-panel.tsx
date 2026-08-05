@@ -13,7 +13,8 @@ import { cn } from '@/lib/utils'
 import { useSession } from '@/lib/session-context'
 import {
   buildCurl,
-  buildJson,
+  buildRequestJson,
+  buildResponseJson,
   scopeKeyFor,
   useApiInspector,
   type ApiCall,
@@ -292,13 +293,6 @@ function InspectorHeader({
         value={selected ? buildCurl(selected) : ''}
         disabled={!selected}
       />
-      <CopyAction
-        label="Copy JSON"
-        icon={<FileJson className="h-3.5 w-3.5" />}
-        value={selected ? buildJson(selected) : ''}
-        disabled={!selected}
-      />
-
       <button
         type="button"
         onClick={onClear}
@@ -517,9 +511,16 @@ function CallDetail({ call }: { call: ApiCall | null }) {
         </div>
         {call.requestBody !== undefined && (
           <div className="mt-3">
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Body
-            </p>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                Body
+              </p>
+              <CopyAction
+                label="Copy Request JSON"
+                icon={<FileJson className="h-3.5 w-3.5" />}
+                value={buildRequestJson(call)}
+              />
+            </div>
             <pre className="overflow-x-auto rounded-input border border-border bg-muted/40 p-2.5 font-mono text-[12px] leading-relaxed text-foreground">
               {JSON.stringify(call.requestBody, null, 2)}
             </pre>
@@ -537,18 +538,25 @@ function CallDetail({ call }: { call: ApiCall | null }) {
           </p>
         ) : (
           <>
-            <div className="flex items-center gap-2 font-mono text-xs">
-              <span
-                className={cn(
-                  'font-semibold tabular-nums',
-                  statusClass(call.status ?? 0),
-                )}
-              >
-                {call.status}
-              </span>
-              <span className="text-muted-foreground">
-                · {call.latencyMs}ms · {formatTime(call.timestamp)}
-              </span>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <span
+                  className={cn(
+                    'font-semibold tabular-nums',
+                    statusClass(call.status ?? 0),
+                  )}
+                >
+                  {call.status}
+                </span>
+                <span className="text-muted-foreground">
+                  · {call.latencyMs}ms · {formatTime(call.timestamp)}
+                </span>
+              </div>
+              <CopyAction
+                label="Copy Response JSON"
+                icon={<FileJson className="h-3.5 w-3.5" />}
+                value={buildResponseJson(call)}
+              />
             </div>
             <pre className="mt-2 overflow-x-auto rounded-input border border-border bg-muted/40 p-2.5 font-mono text-[12px] leading-relaxed text-foreground">
               {JSON.stringify(call.responseBody, null, 2)}

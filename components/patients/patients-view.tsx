@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Sparkles, Trash2, Search, X, List } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
@@ -16,6 +16,10 @@ import { PatientsEmptyState } from '@/components/patients/patients-empty-state'
 import { AddPatientModal, type NewPatientDraft } from '@/components/patients/add-patient-modal'
 import { ClearModal } from '@/components/patients/clear-modal'
 import { SeedProgressModal } from '@/components/patients/seed-progress-modal'
+import {
+  isSessionRequiredError,
+  useSessionRecovery,
+} from '@/components/session-recovery'
 
 export function PatientsView() {
   const {
@@ -41,6 +45,13 @@ export function PatientsView() {
   const [seedCreated, setSeedCreated] = useState(0)
   const [seedStatus, setSeedStatus] = useState('')
   const [seedDone, setSeedDone] = useState(false)
+  const seedRecovery = useSessionRecovery()
+  const addProgressRef = useRef(
+    new WeakMap<
+      NewPatientDraft,
+      { patientId?: string; contactAdded?: boolean; addressAdded?: boolean }
+    >(),
+  )
 
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -143,38 +154,70 @@ export function PatientsView() {
   // Seed a hard-coded batch of synthetic patients against the real vault, with
   // a live progress modal. Each patient's contacts, addresses, and optional
   // deceased marker are created via their own v3 API calls.
-  async function handleSeedSample() {
-    setSeedOpen(true)
+  async function runSeedSample() {
     setSeedDone(false)
-    setSeedCreated(0)
     setSeedStatus('Starting…')
+    const created = await seedSampleData(SEED_PATIENTS, (p: SeedProgress) => {
+      setSeedCreated(p.index)
+      setSeedStatus(p.label)
+    })
+    setSeedCreated(created)
+    setSeedStatus(`Created ${created} patients`)
+    setSeedDone(true)
+    showNotice(`${created} patients created`)
+  }
+
+  async function handleSeedSample() {
+    seedRecovery.reset()
+    setSeedOpen(true)
+    setSeedCreated(0)
     try {
-      const created = await seedSampleData(SEED_PATIENTS, (p: SeedProgress) => {
-        setSeedCreated(p.index)
-        setSeedStatus(p.label)
-      })
-      setSeedCreated(created)
-      setSeedStatus(`Created ${created} patients`)
-      setSeedDone(true)
-      showNotice(`${created} patients created`)
-    } catch (e) {
-      setSeedStatus((e as Error).message || 'Seeding failed')
-      setSeedDone(true)
+      await runSeedSample()
+    } catch (error) {
+      if (isSessionRequiredError(error)) {
+        setSeedStatus('Authentication required to continue')
+        seedRecovery.requireAuthentication(async () => {
+          try {
+            await runSeedSample()
+          } catch (retryError) {
+            setSeedStatus(
+              retryError instanceof Error ? retryError.message : 'Seeding failed',
+            )
+            setSeedDone(true)
+            throw retryError
+          }
+        }, error)
+      } else {
+        setSeedDone(true)
+      }
     }
   }
 
   async function handleAdd(draft: NewPatientDraft) {
+    const progress = addProgressRef.current.get(draft) ?? {}
+    addProgressRef.current.set(draft, progress)
+
     try {
-      const created = await createPatientRecord(draft.patient)
-      if (draft.contact) await addPatientContact(created.id, draft.contact)
-      if (draft.address) await addPatientAddress(created.id, draft.address)
+      if (!progress.patientId) {
+        const created = await createPatientRecord(draft.patient)
+        progress.patientId = created.id
+      }
+      if (draft.contact && !progress.contactAdded) {
+        await addPatientContact(progress.patientId, draft.contact)
+        progress.contactAdded = true
+      }
+      if (draft.address && !progress.addressAdded) {
+        await addPatientAddress(progress.patientId, draft.address)
+        progress.addressAdded = true
+      }
+      addProgressRef.current.delete(draft)
       showNotice(
         `Added ${draft.patient.firstName} ${draft.patient.lastName}`,
       )
     } catch (e) {
-      // Surface the real API error and re-throw so the modal stays open instead
-      // of signalling a false success. A patient/contact created before the
-      // failing step still persists, so we reload below to reflect it.
+      // Keep completed write steps attached to this draft. If authentication is
+      // restored, the modal retries only the unfinished step instead of creating
+      // a duplicate patient.
       showNotice((e as Error).message || 'Failed to add patient')
       throw e
     } finally {
@@ -289,6 +332,8 @@ export function PatientsView() {
           projectName={currentProject.name}
           onSeed={handleSeedSample}
           onAdd={() => setAddOpen(true)}
+          onList={handleListGet}
+          listing={listing}
         />
       ) : (
         <>
@@ -374,7 +419,22 @@ export function PatientsView() {
         created={seedCreated}
         status={seedStatus}
         done={seedDone}
-        onClose={() => setSeedOpen(false)}
+        recovery={
+          seedRecovery.status === 'idle'
+            ? null
+            : {
+                status: seedRecovery.status,
+                message: seedRecovery.message,
+                environment: seedRecovery.environment,
+                onAuthenticate: seedRecovery.openAuthentication,
+                onCheck: () => void seedRecovery.checkForSession(),
+              }
+        }
+        onClose={() => {
+          if (seedRecovery.status === 'retrying') return
+          seedRecovery.reset()
+          setSeedOpen(false)
+        }}
       />
     </div>
   )

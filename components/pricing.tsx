@@ -7,7 +7,7 @@ const tiers = [
     period: 'forever for your first 1,000 patients',
     features: [
       'No credit card required',
-      'BAA executed at signup',
+      'BAA executed at production activation',
       'Full API access',
       'Community support',
     ],
@@ -20,7 +20,7 @@ const tiers = [
     period: 'per patient per year, starting at patient 1,001',
     features: [
       'No monthly minimums',
-      'BAA executed at signup',
+      'BAA executed at production activation',
       'Production access',
       'Reads always work, even if you stop paying',
       'Email support, 1 business day response',

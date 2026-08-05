@@ -1,18 +1,22 @@
 'use client'
 
-import { Database, Plus, Sparkles } from 'lucide-react'
+import { Database, List, Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 type PatientsEmptyStateProps = {
   projectName: string
   onSeed: () => void
   onAdd: () => void
+  onList: () => void
+  listing: boolean
 }
 
 export function PatientsEmptyState({
   projectName,
   onSeed,
   onAdd,
+  onList,
+  listing,
 }: PatientsEmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-border bg-card/50 px-6 py-16 text-center">
@@ -36,6 +40,10 @@ export function PatientsEmptyState({
         <Button variant="outline" onClick={onAdd}>
           <Plus className="h-4 w-4" data-icon="inline-start" />
           Add patient
+        </Button>
+        <Button variant="outline" onClick={onList} disabled={listing}>
+          <List className="h-4 w-4" data-icon="inline-start" />
+          {listing ? 'Listing…' : 'GET /v3/patient'}
         </Button>
       </div>
     </div>

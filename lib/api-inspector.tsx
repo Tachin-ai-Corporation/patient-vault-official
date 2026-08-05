@@ -12,7 +12,7 @@ import {
 } from 'react'
 import { useSession, type ApiEnv } from '@/lib/session-context'
 import { subscribeApiCalls } from '@/lib/api-inspector-bus'
-import { getAccessToken } from '@/lib/auth-client'
+import { getAccessToken, getOneHealthBaseUrl } from '@/lib/auth-client'
 
 // ============================================================================
 // API Inspector — a shared, in-memory record of the API calls behind every
@@ -48,6 +48,8 @@ export type ApiCall = {
   id: string
   timestamp: number
   method: ApiMethod
+  // Exact connected base URL used by the console session for this call.
+  baseUrl: string
   path: string
   requestHeaders: Record<string, string>
   requestBody?: unknown
@@ -72,6 +74,9 @@ export type LogApiCallInput = {
   method: ApiMethod
   path: string
   requestBody?: unknown
+  // Optional for illustrative calls. Live calls always provide the exact URL
+  // captured by authFetch through the Inspector bus.
+  baseUrl?: string
   projectId: string
   env: ApiEnv
   // Optional explicit auth header value (already masked). When omitted we
@@ -201,10 +206,15 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
 
   const logApiCall = useCallback((input: LogApiCallInput) => {
     const live = input.liveResponse
+    // Live calls carry the exact origin parsed from the URL sent by authFetch.
+    // Illustrative calls read the active connected session directly; neither
+    // path derives the host from the Inspector's UI environment label.
+    const baseUrl = input.baseUrl ?? getOneHealthBaseUrl()
     const entry: ApiCall = {
       id: `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
       timestamp: Date.now(),
       method: input.method,
+      baseUrl,
       path: input.path,
       requestHeaders: {
         // Mask immediately: only the first six characters enter Inspector state.
@@ -253,6 +263,7 @@ export function ApiInspectorProvider({ children }: { children: ReactNode }) {
       if (!enabledRef.current) return
       logApiCall({
         method: c.method,
+        baseUrl: c.baseUrl,
         path: c.path,
         requestBody: c.requestBody,
         uploadOriginalSizeKb: c.uploadOriginalSizeKb,
@@ -337,86 +348,13 @@ export function useApiEmitter() {
   )
 }
 
-// ============================================================================
-// Attachment (upload) helpers
-//
-// A POST to a path containing "/attach" whose JSON body carries a base64 `data`
-// field is a file upload. The base64 payload can be megabytes, so it is
-// truncated at publish time (see lib/api-inspector-bus.ts) — the stored body
-// already holds the shortened `data` and the entry records the original size in
-// `uploadOriginalSizeKb`. Rendering shows the stored body verbatim; the copy
-// helpers below swap in a placeholder (cURL) or append a size note (JSON).
-// ============================================================================
-
-// True when the call is a document upload (POST /…/attach with a `data` field).
-// Accepts the minimal shape so it works on both ApiCall and bus rows.
-export function isUploadCall(
-  call: Pick<ApiCall, 'method' | 'path' | 'requestBody'>,
-): boolean {
-  return (
-    call.method === 'POST' &&
-    call.path.includes('/attach') &&
-    !!call.requestBody &&
-    typeof call.requestBody === 'object' &&
-    typeof (call.requestBody as Record<string, unknown>).data === 'string'
-  )
-}
-
-// The literal cURL placeholder standing in for the omitted base64 payload.
-export const CURL_DATA_PLACEHOLDER = '<BASE64_FILE_CONTENT>'
-
-// Build a valid cURL string for a recorded call. This is request-only, so it is
-// accurate for both illustrative and live entries. Upload calls emit the
-// literal <BASE64_FILE_CONTENT> placeholder in place of the real payload; the
-// Authorization header keeps the existing masked-key convention.
-export function buildCurl(call: ApiCall): string {
-  const base = 'https://api.1health.io'
-  const lines: string[] = [`curl -X ${call.method} '${base}${call.path}'`]
-  for (const [k, v] of Object.entries(call.requestHeaders)) {
-    lines.push(`  -H '${k}: ${v}'`)
-  }
-  if (call.requestBody !== undefined) {
-    const body = isUploadCall(call)
-      ? {
-          ...(call.requestBody as Record<string, unknown>),
-          data: CURL_DATA_PLACEHOLDER,
-        }
-      : call.requestBody
-    lines.push(`  -d '${JSON.stringify(body)}'`)
-  }
-  return lines.join(' \\\n')
-}
-
-// Build the JSON payload copied by "Copy JSON". For illustrative calls the
-// response is null and a note explains why — we never copy a fabricated result.
-export function buildJson(call: ApiCall): string {
-  // Upload bodies were already truncated at publish time; copy that stored body
-  // and append a "_note" recording the original payload size.
-  const requestBodyForCopy =
-    isUploadCall(call) && call.uploadOriginalSizeKb
-      ? {
-          ...(call.requestBody as Record<string, unknown>),
-          _note: `data truncated — full payload was ${call.uploadOriginalSizeKb} KB base64`,
-        }
-      : (call.requestBody ?? null)
-  return JSON.stringify(
-    {
-      request: {
-        method: call.method,
-        path: call.path,
-        headers: call.requestHeaders,
-        body: requestBodyForCopy,
-      },
-      response: call.illustrative
-        ? null
-        : { status: call.status, body: call.responseBody },
-      ...(call.illustrative
-        ? {
-            note: 'Illustrative request — PV APIs are not live yet, so no response was returned.',
-          }
-        : {}),
-    },
-    null,
-    2,
-  )
-}
+// Copy output is kept in a pure module so its shell and JSON contracts can be
+// regression-tested independently of the React Inspector provider.
+export {
+  buildCurl,
+  buildRequestJson,
+  buildResponseJson,
+  CURL_DATA_PLACEHOLDER,
+  isUploadCall,
+  versionedPath,
+} from '@/lib/api-inspector-copy'

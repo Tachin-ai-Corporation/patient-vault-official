@@ -6,6 +6,11 @@ import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Field, FieldGroup, Select, TextInput } from '@/components/ui/field'
 import {
+  isSessionRequiredError,
+  SessionRecoveryNotice,
+  useSessionRecovery,
+} from '@/components/session-recovery'
+import {
   ADDRESS_USE_OPTIONS,
   CONTACT_TYPE_OPTIONS,
   COUNTRY_OPTIONS,
@@ -73,7 +78,9 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
   const [contact, setContact] = useState<ContactState | null>(null)
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submissionError, setSubmissionError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const sessionRecovery = useSessionRecovery()
 
   function reset() {
     setGiven('')
@@ -88,9 +95,12 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
     setAddress(null)
     setContact(null)
     setErrors({})
+    setSubmissionError(null)
+    sessionRecovery.reset()
   }
 
   function handleClose() {
+    if (submitting || sessionRecovery.status === 'retrying') return
     reset()
     onClose()
   }
@@ -151,11 +161,29 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
           : undefined,
     }
 
+    setSubmissionError(null)
     setSubmitting(true)
     try {
       await onAdd(draft)
       reset()
       onClose()
+    } catch (error) {
+      if (isSessionRequiredError(error)) {
+        sessionRecovery.requireAuthentication(async () => {
+          setSubmitting(true)
+          try {
+            await onAdd(draft)
+            reset()
+            onClose()
+          } finally {
+            setSubmitting(false)
+          }
+        }, error)
+      } else {
+        setSubmissionError(
+          error instanceof Error ? error.message : 'Failed to add patient.',
+        )
+      }
     } finally {
       setSubmitting(false)
     }
@@ -169,19 +197,44 @@ export function AddPatientModal({ open, onClose, onAdd }: AddPatientModalProps) 
       description="Create a single record. Race and ethnicity are stored as the API's validated codes."
       className="max-w-2xl"
       footer={
-        <>
-          <Button variant="ghost" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="bg-primary text-primary-foreground"
-          >
-            <Plus className="h-4 w-4" data-icon="inline-start" />
-            {submitting ? 'Adding…' : 'Add patient'}
-          </Button>
-        </>
+        <div className="flex w-full flex-col gap-3">
+          {sessionRecovery.status !== 'idle' && (
+            <SessionRecoveryNotice
+              status={sessionRecovery.status}
+              message={sessionRecovery.message}
+              environment={sessionRecovery.environment}
+              onAuthenticate={sessionRecovery.openAuthentication}
+              onCheck={() => void sessionRecovery.checkForSession()}
+            />
+          )}
+          {submissionError && sessionRecovery.status === 'idle' && (
+            <div
+              role="alert"
+              className="rounded-input border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-relaxed text-destructive"
+            >
+              {submissionError}
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              variant="ghost"
+              onClick={handleClose}
+              disabled={sessionRecovery.status === 'retrying'}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || sessionRecovery.status !== 'idle'}
+              className="bg-primary text-primary-foreground"
+            >
+              <Plus className="h-4 w-4" data-icon="inline-start" />
+              {submitting || sessionRecovery.status === 'retrying'
+                ? 'Adding…'
+                : 'Add patient'}
+            </Button>
+          </div>
+        </div>
       }
     >
       <div className="flex flex-col gap-6">
