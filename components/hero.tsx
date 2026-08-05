@@ -8,7 +8,7 @@ import { withAuthParams } from '@/lib/auth-branding'
 import { useTheme } from '@/components/theme-provider'
 
 // brandingId + the active light/dark mode are appended per render.
-const REGISTER_BASE = 'https://1health.demo.1health.io/register?openApp=Patient%20Vault'
+const REGISTER_BASE = 'https://pv.demo.1health.io/register?openApp=Patient%20Vault'
 
 const partnerMessages: Record<string, string> = {
   verge: 'Verge HealthTech sent you. Your $25,000 in Patient Vault credits will apply at signup.',
