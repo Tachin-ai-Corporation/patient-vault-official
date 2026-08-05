@@ -26,9 +26,9 @@ function shellQuote(value: string): string {
 }
 
 export function versionedPath(path: string): string {
-  const match = path.match(/\/v3(?:\/|\?|$)/)
+  const match = path.match(/\/v\d+(?:\/|\?|$)/)
   if (!match || match.index === undefined) {
-    throw new Error(`Inspector call does not contain a /v3 path: ${path}`)
+    throw new Error(`Inspector call does not contain a versioned API path: ${path}`)
   }
   return path.slice(match.index)
 }

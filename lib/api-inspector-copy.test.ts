@@ -63,7 +63,26 @@ test('request and response JSON copy exactly their pretty-printed payloads', () 
   assert.match(response, /\n  "id"/)
 })
 
-test('versionedPath rejects calls without a v3 route', () => {
+test('versionedPath supports platform v2 and patient v3 routes', () => {
   assert.equal(versionedPath('/api/v3/patient/123'), '/v3/patient/123')
-  assert.throws(() => versionedPath('/health'), /does not contain a \/v3 path/)
+  assert.equal(
+    versionedPath('/api/v2/tenant/sys-config?Tenant%20IDs=55911'),
+    '/v2/tenant/sys-config?Tenant%20IDs=55911',
+  )
+  assert.throws(
+    () => versionedPath('/health'),
+    /does not contain a versioned API path/,
+  )
+})
+
+test('v2 platform calls produce a copyable cURL without crashing', () => {
+  const command = buildCurl({
+    ...baseCall,
+    path: '/api/v2/tenant/sys-config?Tenant%20IDs=55911&includeAllRelations=true',
+  })
+
+  assert.match(
+    command,
+    /https:\/\/1health\.demo\.1health\.io\/api\/v2\/tenant\/sys-config\?Tenant%20IDs=55911&includeAllRelations=true/,
+  )
 })

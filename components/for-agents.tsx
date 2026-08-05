@@ -59,7 +59,7 @@ export function ForAgents() {
         <p className="font-mono text-[13px] text-[--color-slate]">
           first call:{' '}
           <span className="text-[--color-amber]">
-            curl https://mcp.dev.1hdev.io/agents-docs-index
+            curl https://mcp.dev.1hdev.io/agents-docs-index/patient
           </span>
         </p>
       </div>
