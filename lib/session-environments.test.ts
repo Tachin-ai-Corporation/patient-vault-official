@@ -6,10 +6,27 @@ import {
   ENVIRONMENT_CONFIG,
   // @ts-expect-error Node's strip-types runner requires the runtime extension.
 } from './session-environments.ts'
+import {
+  ENVIRONMENTS,
+  environmentId,
+  environmentLabel,
+  keyPrefixFor,
+  // @ts-expect-error Node's strip-types runner requires the runtime extension.
+} from './environments.ts'
 
 function cookieReader(values: Record<string, string>) {
   return (name: string) => values[name] ?? null
 }
+
+test('Sandbox display label preserves staging compatibility contracts', () => {
+  const sandbox = ENVIRONMENTS.find((environment) => environment.id === 'staging')
+  assert.ok(sandbox)
+  assert.equal(environmentId(sandbox), 'staging')
+  assert.equal(environmentLabel('staging'), 'Sandbox')
+  assert.equal(keyPrefixFor('staging'), 'pv_sk_test_')
+  assert.equal(ENVIRONMENT_CONFIG.demo.ui, 'staging')
+  assert.equal(ENVIRONMENT_CONFIG.demo.label, 'Sandbox')
+})
 
 test('hosted login URLs use the Patient Vault tenant', () => {
   assert.equal(

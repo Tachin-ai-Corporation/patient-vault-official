@@ -1,5 +1,6 @@
 'use client'
 
+import { environmentLabel } from '@/lib/environments'
 import { useSession, type ApiEnv } from '@/lib/session-context'
 import { cn } from '@/lib/utils'
 
@@ -44,7 +45,7 @@ export function EnvToggle() {
                   : 'bg-muted-foreground/50',
               )}
             />
-            {env}
+            {environmentLabel(env)}
           </button>
         )
       })}

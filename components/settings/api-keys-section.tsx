@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Field, TextInput } from '@/components/ui/field'
 import { Modal } from '@/components/ui/modal'
 import { CopyButton } from '@/components/ui/copy-button'
-import { keyPrefixFor } from '@/lib/environments'
+import { environmentLabel, keyPrefixFor } from '@/lib/environments'
 
 // ---- MOCK key model --------------------------------------------------------
 // SWAP POINT: in production, secret keys are issued server-side by the key
@@ -79,7 +79,7 @@ function EnvSwitch({ value }: { value: ApiEnv }) {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {env}
+            {environmentLabel(env)}
           </button>
         )
       })}
@@ -266,7 +266,7 @@ export function ApiKeysSection() {
         <div className="mt-5">
           <div className="mb-3 flex items-center justify-between">
             <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-              {keys.length} staging {keys.length === 1 ? 'key' : 'keys'}
+              {keys.length} Sandbox {keys.length === 1 ? 'key' : 'keys'}
             </p>
             <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" data-icon="inline-start" />
@@ -289,7 +289,7 @@ export function ApiKeysSection() {
             <div className="rounded-card border border-dashed border-border px-4 py-8 text-center">
               <KeyRound className="mx-auto h-5 w-5 text-muted-foreground" />
               <p className="mt-2 text-sm text-muted-foreground">
-                No staging keys. Create one to start making API calls.
+                No Sandbox keys. Create one to start making API calls.
               </p>
             </div>
           )}
@@ -301,7 +301,7 @@ export function ApiKeysSection() {
               downtime — deploy the new key, then revoke the previous one.
             </p>
             <p>
-              Staging keys are revealable because they only touch synthetic
+              Sandbox keys are revealable because they only touch synthetic
               data. If a key is ever leaked, rotate it immediately.
             </p>
           </div>
@@ -359,7 +359,7 @@ export function ApiKeysSection() {
       <Modal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Create staging key"
+        title="Create Sandbox key"
         description="Name the key for the service that will use it, e.g. ingestion-worker."
         footer={
           <>

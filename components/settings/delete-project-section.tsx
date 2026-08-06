@@ -103,7 +103,7 @@ export function DeleteProjectSection() {
             <span className="font-medium text-foreground">
               {currentProject.name}
             </span>{' '}
-            and all its synthetic data. Staging holds no real patient data, so
+            and all its synthetic data. Sandbox holds no real patient data, so
             this is immediate.
           </p>
           <Button
@@ -158,7 +158,7 @@ function ConfirmDeleteModal({
       open={open}
       onClose={handleClose}
       title="Delete project"
-      description={`This permanently deletes ${projectName} and all its synthetic data. Staging holds no real patient data, so this is immediate.`}
+      description={`This permanently deletes ${projectName} and all its synthetic data. Sandbox holds no real patient data, so this is immediate.`}
       footer={
         <>
           <Button variant="ghost" onClick={handleClose}>

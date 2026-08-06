@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/modal'
 import { CopyButton } from '@/components/ui/copy-button'
 import { EnvBadge } from '@/components/env-badge'
 import { useSession, type ApiEnv } from '@/lib/session-context'
-import { keyPrefixFor } from '@/lib/environments'
+import { environmentLabel, keyPrefixFor } from '@/lib/environments'
 import { useProductionStatus } from '@/lib/production-status'
 
 // ---- MOCK key model --------------------------------------------------------
@@ -52,7 +52,7 @@ function formatDate(iso: string): string {
 // one: it tells the developer the key in front of them cannot touch real
 // patients, which is what makes the sandbox safe to experiment in.
 const REACH_COPY: Record<ApiEnv, string> = {
-  staging: 'A staging key reaches synthetic records only.',
+  staging: 'A Sandbox key reaches synthetic records only.',
   production: 'A production key reaches live patient records, and every request is audited.',
 }
 
@@ -349,7 +349,7 @@ export function ConsoleApiKey() {
         }
       >
         <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-          This affects the <span className="font-medium text-foreground">{currentEnv}</span>{' '}
+          This affects the <span className="font-medium text-foreground">{environmentLabel(currentEnv)}</span>{' '}
           key only. Make sure you can update wherever the current key is used —
           the new key is displayed only once.
         </p>
@@ -378,7 +378,10 @@ export function ConsoleApiKey() {
       >
         <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
           This revokes the{' '}
-          <span className="font-medium text-foreground">{currentEnv}</span> key
+          <span className="font-medium text-foreground">
+            {environmentLabel(currentEnv)}
+          </span>{' '}
+          key
           and cannot be undone. If you only want to replace the key, rotate it
           instead.
         </p>

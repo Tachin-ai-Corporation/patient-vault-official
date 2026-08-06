@@ -10,6 +10,7 @@ import {
   FileArchive,
   Loader2,
 } from 'lucide-react'
+import { environmentLabel } from '@/lib/environments'
 import { useSession } from '@/lib/session-context'
 import { Button } from '@/components/ui/button'
 
@@ -63,8 +64,8 @@ type PacketState = 'idle' | 'generating' | 'ready'
 // informational policy text only: no deletion controls, timers, or durations.
 const RETENTION_STATEMENTS = {
   staging: [
-    'Staging vaults are for synthetic data only — no PHI is ever permitted in staging.',
-    'A staging vault with no API or console activity for 30 days is deleted, after advance notice.',
+    'Sandbox vaults are for synthetic data only — no PHI is ever permitted in Sandbox.',
+    'A Sandbox vault with no API or console activity for 30 days is deleted, after advance notice.',
   ],
   production: [
     'Production data is retained until you request deletion or terminate your account. Patient Vault does not delete production data on a timer.',
@@ -102,7 +103,7 @@ export function ComplianceSection() {
         id: 'env-separation',
         label: 'Environment separation',
         detail:
-          'Staging and production are isolated — synthetic data never carries over to production.',
+          'Sandbox and production are isolated — synthetic data never carries over to production.',
         state: 'done',
       },
       {
@@ -129,9 +130,9 @@ export function ComplianceSection() {
       },
       {
         id: 'no-phi-staging',
-        label: 'No PHI in staging',
+        label: 'No PHI in Sandbox',
         detail:
-          'Staging permits synthetic data only — never real protected health information.',
+          'Sandbox permits synthetic data only — never real protected health information.',
         state: 'done',
       },
       {
@@ -144,7 +145,7 @@ export function ComplianceSection() {
         id: 'data-retention',
         label: 'Data retention policy — Active',
         detail:
-          'A documented retention policy governs how staging and production data are kept and released.',
+          'A documented retention policy governs how Sandbox and production data are kept and released.',
         state: 'done',
       },
     ]
@@ -193,7 +194,9 @@ export function ComplianceSection() {
         of{' '}
         <span className="font-mono tabular-nums text-foreground">{total}</span>{' '}
         items complete for{' '}
-        <span className="font-mono text-accent">{currentEnv}</span>.
+        <span className="font-mono text-accent">
+          {environmentLabel(currentEnv)}
+        </span>.
       </p>
 
       {/* Checklist */}

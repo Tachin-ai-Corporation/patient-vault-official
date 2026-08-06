@@ -1,8 +1,9 @@
+import { environmentLabel } from '@/lib/environments'
 import type { ApiEnv } from '@/lib/session-context'
 import { cn } from '@/lib/utils'
 
 /**
- * Environment identity colors: amber for staging, green for production. Solid
+ * Environment identity colors: amber for Sandbox, green for Production. Solid
  * fills with fixed dark ink so contrast holds in both light and dark themes.
  *
  * Exported so any surface that needs the raw classes can stay in lockstep with
@@ -19,7 +20,7 @@ export function envBadgeClasses(env: ApiEnv): string {
  * scoped surface (e.g. the console API key card).
  *
  * Single source of truth on purpose: these badges are the primary signal for
- * "am I touching live patient data?", so staging amber and production green
+ * "am I touching live patient data?", so Sandbox amber and Production green
  * must never drift between the header and the panels below it.
  */
 export function EnvBadge({
@@ -37,7 +38,7 @@ export function EnvBadge({
         className,
       )}
     >
-      {env === 'production' ? 'PROD' : env}
+      {env === 'production' ? 'PROD' : environmentLabel(env)}
     </span>
   )
 }

@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Lock, Radio, FileDown, Archive } from 'lucide-react'
+import { environmentLabel } from '@/lib/environments'
 import { useSession } from '@/lib/session-context'
 import { Drawer } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
@@ -418,7 +419,9 @@ export function AuditDashboard() {
                   </span>
                 </DetailRow>
                 <DetailRow label="Environment">
-                  <span className="font-mono text-[13px]">{env}</span>
+                  <span className="font-mono text-[13px]">
+                    {environmentLabel(env)}
+                  </span>
                 </DetailRow>
               </div>
             </section>
