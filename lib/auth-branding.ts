@@ -43,18 +43,25 @@ export function resolveBranding(
   return { ...DEFAULT_BRANDING, ...overrides }
 }
 
-// The Patient Vault brandingId registered with 1health. It is appended to every
-// outbound hosted login/registration URL so 1health renders the Patient Vault
-// branding on its login and registration screens.
-export const BRANDING_ID = '805f90f6-2b22-4e55-8a0c-7c33df804ce5'
+// Patient Vault uses separate hosted-auth branding records for Sandbox and
+// Production. Select the branding ID from the destination host so every caller
+// gets the correct branding without having to duplicate environment logic.
+export const SANDBOX_BRANDING_ID = '805f90f6-2b22-4e55-8a0c-7c33df804ce5'
+export const PRODUCTION_BRANDING_ID = 'b82f4b43-5657-429e-a7ca-bbf7ccace278'
+
+export function brandingIdForUrl(url: string): string {
+  return new URL(url).hostname === '1health.app.1health.io'
+    ? PRODUCTION_BRANDING_ID
+    : SANDBOX_BRANDING_ID
+}
 
 /**
- * Append the Patient Vault `brandingId` to a 1health login/registration URL,
- * preserving any existing query string (e.g. `?openApp=Patient%20Vault`).
+ * Append the environment-specific Patient Vault `brandingId` to a hosted auth
+ * URL, preserving any existing query string.
  */
 export function withBrandingId(url: string): string {
   const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}brandingId=${BRANDING_ID}`
+  return `${url}${separator}brandingId=${brandingIdForUrl(url)}`
 }
 
 /** Light/dark selection forwarded to the hosted 1health auth screens. */

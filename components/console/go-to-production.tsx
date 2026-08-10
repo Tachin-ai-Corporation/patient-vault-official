@@ -10,14 +10,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useTheme } from '@/components/theme-provider'
-import { BRANDING_ID, withAuthParams } from '@/lib/auth-branding'
+import { PRODUCTION_BRANDING_ID, withAuthParams } from '@/lib/auth-branding'
 import { useSession } from '@/lib/session-context'
 
 function buildRegistrationUrl(mode: 'dark' | 'light'): string {
   const registrationUrl = new URL('/register', 'https://1health.app.1health.io')
   const parameters = new URLSearchParams({
     openApp: 'Patient Vault',
-    brandingId: BRANDING_ID,
+    brandingId: PRODUCTION_BRANDING_ID,
     mode,
     rf: 'developer',
   })
