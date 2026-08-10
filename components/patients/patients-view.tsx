@@ -24,6 +24,7 @@ import {
 export function PatientsView() {
   const {
     currentProject,
+    currentEnv,
     patients,
     patientsLoading,
     createPatientRecord,
@@ -288,10 +289,12 @@ export function PatientsView() {
                 <Plus className="h-4 w-4" data-icon="inline-start" />
                 Add patient
               </Button>
-              <Button variant="outline" onClick={handleSeedSample}>
-                <Sparkles className="h-4 w-4" data-icon="inline-start" />
-                Seed sample data
-              </Button>
+              {currentEnv !== 'production' && (
+                <Button variant="outline" onClick={handleSeedSample}>
+                  <Sparkles className="h-4 w-4" data-icon="inline-start" />
+                  Seed sample data
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={handleListGet}
@@ -330,6 +333,7 @@ export function PatientsView() {
       ) : count === 0 ? (
         <PatientsEmptyState
           projectName={currentProject.name}
+          allowSeed={currentEnv !== 'production'}
           onSeed={handleSeedSample}
           onAdd={() => setAddOpen(true)}
           onList={handleListGet}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 
 type PatientsEmptyStateProps = {
   projectName: string
+  allowSeed: boolean
   onSeed: () => void
   onAdd: () => void
   onList: () => void
@@ -13,6 +14,7 @@ type PatientsEmptyStateProps = {
 
 export function PatientsEmptyState({
   projectName,
+  allowSeed,
   onSeed,
   onAdd,
   onList,
@@ -33,10 +35,12 @@ export function PatientsEmptyState({
         add one yourself.
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-        <Button onClick={onSeed} className="bg-primary text-primary-foreground">
-          <Sparkles className="h-4 w-4" data-icon="inline-start" />
-          Seed sample data
-        </Button>
+        {allowSeed && (
+          <Button onClick={onSeed} className="bg-primary text-primary-foreground">
+            <Sparkles className="h-4 w-4" data-icon="inline-start" />
+            Seed sample data
+          </Button>
+        )}
         <Button variant="outline" onClick={onAdd}>
           <Plus className="h-4 w-4" data-icon="inline-start" />
           Add patient
