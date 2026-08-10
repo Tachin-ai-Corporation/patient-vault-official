@@ -19,6 +19,7 @@ function buildRegistrationUrl(mode: 'dark' | 'light'): string {
     openApp: 'Patient Vault',
     brandingId: BRANDING_ID,
     mode,
+    rf: 'developer',
   })
   registrationUrl.search = parameters.toString()
   return registrationUrl.toString()

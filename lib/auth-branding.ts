@@ -74,12 +74,14 @@ export function currentAuthMode(): AuthMode {
 }
 
 /**
- * Build an outbound 1health login/registration URL carrying both the Patient
- * Vault `brandingId` and the current `mode`, so the hosted screen renders in the
- * same light/dark mode the user selected here.
+ * Build an outbound 1health login/registration URL carrying the Patient Vault
+ * `brandingId` and current `mode`, so the hosted screen matches the selected
+ * theme. Registration URLs additionally identify the developer acquisition
+ * flow with `rf=developer`; login URLs remain unchanged.
  *
- * `withBrandingId` always introduces a `?`, so appending `&mode=` is safe.
+ * `withBrandingId` always introduces a `?`, so appending parameters is safe.
  */
 export function withAuthParams(url: string, mode: AuthMode): string {
-  return `${withBrandingId(url)}&mode=${mode}`
+  const authUrl = `${withBrandingId(url)}&mode=${mode}`
+  return url.includes('/register') ? `${authUrl}&rf=developer` : authUrl
 }

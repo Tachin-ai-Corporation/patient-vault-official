@@ -7,6 +7,7 @@ import { TopNav } from '@/components/top-nav'
 import { OnboardingOverlay } from '@/components/onboarding/onboarding-overlay'
 import { ApiInspectorPanel } from '@/components/api-inspector/api-inspector-panel'
 import { ProductionRail } from '@/components/production-rail'
+import { BaaAcceptanceGate } from '@/components/baa-acceptance-gate'
 import { useSession } from '@/lib/session-context'
 
 // Developers launched on the shared bootstrap tenant get their own org
@@ -94,17 +95,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Self-gating: renders only while Production is the active environment. */}
-      <ProductionRail />
-      <div className="flex min-h-screen flex-col">
-        <TopBar />
-        <TopNav />
-        <main className="flex-1 px-6 py-8">{children}</main>
+    <BaaAcceptanceGate>
+      <div className="min-h-screen bg-background">
+        {/* Self-gating: renders only while Production is the active environment. */}
+        <ProductionRail />
+        <div className="flex min-h-screen flex-col">
+          <TopBar />
+          <TopNav />
+          <main className="flex-1 px-6 py-8">{children}</main>
+        </div>
+        {/* Floating API Inspector — fixed-position, only renders once the
+            authenticated console is shown (not on bare/onboarding screens). */}
+        <ApiInspectorPanel />
       </div>
-      {/* Floating API Inspector — fixed-position, only renders once the
-          authenticated console is shown (not on bare/onboarding screens). */}
-      <ApiInspectorPanel />
-    </div>
+    </BaaAcceptanceGate>
   )
 }
