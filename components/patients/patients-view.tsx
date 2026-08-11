@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Sparkles, Trash2, Search, X, List } from 'lucide-react'
+import { Plus, Sparkles, Trash2, Search, X, List, GitMerge } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
 import { patientFullName, type Patient } from '@/lib/patient-data'
 import {
@@ -22,6 +22,7 @@ import { PatientsEmptyState } from '@/components/patients/patients-empty-state'
 import { AddPatientModal, type NewPatientDraft } from '@/components/patients/add-patient-modal'
 import { ClearModal } from '@/components/patients/clear-modal'
 import { SeedProgressModal } from '@/components/patients/seed-progress-modal'
+import { PatientMergeDialog } from '@/components/patients/patient-merge-dialog'
 import {
   isSessionRequiredError,
   useSessionRecovery,
@@ -70,6 +71,8 @@ export function PatientsView() {
   const [candidates, setCandidates] = useState<FindCandidate[] | null>(null)
   const [quickFilter, setQuickFilter] = useState('')
   const [finding, setFinding] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [selectedMergeIds, setSelectedMergeIds] = useState<Set<string>>(new Set())
 
   const count = patients.length
   const canFind = hasPatientFindCriteria(criteria)
@@ -116,6 +119,7 @@ export function PatientsView() {
       const ranked = await findPatients(criteria)
       setCandidates(ranked)
       setQuickFilter('')
+      setSelectedMergeIds(new Set())
       showNotice(
         `Found ${ranked.length} match${ranked.length === 1 ? '' : 'es'} via ${findPath}`,
       )
@@ -126,10 +130,25 @@ export function PatientsView() {
     }
   }
 
+  const selectedMergePatients = useMemo(
+    () => patients.filter((patient) => selectedMergeIds.has(patient.id)),
+    [patients, selectedMergeIds],
+  )
+
+  function toggleMergePatient(patient: Patient) {
+    setSelectedMergeIds((current) => {
+      const next = new Set(current)
+      if (next.has(patient.id)) next.delete(patient.id)
+      else if (next.size < 3) next.add(patient.id)
+      return next
+    })
+  }
+
   function clearFind() {
     setCriteria(EMPTY_PATIENT_FIND)
     setCandidates(null)
     setQuickFilter('')
+    setSelectedMergeIds(new Set())
   }
 
   function showNotice(text: string) {
@@ -391,9 +410,17 @@ export function PatientsView() {
           </form>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="font-mono text-xs text-muted-foreground">
-              {candidates ? `${visible.length} of ${candidates.length} server candidates` : `${visible.length} loaded patients`}
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="font-mono text-xs text-muted-foreground">
+                {candidates ? `${visible.length} of ${candidates.length} server candidates` : `${visible.length} loaded patients`}
+              </p>
+              {candidates && (
+                <Button type="button" variant="outline" disabled={selectedMergeIds.size < 2} onClick={() => setMergeOpen(true)} title={selectedMergeIds.size < 2 ? 'Select two or three candidates to compare.' : undefined}>
+                  <GitMerge className="h-4 w-4" data-icon="inline-start" />
+                  Merge… ({selectedMergeIds.size})
+                </Button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -415,6 +442,9 @@ export function PatientsView() {
             onSelect={(p) => router.push(`/patients/${p.id}`)}
             isVisible={isVisible}
             findMeta={findMeta}
+            selectedIds={selectedMergeIds}
+            onToggleSelected={toggleMergePatient}
+            selectionLimit={3}
           />
         </>
       )}
@@ -431,6 +461,11 @@ export function PatientsView() {
         onConfirm={handleClear}
         projectName={currentProject.name}
         count={count}
+      />
+      <PatientMergeDialog
+        open={mergeOpen}
+        patients={selectedMergePatients}
+        onClose={() => setMergeOpen(false)}
       />
       <SeedProgressModal
         open={seedOpen}

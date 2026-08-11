@@ -13,6 +13,9 @@ type PatientsGridProps = {
   onSelect: (patient: Patient) => void
   loading?: boolean
   findMeta?: ReadonlyMap<string, PatientFindMeta>
+  selectedIds?: ReadonlySet<string>
+  onToggleSelected?: (patient: Patient) => void
+  selectionLimit?: number
   // Returns whether a column key should be rendered. Defaults to all-visible.
   isVisible?: (key: string) => boolean
 }
@@ -131,12 +134,19 @@ export function PatientsGrid({
   onSelect,
   loading,
   findMeta,
+  selectedIds,
+  onToggleSelected,
+  selectionLimit = 3,
   isVisible,
 }: PatientsGridProps) {
   const visibleColumns = BASE_GRID_COLUMNS.filter(
     (c) => !isVisible || isVisible(c.key),
   )
-  const columnCount = visibleColumns.length + (findMeta ? 2 : 0)
+  const selection = findMeta && selectedIds && onToggleSelected
+    ? { selectedIds, onToggleSelected }
+    : null
+  const selectable = selection !== null
+  const columnCount = visibleColumns.length + (findMeta ? 2 : 0) + (selectable ? 1 : 0)
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card">
@@ -144,6 +154,7 @@ export function PatientsGrid({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-xs">
+              {selectable && <HeaderCell><span className="sr-only">Select for merge</span></HeaderCell>}
               {visibleColumns.map((c) => (
                 <HeaderCell
                   key={c.key}
@@ -186,6 +197,25 @@ export function PatientsGrid({
                     }}
                     className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-muted/50 focus-visible:bg-muted/50"
                   >
+                    {selectable && (() => {
+                      const checked = selection.selectedIds.has(p.id)
+                      const disabled = !checked && selection.selectedIds.size >= selectionLimit
+                      const limitMessage = `You can compare up to ${selectionLimit} patients.`
+                      return (
+                        <td className="h-12 px-4" onClick={(event) => event.stopPropagation()}>
+                          <span className="inline-flex" title={disabled ? limitMessage : undefined}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={disabled}
+                              aria-label={disabled ? `${patientFullName(p)} unavailable. ${limitMessage}` : `Select ${patientFullName(p)} for merge review`}
+                              onChange={() => selection.onToggleSelected(p)}
+                              className="h-4 w-4 rounded border-border accent-primary disabled:cursor-not-allowed"
+                            />
+                          </span>
+                        </td>
+                      )
+                    })()}
                     {visibleColumns.map((c) => (
                       <td key={c.key} className="h-12 px-4">
                         {renderCell(c, p)}
