@@ -1,4 +1,5 @@
 export type SessionEnvironment = 'demo' | 'prod'
+export type SessionAdmission = SessionEnvironment | 'resolving' | null
 export type UiEnvironment = 'staging' | 'production'
 
 export const SESSION_ENVIRONMENTS: readonly SessionEnvironment[] = ['demo', 'prod']
@@ -77,6 +78,27 @@ export function connectedSessionEnvironment(
   }
 
   return null
+}
+
+/**
+ * Admit a valid legacy token while its companion launch base URL is becoming
+ * visible, but never infer an environment from the token alone.
+ */
+export function sessionAdmission(
+  readCookie: (name: string) => string | null,
+  skewSeconds = 30,
+): SessionAdmission {
+  const connected = connectedSessionEnvironment(readCookie)
+  if (connected && sessionIsUnexpired(connected, readCookie, skewSeconds)) return connected
+
+  const legacyToken = readCookie('access_token')
+  if (!legacyToken) return null
+  const rawExpiry = readCookie('token_expires_at')
+  if (!rawExpiry) return 'resolving'
+  const expiry = Number.parseInt(rawExpiry, 10)
+  return Number.isFinite(expiry) && Math.floor(Date.now() / 1000) < expiry - skewSeconds
+    ? 'resolving'
+    : null
 }
 
 export function isSessionEnvironment(value: unknown): value is SessionEnvironment {

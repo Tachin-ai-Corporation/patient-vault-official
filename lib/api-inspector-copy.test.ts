@@ -32,6 +32,13 @@ test('cURL uses connected base URL when UI environment disagrees', () => {
   assert.match(command, /Content-Type: application\/json/)
 })
 
+test('cURL waits for a resolved connected base URL', () => {
+  assert.throws(
+    () => buildCurl({ ...baseCall, baseUrl: '' }),
+    /until the connected 1health base URL is resolved/,
+  )
+})
+
 test('write cURL includes method, escaped JSON body, and public v3 suffix', () => {
   const command = buildCurl({
     ...baseCall,

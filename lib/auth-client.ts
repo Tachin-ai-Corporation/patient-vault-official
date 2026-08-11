@@ -48,7 +48,7 @@ import {
   SESSION_FIELDS,
   connectedBaseUrlFor,
   connectedSessionEnvironment,
-  isSessionEnvironment,
+  sessionEnvironmentFromBaseUrl,
   sessionCookieName,
   sessionIsUnexpired,
   type SessionEnvironment,
@@ -141,9 +141,9 @@ function getConnectedBaseUrl(env: SessionEnvironment): string | null {
 }
 
 export function getActiveEnvironment(): SessionEnvironment {
-  const selected = getCookie("active_environment")
-  if (isSessionEnvironment(selected) && hasEnvironmentSession(selected)) return selected
-  return SESSION_ENVIRONMENTS.find(hasEnvironmentSession) ?? "demo"
+  const connected = getConnectedSessionEnvironment()
+  if (connected) return connected
+  throw new Error("The 1health environment is still resolving because no connected base URL is available.")
 }
 
 export function getConnectedSessionEnvironment(): SessionEnvironment | null {
@@ -163,14 +163,17 @@ export function hasEnvironmentSession(env: SessionEnvironment): boolean {
   return sessionIsUnexpired(env, getCookie)
 }
 
-/** Migrate the old single cookie set once, without replacing an existing slot. */
-export function migrateLegacySession(): void {
+/**
+ * Migrate the old single cookie set once its launch base URL resolves the real
+ * environment. A token without that URL remains in the resolving state.
+ */
+export function migrateLegacySession(): SessionEnvironment | null {
   const legacyToken = getCookie("access_token")
-  if (!legacyToken) return
-  const legacyEnv = getCookie("onehealth_environment") === "prod" ||
-    getCookie("onehealth_base_url")?.includes("1health.app.1health.io")
-    ? "prod"
-    : "demo"
+  if (!legacyToken) return getConnectedSessionEnvironment()
+
+  const legacyEnv = sessionEnvironmentFromBaseUrl(getCookie("onehealth_base_url"))
+  if (!legacyEnv) return null
+
   if (!getCookie(sessionCookieName(legacyEnv, "access_token"))) {
     for (const field of SESSION_FIELDS) {
       const legacyName = field === "base_url" ? "onehealth_base_url" : field
@@ -180,6 +183,7 @@ export function migrateLegacySession(): void {
   }
   setCookie("active_environment", legacyEnv, 60 * 60 * 24 * 30)
   for (const name of LEGACY_SESSION_COOKIES) deleteCookie(name)
+  return legacyEnv
 }
 
 /** True if the selected slot is missing or near expiry. */

@@ -35,6 +35,9 @@ export function versionedPath(path: string): string {
 
 export function buildCurl(call: CopyableApiCall): string {
   const connectedBase = call.baseUrl.replace(/\/+$/, '')
+  if (!connectedBase) {
+    throw new Error('Cannot build cURL until the connected 1health base URL is resolved.')
+  }
   const url = `${connectedBase}/api${versionedPath(call.path)}`
   const lines: string[] = [
     `curl --request ${call.method} ${shellQuote(url)}`,

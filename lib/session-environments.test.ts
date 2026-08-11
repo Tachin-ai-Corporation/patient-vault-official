@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   connectedBaseUrlFor,
   ENVIRONMENT_CONFIG,
+  sessionAdmission,
   // @ts-expect-error Node's strip-types runner requires the runtime extension.
 } from './session-environments.ts'
 import {
@@ -68,4 +69,36 @@ test('legacy onehealth_base_url is used only for its active session', () => {
     'https://launch-connected.production.example.test',
   )
   assert.equal(connectedBaseUrlFor('demo', readCookie), null)
+})
+
+test('legacy token without a base URL is admitted only as resolving', () => {
+  assert.equal(sessionAdmission(cookieReader({ access_token: 'legacy-token' })), 'resolving')
+})
+
+test('legacy token resolves only from an actual recognized base URL', () => {
+  assert.equal(
+    sessionAdmission(cookieReader({
+      access_token: 'legacy-token',
+      onehealth_base_url: 'https://1health.app.1health.io',
+      prod_access_token: 'legacy-token',
+    })),
+    'prod',
+  )
+  assert.equal(
+    sessionAdmission(cookieReader({
+      access_token: 'legacy-token',
+      onehealth_environment: 'demo',
+    })),
+    'resolving',
+  )
+})
+
+test('expired legacy token is not admitted for normalization', () => {
+  assert.equal(
+    sessionAdmission(cookieReader({
+      access_token: 'legacy-token',
+      token_expires_at: String(Math.floor(Date.now() / 1000) - 60),
+    })),
+    null,
+  )
 })
