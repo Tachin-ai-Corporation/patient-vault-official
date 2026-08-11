@@ -11,6 +11,7 @@
 "use client"
 
 import { apiRequest, apiFetch } from "@/lib/api/client"
+import { buildPatientFindPath, type PatientFindCriteria } from "@/lib/patient-find"
 import {
   type Patient,
   type Coded,
@@ -440,28 +441,13 @@ export async function fetchPatientGrid(q: GridQuery = {}): Promise<Page<PatientG
   )
 }
 
-export async function findPatients(criteria: {
-  firstName?: string
-  lastName?: string
-  dob?: string
-  sexAtBirth?: string
-  exact?: boolean
-}): Promise<FindCandidate[]> {
-  const params = new URLSearchParams()
-  // Params match the live /v3/patient/find swagger exactly:
-  // firstName, lastName, dob, sexAtBirth, exact (all optional). There is NO
-  // `purpose` param on this endpoint, and `sexAtBirth` is camelCase.
-  if (criteria.firstName) params.set("firstName", criteria.firstName)
-  if (criteria.lastName) params.set("lastName", criteria.lastName)
-  if (criteria.dob) params.set("dob", criteria.dob)
-  if (criteria.sexAtBirth) params.set("sexAtBirth", criteria.sexAtBirth)
-  if (criteria.exact) params.set("exact", "true")
-  // Docs: PatientFindResponseDTO -> { patients: [{ id, matchedOn, score }] }.
+export async function findPatients(criteria: PatientFindCriteria): Promise<FindCandidate[]> {
+  // The request, UI preview, and Inspector all share this exact builder.
   const data = await request<{ patients: FindCandidate[] }>(
-    `/v3/patient/find?${params.toString()}`,
+    buildPatientFindPath(criteria),
     { method: "GET" },
   )
-  return data?.patients ?? []
+  return (data?.patients ?? []).toSorted((a, b) => b.score - a.score)
 }
 
 /**
