@@ -28,7 +28,7 @@ import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { fetchMyself, type UserInfo } from '@/lib/api/user'
 import {
-  getActiveEnvironment,
+  getConnectedSessionEnvironment,
   hasEnvironmentSession,
   migrateLegacySession,
   setActiveEnvironment as persistActiveEnvironment,
@@ -198,13 +198,20 @@ async function tenantFetcher(tenantId: number): Promise<TenantConfig | null> {
   return result.success && result.data ? result.data : null
 }
 
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const [activeEnvironment, setActiveEnvironmentState] = useState<SessionEnvironment>('demo')
+export function SessionProvider({
+  children,
+  initialEnvironment,
+}: {
+  children: ReactNode
+  initialEnvironment: SessionEnvironment
+}) {
+  const [activeEnvironment, setActiveEnvironmentState] = useState<SessionEnvironment>(initialEnvironment)
   const [sessionVersion, setSessionVersion] = useState(0)
 
   useEffect(() => {
     migrateLegacySession()
-    setActiveEnvironmentState(getActiveEnvironment())
+    const connectedEnvironment = getConnectedSessionEnvironment()
+    if (connectedEnvironment) setActiveEnvironmentState(connectedEnvironment)
     setSessionVersion((version) => version + 1)
   }, [])
 

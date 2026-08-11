@@ -8,6 +8,7 @@ import {
 } from '@/components/docs/docs-view'
 import { SessionProvider } from '@/lib/session-context'
 import type { PublicDocsPayload } from '@/lib/public-docs'
+import type { SessionEnvironment } from '@/lib/session-environments'
 
 function DocumentationFrame({ children }: { children: React.ReactNode }) {
   return (
@@ -34,10 +35,16 @@ export function PublicDocumentationShell({
   )
 }
 
-export function AuthenticatedDocumentationShell({ slug }: { slug?: string }) {
+export function AuthenticatedDocumentationShell({
+  initialEnvironment,
+  slug,
+}: {
+  initialEnvironment: SessionEnvironment
+  slug?: string
+}) {
   return (
     <Suspense fallback={null}>
-      <SessionProvider>
+      <SessionProvider initialEnvironment={initialEnvironment}>
         <DocumentationFrame>
           <SharedHeader authenticated />
           <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6">
