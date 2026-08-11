@@ -179,7 +179,7 @@ function AuthContent() {
           }
           setIsConfirming(false)
           setAuthState("success")
-          const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/"
+          const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/console"
 
           setTimeout(() => {
             // Hard navigation (not router.push): a full-page load discards any
