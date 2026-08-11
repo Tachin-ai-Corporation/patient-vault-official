@@ -1,3 +1,4 @@
+import { withResolvedDocGroup } from '@/lib/docs-groups'
 import {
   HTTP_METHODS,
   slugifyHeading,
@@ -266,7 +267,9 @@ export async function loadDocs(
   const availableDocs = [...indexedDocs, ...availableExtras]
   const loadedDocs = [...loadedIndexed, ...loadedExtras]
 
-  const nav: DocNavItem[] = availableDocs.map(({ sourcePath: _sourcePath, ...item }) => item)
+  const nav: DocNavItem[] = availableDocs.map(({ sourcePath: _sourcePath, ...item }) =>
+    withResolvedDocGroup(item),
+  )
   const selected = requestedSlug
     ? availableDocs.find((item) => item.slug === requestedSlug)
     : availableDocs[0]

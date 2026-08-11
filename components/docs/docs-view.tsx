@@ -13,6 +13,7 @@ import type {
   GlobalEndpoint,
   LoadedDoc,
 } from '@/lib/docs-shared'
+import { groupDocNav, landingHrefForGroup, resolveDocGroup } from '@/lib/docs-groups'
 import { cn } from '@/lib/utils'
 
 type DocsResponse = {
@@ -73,9 +74,8 @@ function Sidebar({
                 No endpoints match “{query}”.
               </li>
             )}
-            {(trimmed ? results : nav).map((entry) => {
-              if ('method' in entry) {
-                return (
+            {trimmed
+              ? results.map((entry) => (
                   <li key={`${entry.slug}-${entry.id}`}>
                     <Link
                       href={`/documentation/${entry.slug}#${entry.id}`}
@@ -92,32 +92,40 @@ function Sidebar({
                       </span>
                     </Link>
                   </li>
-                )
-              }
-
-              const active = entry.slug === currentSlug
-              return (
-                <li key={entry.slug}>
-                  <Link
-                    href={`/documentation/${entry.slug}`}
-                    aria-current={active ? 'page' : undefined}
-                    className={cn(
-                      'flex items-center gap-2 rounded-button border px-2.5 py-2 text-sm transition-colors',
-                      active
-                        ? 'border-teal/40 bg-teal/10 font-medium text-foreground'
-                        : 'border-transparent text-foreground/90 hover:bg-muted',
-                    )}
-                  >
-                    <span className="truncate">{entry.title}</span>
-                    {entry.param && (
-                      <span className="ml-auto shrink-0 rounded-tag bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {`{${entry.param}}`}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              )
-            })}
+                ))
+              : groupDocNav(nav).map(({ group, items }) => (
+                  <li key={group} id={`docs-group-${group.toLowerCase()}`} className="scroll-mt-28">
+                    <p className="px-2 pb-1 pt-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-0">
+                      {group}
+                    </p>
+                    <ul className="flex flex-col gap-0.5">
+                      {items.map((entry) => {
+                        const active = entry.slug === currentSlug
+                        return (
+                          <li key={entry.slug}>
+                            <Link
+                              href={`/documentation/${entry.slug}`}
+                              aria-current={active ? 'page' : undefined}
+                              className={cn(
+                                'flex items-center gap-2 rounded-button border px-2.5 py-2 text-sm transition-colors',
+                                active
+                                  ? 'border-teal/40 bg-teal/10 font-medium text-foreground'
+                                  : 'border-transparent text-foreground/90 hover:bg-muted',
+                              )}
+                            >
+                              <span className="truncate">{entry.title}</span>
+                              {entry.param && (
+                                <span className="ml-auto shrink-0 rounded-tag bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                  {`{${entry.param}}`}
+                                </span>
+                              )}
+                            </Link>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </li>
+                ))}
           </ul>
         </nav>
       </div>
@@ -225,7 +233,11 @@ function DocsContent({
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{data.doc.summary}</p>
             <div className="mt-6">
-              <DocMarkdown body={data.doc.body} />
+              <DocMarkdown
+                body={data.doc.body}
+                group={resolveDocGroup(data.doc)}
+                groupHref={landingHrefForGroup(resolveDocGroup(data.doc))}
+              />
             </div>
           </main>
 

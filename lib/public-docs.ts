@@ -2,6 +2,7 @@ import 'server-only'
 
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { withResolvedDocGroup } from '@/lib/docs-groups'
 import {
   HTTP_METHODS,
   slugifyHeading,
@@ -48,7 +49,7 @@ export async function loadPublicDocs(requestedSlug?: string): Promise<PublicDocs
         throw new Error('Documentation path is invalid.')
       }
       const body = stripLeadingTitle(await readFile(path.join(DOCS_DIRECTORY, safeFile), 'utf8'))
-      return { ...item, body, endpoints: parseEndpoints(body) }
+      return { ...withResolvedDocGroup(item), body, endpoints: parseEndpoints(body) }
     }),
   )
 

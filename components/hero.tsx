@@ -88,25 +88,29 @@ export function Hero() {
                   verb: 'STORE',
                   description:
                     'Create and list patient demographic records, with endpoints for addresses, contacts, aliases, external identifiers, and deceased status.',
-                  href: '/documentation/patient',
+                  anchor: 'store',
+                  href: '/documentation#docs-group-store',
                 },
                 {
                   verb: 'ATTACH',
                   description:
                     'Upload and list file attachments linked to a patient record, including consent forms and lab results.',
-                  href: '/documentation/patient-patientid-attach',
+                  anchor: 'attach',
+                  href: '/documentation#docs-group-attach',
                 },
                 {
                   verb: 'FIND',
                   description:
                     'Find patients by demographic criteria using exact or fuzzy matching.',
-                  href: '/documentation/patient-find',
+                  anchor: 'find',
+                  href: '/documentation#docs-group-find',
                 },
               ].map((card) => (
                 <a
                   key={card.verb}
+                  id={card.anchor}
                   href={card.href}
-                  className="group flex min-h-64 flex-col rounded-[10px] border border-[--color-slate]/30 bg-[--color-charcoal]/60 p-6 transition-colors hover:border-[--color-network-teal]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-network-teal]"
+                  className="group flex min-h-64 scroll-mt-24 flex-col rounded-[10px] border border-[--color-slate]/30 bg-[--color-charcoal]/60 p-6 transition-colors hover:border-[--color-network-teal]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-network-teal]"
                 >
                   <h3 className="font-mono text-sm font-semibold tracking-[0.16em] text-[--color-network-teal]">
                     {card.verb}
