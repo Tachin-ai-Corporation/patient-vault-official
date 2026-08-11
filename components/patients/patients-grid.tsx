@@ -3,10 +3,16 @@
 import { patientFullName, prettifyCode, type Patient } from '@/lib/patient-data'
 import { BASE_GRID_COLUMNS, type GridColumn } from '@/lib/grid-columns'
 
+export type PatientFindMeta = {
+  score: number
+  matchedOn: string[]
+}
+
 type PatientsGridProps = {
   patients: Patient[]
   onSelect: (patient: Patient) => void
   loading?: boolean
+  findMeta?: ReadonlyMap<string, PatientFindMeta>
   // Returns whether a column key should be rendered. Defaults to all-visible.
   isVisible?: (key: string) => boolean
 }
@@ -124,12 +130,13 @@ export function PatientsGrid({
   patients,
   onSelect,
   loading,
+  findMeta,
   isVisible,
 }: PatientsGridProps) {
   const visibleColumns = BASE_GRID_COLUMNS.filter(
     (c) => !isVisible || isVisible(c.key),
   )
-  const columnCount = visibleColumns.length
+  const columnCount = visibleColumns.length + (findMeta ? 2 : 0)
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-card">
@@ -145,6 +152,12 @@ export function PatientsGrid({
                   {c.label}
                 </HeaderCell>
               ))}
+              {findMeta && (
+                <>
+                  <HeaderCell className="font-mono">Score</HeaderCell>
+                  <HeaderCell>Matched on</HeaderCell>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -178,6 +191,25 @@ export function PatientsGrid({
                         {renderCell(c, p)}
                       </td>
                     ))}
+                    {findMeta && (
+                      <>
+                        <td className="h-12 px-4 font-mono text-[13px] tabular-nums text-foreground">
+                          {findMeta.get(p.id)?.score.toFixed(2) ?? '—'}
+                        </td>
+                        <td className="h-12 px-4">
+                          <div className="flex flex-wrap gap-1">
+                            {(findMeta.get(p.id)?.matchedOn ?? []).map((field) => (
+                              <span
+                                key={field}
+                                className="rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground"
+                              >
+                                {field}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
           </tbody>

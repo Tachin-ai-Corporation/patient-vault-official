@@ -4,11 +4,17 @@ import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Sparkles, Trash2, Search, X, List } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
-import { type Patient } from '@/lib/patient-data'
-import { runFind, type FindQuery } from '@/lib/find-search'
+import { patientFullName, type Patient } from '@/lib/patient-data'
+import {
+  EMPTY_PATIENT_FIND,
+  buildPatientFindPath,
+  hasPatientFindCriteria,
+  patientFindPreview,
+  type PatientFindCriteria,
+} from '@/lib/patient-find'
 import { useColumnVisibility } from '@/lib/grid-columns'
 import { SEED_PATIENTS } from '@/lib/seed-data'
-import { findPatients, type SeedProgress } from '@/lib/api/patient'
+import { findPatients, type FindCandidate, type SeedProgress } from '@/lib/api/patient'
 import { Button } from '@/components/ui/button'
 import { PatientsGrid } from '@/components/patients/patients-grid'
 import { ColumnsMenu } from '@/components/patients/columns-menu'
@@ -60,91 +66,70 @@ export function PatientsView() {
   // API), so the grid uses only the fixed base columns.
   const { allColumns, isVisible, toggle, selectAll, reset } =
     useColumnVisibility([])
-  const [find, setFind] = useState('')
-  // Result of the last real `GET /v3/patient/find` call (shows in the API
-  // Inspector). Null until the user submits a server find; scoped to the exact
-  // query string it was run for so editing the box falls back to local filter.
-  const [serverFind, setServerFind] = useState<{
-    query: string
-    patients: Patient[]
-  } | null>(null)
+  const [criteria, setCriteria] = useState<PatientFindCriteria>(EMPTY_PATIENT_FIND)
+  const [candidates, setCandidates] = useState<FindCandidate[] | null>(null)
+  const [quickFilter, setQuickFilter] = useState('')
   const [finding, setFinding] = useState(false)
 
   const count = patients.length
+  const canFind = hasPatientFindCriteria(criteria)
+  const findPath = buildPatientFindPath(criteria)
 
-  // Instant, client-side Find over the loaded page (runs as you type).
-  const localVisible = useMemo<Patient[]>(() => {
-    const q = find.trim()
-    if (!q) return patients
-    const query: FindQuery = {
-      given_name: '',
-      family_name: '',
-      date_of_birth: '',
-      any: q,
-      exact: false,
-    }
-    return runFind(patients, query).map((r) => r.patient)
-  }, [patients, find])
+  const findMeta = useMemo(() => {
+    if (!candidates) return undefined
+    return new Map(
+      candidates.map((candidate) => [
+        String(candidate.id),
+        { score: candidate.score, matchedOn: candidate.matchedOn ?? [] },
+      ]),
+    )
+  }, [candidates])
 
-  // When the current text matches a completed server find, show those results
-  // (server-ranked); otherwise fall back to the instant local filter.
-  const usingServerFind = serverFind != null && serverFind.query === find.trim()
-  const visible = usingServerFind ? serverFind!.patients : localVisible
+  const visible = useMemo(() => {
+    const source = candidates
+      ? candidates
+          .map((candidate) => patients.find((patient) => patient.id === String(candidate.id)))
+          .filter((patient): patient is Patient => patient != null)
+      : patients
+    const query = quickFilter.trim().toLowerCase()
+    if (!query) return source
+    return source.filter((patient) =>
+      [patientFullName(patient), patient.date_of_birth, patient.id]
+        .join(' ')
+        .toLowerCase()
+        .includes(query),
+    )
+  }, [candidates, patients, quickFilter])
 
-  // Map the single free-text box onto the fields the /find endpoint supports.
-  // A date-looking value is treated as DOB; two+ tokens as first + last name;
-  // a single token as a (fuzzy) last-name match — matching the grid's search
-  // convention. `exact` stays false so the server returns ranked candidates.
-  function parseFindCriteria(q: string) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(q)) return { dob: q, exact: false }
-    const tokens = q.split(/\s+/).filter(Boolean)
-    if (tokens.length >= 2) {
-      return {
-        firstName: tokens[0],
-        lastName: tokens.slice(1).join(' '),
-        exact: false,
-      }
-    }
-    return { lastName: q, exact: false }
+  function updateCriteria<K extends keyof PatientFindCriteria>(
+    key: K,
+    value: PatientFindCriteria[K],
+  ) {
+    setCriteria((current) => ({ ...current, [key]: value }))
   }
 
-  // Run a real server-side find. Candidate ids are reconciled against the
-  // loaded patients so the grid can render full rows in the server's ranked
-  // order. This is the call that surfaces in the API Inspector.
   async function handleFindSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const q = find.trim()
-    if (!q) {
-      setServerFind(null)
-      return
-    }
+    if (!canFind) return
     setFinding(true)
     try {
-      const criteria = parseFindCriteria(q)
-      let candidates = await findPatients(criteria)
-      // The find API can't match first + last name in one request, so a single
-      // token is sent as lastName first. If that finds nothing, retry the same
-      // token as firstName (e.g. "lily" is a first name) before giving up.
-      const isSingleName =
-        criteria.lastName != null &&
-        criteria.firstName == null &&
-        criteria.dob == null
-      if (candidates.length === 0 && isSingleName) {
-        candidates = await findPatients({ firstName: q, exact: false })
-      }
-      const byId = new Map(patients.map((p) => [p.id, p]))
-      const ranked = candidates
-        .map((c) => byId.get(String(c.id)))
-        .filter((p): p is Patient => p != null)
-      setServerFind({ query: q, patients: ranked })
+      const ranked = await findPatients(criteria)
+      setCandidates(ranked)
+      setQuickFilter('')
       showNotice(
-        `Found ${ranked.length} match${ranked.length === 1 ? '' : 'es'} via /v3/patient/find`,
+        `Found ${ranked.length} match${ranked.length === 1 ? '' : 'es'} via ${findPath}`,
       )
     } catch (err) {
       showNotice((err as Error).message || 'Find failed')
     } finally {
       setFinding(false)
     }
+  }
+
+  function clearFind() {
+    setCriteria(EMPTY_PATIENT_FIND)
+    setCandidates(null)
+    setQuickFilter('')
   }
 
   function showNotice(text: string) {
@@ -250,7 +235,7 @@ export function PatientsView() {
         await deletePatient(p.id)
       }
       await reloadPatients()
-      setFind('')
+      clearFind()
       showNotice('Cleared the vault')
     } catch (e) {
       showNotice((e as Error).message || 'Failed to clear vault')
@@ -341,65 +326,95 @@ export function PatientsView() {
         />
       ) : (
         <>
-          {/* In-grid Find */}
           <form
             role="search"
             onSubmit={handleFindSubmit}
-            className="flex items-center gap-2"
+            className="rounded-card border border-border bg-card p-4"
           >
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="search"
-                value={find}
-                onChange={(e) => setFind(e.target.value)}
-                placeholder="Find patients by name or date of birth — Enter to search the vault"
-                aria-label="Find patients"
-                className="w-full rounded-input border border-border bg-card py-2 pl-9 pr-9 text-sm text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              {find && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFind('')
-                    setServerFind(null)
-                  }}
-                  aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Find patients</h2>
+                <p className="text-sm text-muted-foreground">Search the vault using documented demographic fields.</p>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={criteria.exact}
+                  onChange={(event) => updateCriteria('exact', event.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                Exact
+              </label>
             </div>
-            <Button type="submit" variant="outline" disabled={!find.trim() || finding}>
-              <Search className="h-4 w-4" data-icon="inline-start" />
-              {finding ? 'Finding…' : 'Find'}
-            </Button>
-            <ColumnsMenu
-              columns={allColumns}
-              isVisible={isVisible}
-              onToggle={toggle}
-              onSelectAll={selectAll}
-              onReset={reset}
-            />
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
+                First name
+                <input value={criteria.firstName} onChange={(e) => updateCriteria('firstName', e.target.value)} className="rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              </label>
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
+                Last name
+                <input value={criteria.lastName} onChange={(e) => updateCriteria('lastName', e.target.value)} className="rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              </label>
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
+                Date of birth
+                <input type="date" value={criteria.dob} onChange={(e) => updateCriteria('dob', e.target.value)} className="rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              </label>
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
+                Sex at birth
+                <select value={criteria.sexAtBirth} onChange={(e) => updateCriteria('sexAtBirth', e.target.value)} className="rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <option value="">Any</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="intersex">Intersex</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <code className="break-all font-mono text-xs text-muted-foreground">{patientFindPreview(criteria)}</code>
+                {!canFind && <p className="mt-1 text-xs text-destructive">Enter at least one demographic field.</p>}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={clearFind} disabled={!canFind && !candidates}>
+                  <X className="h-4 w-4" data-icon="inline-start" />
+                  Clear
+                </Button>
+                <Button type="submit" disabled={!canFind || finding}>
+                  <Search className="h-4 w-4" data-icon="inline-start" />
+                  {finding ? 'Finding…' : 'Find'}
+                </Button>
+              </div>
+            </div>
           </form>
 
-          {find.trim() && (
-            <p className="-mt-2 font-mono text-xs text-muted-foreground">
-              {visible.length} match{visible.length === 1 ? '' : 'es'} for{' '}
-              <span className="text-foreground">{find.trim()}</span>
-              {usingServerFind ? (
-                <span className="text-muted-foreground"> · via /v3/patient/find</span>
-              ) : (
-                <span className="text-muted-foreground"> · local filter — press Enter to search the vault</span>
-              )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-mono text-xs text-muted-foreground">
+              {candidates ? `${visible.length} of ${candidates.length} server candidates` : `${visible.length} loaded patients`}
             </p>
-          )}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  value={quickFilter}
+                  onChange={(event) => setQuickFilter(event.target.value)}
+                  placeholder="Filter results"
+                  aria-label="Filter results"
+                  className="w-48 rounded-input border border-border bg-card py-2 pl-9 pr-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <ColumnsMenu columns={allColumns} isVisible={isVisible} onToggle={toggle} onSelectAll={selectAll} onReset={reset} />
+            </div>
+          </div>
 
           <PatientsGrid
             patients={visible}
             onSelect={(p) => router.push(`/patients/${p.id}`)}
             isVisible={isVisible}
+            findMeta={findMeta}
           />
         </>
       )}
