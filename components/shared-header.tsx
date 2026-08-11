@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { EnvironmentSelector } from '@/components/environment-selector'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { UserMenu } from '@/components/user-menu'
+import { SignInLink } from '@/components/sign-in-link'
 import { useTheme } from '@/components/theme-provider'
 import { withAuthParams } from '@/lib/auth-branding'
 import { cn } from '@/lib/utils'
@@ -50,9 +51,9 @@ function PublicActions() {
 
   return (
     <>
-      <a href={loginUrl} className="shrink-0 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+      <SignInLink href={loginUrl} className="shrink-0 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
         Sign in
-      </a>
+      </SignInLink>
       <a
         href={registerUrl}
         className="inline-flex h-9 shrink-0 items-center rounded-button bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
