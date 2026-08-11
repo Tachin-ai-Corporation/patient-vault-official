@@ -49,6 +49,36 @@ export function connectedBaseUrlFor(
   return (scopedBaseUrl ?? activeBaseUrl)?.replace(/\/+$/, '') ?? null
 }
 
+export function sessionEnvironmentFromBaseUrl(baseUrl: string | null): SessionEnvironment | null {
+  if (!baseUrl) return null
+
+  try {
+    const hostname = new URL(baseUrl).hostname
+    if (hostname === '1health.demo.1health.io') return 'demo'
+    if (hostname === '1health.app.1health.io') return 'prod'
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+/** Resolve the environment represented by the session that is actually active. */
+export function connectedSessionEnvironment(
+  readCookie: (name: string) => string | null,
+): SessionEnvironment | null {
+  const active = sessionEnvironmentFromBaseUrl(readCookie('onehealth_base_url'))
+  if (active) return active
+
+  for (const env of SESSION_ENVIRONMENTS) {
+    if (!readCookie(sessionCookieName(env, 'access_token'))) continue
+    const connected = sessionEnvironmentFromBaseUrl(connectedBaseUrlFor(env, readCookie))
+    if (connected) return connected
+  }
+
+  return null
+}
+
 export function isSessionEnvironment(value: unknown): value is SessionEnvironment {
   return value === 'demo' || value === 'prod'
 }

@@ -10,6 +10,9 @@ export type DocNavItem = {
   file: string
   status: DocStatus
   summary: string
+  // Generated docs may provide this in frontmatter. Loaders resolve the
+  // fallback centrally while preserving this value when present.
+  group?: string
   // Trailing path parameter for item endpoints (e.g. "addressId"). Undefined
   // for collection endpoints. Used to render a compact hint in the nav.
   param?: string
@@ -40,6 +43,7 @@ export type LoadedDoc = {
   title: string
   status: DocStatus
   summary: string
+  group?: string
   body: string
   endpoints: DocEndpoint[]
 }

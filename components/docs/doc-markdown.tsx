@@ -7,6 +7,7 @@ import rehypeRaw from 'rehype-raw'
 import rehypeHighlight from 'rehype-highlight'
 import 'highlight.js/styles/github-dark.css'
 import { slugifyHeading } from '@/lib/docs-shared'
+import type { DocGroup } from '@/lib/docs-groups'
 import { MethodBadge } from '@/components/docs/method-badge'
 import { cn } from '@/lib/utils'
 
@@ -31,7 +32,22 @@ function childrenToText(children: ReactNode): string {
 
 const METHOD_HEADING_RE = /^(GET|POST|PUT|PATCH|DELETE)\s+(.+)$/
 
-export function DocMarkdown({ body }: { body: string }) {
+export function DocMarkdown({
+  body,
+  group,
+  groupHref,
+}: {
+  body: string
+  group?: DocGroup
+  groupHref?: string | null
+}) {
+  const renderedBody = groupHref
+    ? body.replace(
+        /(^>?\s*\*\*Authentication\*\*[^\n]*$)/m,
+        `$1\n\n[Part of ${group} ↩](${groupHref})`,
+      )
+    : body
+
   return (
     <div className="docs-prose max-w-none text-sm leading-relaxed text-foreground">
       <ReactMarkdown
@@ -172,7 +188,7 @@ export function DocMarkdown({ body }: { body: string }) {
           },
         }}
       >
-        {body}
+        {renderedBody}
       </ReactMarkdown>
     </div>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
 import { signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 export function UserMenu() {
   const { session } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -24,13 +25,10 @@ export function UserMenu() {
       // parent-domain + HttpOnly + partitioned cookies).
       await signOut()
 
-      // Land on the public marketing page. A full document `replace` (not
-      // router.push) is required: "/" is a server component that redirects
-      // authenticated visitors to /patients based on the access_token cookie, so
-      // the browser must re-request it and observe the now-cleared cookies.
-      // `replace` (vs `assign`) also drops the authenticated page from history
-      // so Back can't restore it.
-      window.location.replace('/')
+      // Re-request the current documentation URL so its server component sees
+      // the cleared cookies and swaps to the public header/content in place.
+      // Other authenticated routes return to the public landing page.
+      window.location.replace(pathname.startsWith('/documentation') ? pathname : '/')
 
       // NOTE: the 1health *platform* SSO session is separate from this app's
       // tokens and lives on a sibling host we can't clear here, so relaunching

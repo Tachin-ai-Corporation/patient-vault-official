@@ -125,7 +125,7 @@ function EnvironmentRow({
  * every environment from the catalog. The authenticated backend environment
  * is selected; the other row starts a sign-in to that environment.
  */
-export function EnvironmentSelector() {
+export function EnvironmentSelector({ brand = false }: { brand?: boolean }) {
   const {
     currentProject,
     currentEnv,
@@ -157,10 +157,23 @@ export function EnvironmentSelector() {
             'text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal',
           )}
         >
-          <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="max-w-[12ch] truncate font-medium text-foreground sm:max-w-[20ch]">
-            {currentProject.name}
-          </span>
+          {brand ? (
+            <span className="flex items-center gap-2">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-tag bg-teal font-mono text-xs font-semibold text-[#202833]">
+                1h
+              </span>
+              <span className="whitespace-nowrap font-semibold tracking-tight text-foreground">
+                Patient Vault
+              </span>
+            </span>
+          ) : (
+            <>
+              <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="max-w-[12ch] truncate font-medium text-foreground sm:max-w-[20ch]">
+                {currentProject.name}
+              </span>
+            </>
+          )}
           <EnvBadge env={currentEnv} />
           <ChevronDown
             aria-hidden

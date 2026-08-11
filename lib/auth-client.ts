@@ -47,6 +47,7 @@ import {
   SESSION_ENVIRONMENTS,
   SESSION_FIELDS,
   connectedBaseUrlFor,
+  connectedSessionEnvironment,
   isSessionEnvironment,
   sessionCookieName,
   sessionIsUnexpired,
@@ -143,6 +144,10 @@ export function getActiveEnvironment(): SessionEnvironment {
   const selected = getCookie("active_environment")
   if (isSessionEnvironment(selected) && hasEnvironmentSession(selected)) return selected
   return SESSION_ENVIRONMENTS.find(hasEnvironmentSession) ?? "demo"
+}
+
+export function getConnectedSessionEnvironment(): SessionEnvironment | null {
+  return connectedSessionEnvironment(getCookie)
 }
 
 export function setActiveEnvironment(env: SessionEnvironment): boolean {

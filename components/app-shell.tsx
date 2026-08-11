@@ -2,8 +2,7 @@
 
 import { type ReactNode, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { TopBar } from '@/components/top-bar'
-import { TopNav } from '@/components/top-nav'
+import { SharedHeader } from '@/components/shared-header'
 import { OnboardingOverlay } from '@/components/onboarding/onboarding-overlay'
 import { ApiInspectorPanel } from '@/components/api-inspector/api-inspector-panel'
 import { ProductionRail } from '@/components/production-rail'
@@ -100,8 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {/* Self-gating: renders only while Production is the active environment. */}
         <ProductionRail />
         <div className="flex min-h-screen flex-col">
-          <TopBar />
-          <TopNav />
+          <SharedHeader authenticated />
           <main className="flex-1 px-6 py-8">{children}</main>
         </div>
         {/* Floating API Inspector — fixed-position, only renders once the
