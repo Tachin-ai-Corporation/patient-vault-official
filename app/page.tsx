@@ -1,8 +1,5 @@
 import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
-import { Nav } from '@/components/nav'
-import { PlatformBar } from '@/components/platform-bar'
-import { AgentStrip } from '@/components/agent-strip'
+import { LandingHeader } from '@/components/landing-header'
 import { Hero } from '@/components/hero'
 import { WhoThisIsFor } from '@/components/who-this-is-for'
 import { WhatItReplaces } from '@/components/what-it-replaces'
@@ -105,8 +102,6 @@ export default async function PatientVaultPage() {
       cookieStore.get('prod_access_token')?.value ||
       cookieStore.get('access_token')?.value,
   )
-  if (hasSession) redirect('/patients')
-
   return (
     <>
       <script
@@ -121,9 +116,7 @@ export default async function PatientVaultPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdArticle) }}
       />
-      <PlatformBar />
-      <AgentStrip />
-      <Nav />
+      <LandingHeader authenticated={hasSession} />
       <main>
         <Hero />
         <Parallax reveal translate={false}><WhoThisIsFor /></Parallax>

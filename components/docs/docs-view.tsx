@@ -165,16 +165,18 @@ function DocsMessage({ title, message }: { title: string; message: string }) {
   )
 }
 
-export function DocsView({ slug }: { slug?: string }) {
-  const { currentEnv } = useSession()
+function DocsContent({
+  data,
+  error,
+  isLoading,
+  slug,
+}: {
+  data?: DocsResponse
+  error?: unknown
+  isLoading?: boolean
+  slug?: string
+}) {
   const [query, setQuery] = useState('')
-  const docsEnvironment = currentEnv === 'production' ? 'prod' : 'demo'
-  const requestUrl = `/api/agent-docs?environment=${docsEnvironment}${
-    slug ? `&slug=${encodeURIComponent(slug)}` : ''
-  }`
-  const { data, error, isLoading } = useSWR(requestUrl, docsFetcher, {
-    revalidateOnFocus: false,
-  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -193,7 +195,7 @@ export function DocsView({ slug }: { slug?: string }) {
         </div>
       )}
 
-      {error && (
+      {Boolean(error) && (
         <DocsMessage
           title={slug ? 'Documentation not found' : 'Documentation unavailable'}
           message={error instanceof Error ? error.message : 'Please try again shortly.'}
@@ -202,8 +204,8 @@ export function DocsView({ slug }: { slug?: string }) {
 
       {!isLoading && !error && data && !data.doc && (
         <DocsMessage
-          title="No documentation available"
-          message="No Patient agent documentation is available for this environment."
+          title="Documentation not found"
+          message="This Patient Vault documentation resource is unavailable."
         />
       )}
 
@@ -232,4 +234,21 @@ export function DocsView({ slug }: { slug?: string }) {
       )}
     </div>
   )
+}
+
+export function PublicDocsView({ data, slug }: { data: DocsResponse; slug?: string }) {
+  return <DocsContent data={data} slug={slug} />
+}
+
+export function AuthenticatedDocsView({ slug }: { slug?: string }) {
+  const { currentEnv } = useSession()
+  const docsEnvironment = currentEnv === 'production' ? 'prod' : 'demo'
+  const requestUrl = `/api/agent-docs?environment=${docsEnvironment}${
+    slug ? `&slug=${encodeURIComponent(slug)}` : ''
+  }`
+  const { data, error, isLoading } = useSWR(requestUrl, docsFetcher, {
+    revalidateOnFocus: false,
+  })
+
+  return <DocsContent data={data} error={error} isLoading={isLoading} slug={slug} />
 }
