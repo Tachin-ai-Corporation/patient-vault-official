@@ -7,6 +7,10 @@
     { "slug": "contact",    "title": "Contact",         "file": "patient-vault-contact.md",         "status": "live",        "summary": "Contact points — email, phone, fax (append-only)." },
     { "slug": "alias",      "title": "Alias",           "file": "patient-vault-alias.md",           "status": "coming_soon", "summary": "Alternate name records (maiden, nickname, legal change)." },
     { "slug": "deceased",   "title": "Deceased Record", "file": "patient-vault-deceased-record.md", "status": "coming_soon", "summary": "Structured death record; reversal via DELETE." },
-    { "slug": "identifier", "title": "Identifier",      "file": "patient-vault-identifier.md",      "status": "coming_soon", "summary": "External identifiers linking patients to outside systems." }
+    { "slug": "identifier", "title": "Identifier",      "file": "patient-vault-identifier.md",      "status": "coming_soon", "summary": "External identifiers linking patients to outside systems." },
+    { "slug": "attach", "title": "Attach", "file": "patient-vault-attach.md", "status": "live", "summary": "Attach and list patient documents and structured payloads.", "group": "Attach" },
+    { "slug": "find", "title": "Find", "file": "patient-vault-find.md", "status": "live", "summary": "Find patients by demographic criteria.", "group": "Find" },
+    { "slug": "health-grid-patient", "title": "Health Grid / Patient", "file": "health-grid-patient.md", "status": "live", "summary": "Retrieve a patient's connected Health Grid record.", "group": "Platform" },
+    { "slug": "user-myself", "title": "User / Myself", "file": "user-myself.md", "status": "live", "summary": "Retrieve the authenticated user and organization context.", "group": "Platform" }
   ]
 }

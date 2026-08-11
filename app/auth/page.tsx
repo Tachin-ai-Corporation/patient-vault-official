@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { withAuthParams } from "@/lib/auth-branding"
+import { consumeLoginIntent } from "@/lib/login-intent"
 import { useTheme } from "@/components/theme-provider"
 
 type AuthState = "idle" | "loading" | "success" | "error" | "manual-entry"
@@ -179,7 +180,7 @@ function AuthContent() {
           }
           setIsConfirming(false)
           setAuthState("success")
-          const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/console"
+          const redirectRoute = consumeLoginIntent('/patients')
 
           setTimeout(() => {
             // Hard navigation (not router.push): a full-page load discards any
