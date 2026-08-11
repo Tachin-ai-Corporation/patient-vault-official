@@ -38,6 +38,15 @@ export function patientMergeValue(patient: Patient, field: MergeField): string {
   return String(patient[field] || '—')
 }
 
+export function isMergeFieldIdentical(
+  patients: Patient[],
+  field: MergeField,
+): boolean {
+  if (patients.length < 2) return true
+  const values = patients.map((patient) => patientMergeValue(patient, field))
+  return values.every((value) => value === values[0])
+}
+
 export function buildMergePlan(
   patientIds: string[],
   canonicalId: string,

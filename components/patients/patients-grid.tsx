@@ -200,17 +200,19 @@ export function PatientsGrid({
                     {selectable && (() => {
                       const checked = selection.selectedIds.has(p.id)
                       const disabled = !checked && selection.selectedIds.size >= selectionLimit
+                      const limitMessage = `You can compare up to ${selectionLimit} patients.`
                       return (
                         <td className="h-12 px-4" onClick={(event) => event.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={disabled}
-                            title={disabled ? `You can compare up to ${selectionLimit} patients.` : `Select ${patientFullName(p)} for merge review`}
-                            aria-label={`Select ${patientFullName(p)} for merge review`}
-                            onChange={() => selection.onToggleSelected(p)}
-                            className="h-4 w-4 rounded border-border accent-primary disabled:cursor-not-allowed"
-                          />
+                          <span className="inline-flex" title={disabled ? limitMessage : undefined}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={disabled}
+                              aria-label={disabled ? `${patientFullName(p)} unavailable. ${limitMessage}` : `Select ${patientFullName(p)} for merge review`}
+                              onChange={() => selection.onToggleSelected(p)}
+                              className="h-4 w-4 rounded border-border accent-primary disabled:cursor-not-allowed"
+                            />
+                          </span>
                         </td>
                       )
                     })()}

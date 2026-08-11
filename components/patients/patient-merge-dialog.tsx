@@ -3,10 +3,12 @@
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { CopyButton } from '@/components/ui/copy-button'
 import { patientFullName, type Patient } from '@/lib/patient-data'
 import {
   MERGE_FIELDS,
   buildMergePlan,
+  isMergeFieldIdentical,
   patientMergeValue,
   type MergeField,
 } from '@/lib/patient-merge'
@@ -37,6 +39,7 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
 
   function close() {
     setMode('record')
+    setCanonicalId(patients[0]?.id ?? '')
     setFieldSources({})
     onClose()
   }
@@ -48,7 +51,7 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
           <div>
             <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground">review only</p>
             <h2 id="merge-title" className="mt-1 text-xl font-semibold text-foreground">Compare potential duplicates</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Choose the canonical record and review exactly which values would survive.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Choose the canonical record and review exactly which values would survive. Losing patient IDs would return a permanent HTTP 308 redirect to the canonical ID.</p>
           </div>
           <Button type="button" variant="ghost" size="icon" onClick={close} aria-label="Close merge review"><X /></Button>
         </header>
@@ -79,23 +82,35 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {MERGE_FIELDS.map(({ key, label }) => (
-                  <tr key={key} className="border-b border-border last:border-0">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{label}</th>
-                    {patients.map((patient) => {
-                      const sourceId = mode === 'record' ? selectedCanonicalId : fieldSources[key] ?? selectedCanonicalId
-                      const chosen = sourceId === patient.id
-                      return (
-                        <td key={patient.id} className={`border-l border-border px-4 py-3 ${chosen ? 'bg-accent/10' : ''}`}>
-                          <label className={`flex items-center gap-2 ${mode === 'field' ? 'cursor-pointer' : ''}`}>
-                            {mode === 'field' && <input type="radio" name={`field-${key}`} checked={chosen} onChange={() => setFieldSources((current) => ({ ...current, [key]: patient.id }))} className="h-4 w-4 accent-primary" />}
-                            <span className={chosen ? 'font-medium text-foreground' : 'text-muted-foreground'}>{patientMergeValue(patient, key)}</span>
-                          </label>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
+                {MERGE_FIELDS.map(({ key, label }) => {
+                  const identical = isMergeFieldIdentical(patients, key)
+                  return (
+                    <tr key={key} className={`border-b border-border last:border-0 ${identical ? 'bg-muted/25' : ''}`}>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+                        {label}
+                        {identical && <span className="ml-2 font-normal">Identical</span>}
+                      </th>
+                      {patients.map((patient) => {
+                        const sourceId = mode === 'record' ? selectedCanonicalId : fieldSources[key] ?? selectedCanonicalId
+                        const chosen = sourceId === patient.id
+                        const showChoice = mode === 'field' && !identical
+                        return (
+                          <td key={patient.id} className={`border-l border-border px-4 py-3 ${chosen && !identical ? 'bg-accent/10' : ''}`}>
+                            <label className={`flex items-center gap-2 ${showChoice ? 'cursor-pointer' : ''}`}>
+                              {mode === 'record' && !identical && (
+                                <input type="radio" checked={chosen} disabled readOnly aria-label={`${label} from ${patientFullName(patient)}`} className="h-4 w-4 accent-primary" />
+                              )}
+                              {showChoice && (
+                                <input type="radio" name={`field-${key}`} checked={chosen} onChange={() => setFieldSources((current) => ({ ...current, [key]: patient.id }))} className="h-4 w-4 accent-primary" />
+                              )}
+                              <span className={identical ? 'text-muted-foreground' : chosen ? 'font-medium text-foreground' : 'text-muted-foreground'}>{patientMergeValue(patient, key)}</span>
+                            </label>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -110,15 +125,21 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
               </div>
               <details className="mt-3">
                 <summary className="cursor-pointer text-xs font-medium text-accent">View merge plan payload</summary>
-                <pre className="mt-2 overflow-x-auto rounded-input bg-muted p-3 font-mono text-xs text-muted-foreground">{JSON.stringify(plan, null, 2)}</pre>
+                <div className="mt-2 flex items-start gap-2 rounded-input bg-muted p-3">
+                  <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-xs text-muted-foreground">{JSON.stringify(plan, null, 2)}</pre>
+                  <CopyButton value={JSON.stringify(plan, null, 2)} label="Copy merge plan JSON" />
+                </div>
               </details>
             </div>
           )}
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-card px-5 py-4 sm:px-6">
-          <p className="max-w-2xl text-xs text-muted-foreground">No merge endpoint is documented. This comparison creates a reviewable plan but sends no API request.</p>
-          <div className="flex items-center gap-2"><Button type="button" variant="ghost" onClick={close}>Cancel</Button><Button type="button" disabled title="Pending documented patient merge API">Merge patients · Pending API</Button></div>
+          <div className="max-w-2xl text-xs text-muted-foreground">
+            <p>No merge endpoint is documented. This comparison creates a reviewable plan but sends no API request.</p>
+            {plan && <p className="mt-1 font-mono">{plan.redirects.map(({ from, to }) => `${from} → ${to}`).join(' · ')}</p>}
+          </div>
+          <div className="flex items-center gap-2"><Button type="button" variant="ghost" onClick={close}>Cancel</Button><Button type="button" disabled title="Pending documented patient merge API">Pending API</Button></div>
         </footer>
       </section>
     </div>

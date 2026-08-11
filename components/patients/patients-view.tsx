@@ -417,7 +417,7 @@ export function PatientsView() {
               {candidates && (
                 <Button type="button" variant="outline" disabled={selectedMergeIds.size < 2} onClick={() => setMergeOpen(true)} title={selectedMergeIds.size < 2 ? 'Select two or three candidates to compare.' : undefined}>
                   <GitMerge className="h-4 w-4" data-icon="inline-start" />
-                  Compare selected ({selectedMergeIds.size})
+                  Merge… ({selectedMergeIds.size})
                 </Button>
               )}
             </div>
