@@ -1,18 +1,27 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-// @ts-expect-error Node's strip-types runner requires the runtime extension.
-import { buildPatientFindPath, hasPatientFindCriteria } from './patient-find.ts'
+import {
+  buildPatientFindPath,
+  hasPatientFindCriteria,
+  patientFindPreview,
+  // @ts-expect-error Node's strip-types runner requires the runtime extension.
+} from './patient-find.ts'
 
 test('builds only documented find parameters in canonical order', () => {
+  const criteria = {
+    firstName: ' Ada ',
+    lastName: 'Lovelace',
+    dob: '1815-12-10',
+    sexAtBirth: 'female',
+    exact: true,
+  }
   assert.equal(
-    buildPatientFindPath({
-      firstName: ' Ada ',
-      lastName: 'Lovelace',
-      dob: '1815-12-10',
-      sexAtBirth: 'Female',
-      exact: true,
-    }),
-    '/v3/patient/find?firstName=Ada&lastName=Lovelace&dob=1815-12-10&sexAtBirth=Female&exact=true',
+    buildPatientFindPath(criteria),
+    '/v3/patient/find?firstName=Ada&lastName=Lovelace&dob=1815-12-10&sexAtBirth=female&exact=true',
+  )
+  assert.equal(
+    patientFindPreview(criteria),
+    'GET /api/v3/patient/find?firstName=Ada&lastName=Lovelace&dob=1815-12-10&sexAtBirth=female&exact=true',
   )
 })
 

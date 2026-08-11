@@ -194,7 +194,7 @@ export function PatientsGrid({
                     {findMeta && (
                       <>
                         <td className="h-12 px-4 font-mono text-[13px] tabular-nums text-foreground">
-                          {findMeta.get(p.id)?.score ?? '—'}
+                          {findMeta.get(p.id)?.score.toFixed(2) ?? '—'}
                         </td>
                         <td className="h-12 px-4">
                           <div className="flex flex-wrap gap-1">

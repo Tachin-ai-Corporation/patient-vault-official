@@ -40,5 +40,6 @@ export function hasPatientFindCriteria(criteria: PatientFindCriteria): boolean {
 }
 
 export function patientFindPreview(criteria: PatientFindCriteria): string {
-  return `GET ${buildPatientFindPath(criteria)}`
+  // API Inspector records the browser request pathname, which includes /api.
+  return `GET /api${buildPatientFindPath(criteria)}`
 }

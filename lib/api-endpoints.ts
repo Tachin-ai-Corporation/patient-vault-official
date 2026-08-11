@@ -153,7 +153,7 @@ export const ENDPOINTS: EndpointDef[] = [
       { name: 'firstName', label: 'First name', required: false, type: 'text', placeholder: 'Maria', example: 'Maria', in: 'query' },
       { name: 'lastName', label: 'Last name', required: false, type: 'text', placeholder: 'Santos', example: 'Santos', in: 'query' },
       { name: 'dob', label: 'Date of birth', required: false, type: 'date', example: '1988-04-12', in: 'query' },
-      { name: 'sexAtBirth', label: 'Sex at birth', required: false, type: 'select', options: opt(['', 'female', 'male', 'other']), in: 'query' },
+      { name: 'sexAtBirth', label: 'Sex at birth', required: false, type: 'select', options: opt(['', 'female', 'male', 'intersex', 'unknown']), in: 'query' },
       { name: 'exact', label: 'Exact match', required: false, type: 'select', options: opt(['', 'true', 'false']), helpText: 'true returns only full matches.', in: 'query' },
     ],
   },

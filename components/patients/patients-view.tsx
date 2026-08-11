@@ -364,10 +364,10 @@ export function PatientsView() {
                 Sex at birth
                 <select value={criteria.sexAtBirth} onChange={(e) => updateCriteria('sexAtBirth', e.target.value)} className="rounded-input border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="">Any</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Intersex">Intersex</option>
-                  <option value="Unknown">Unknown</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="intersex">Intersex</option>
+                  <option value="unknown">Unknown</option>
                 </select>
               </label>
             </div>
