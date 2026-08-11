@@ -203,14 +203,55 @@ export function SessionProvider({
   initialEnvironment,
 }: {
   children: ReactNode
+  initialEnvironment: SessionEnvironment | null
+}) {
+  const [resolvedEnvironment, setResolvedEnvironment] = useState<SessionEnvironment | null>(initialEnvironment)
+
+  useEffect(() => {
+    if (resolvedEnvironment) return
+
+    const resolve = () => {
+      const migrated = migrateLegacySession()
+      const connected = migrated ?? getConnectedSessionEnvironment()
+      if (connected) setResolvedEnvironment(connected)
+    }
+
+    resolve()
+    const interval = window.setInterval(resolve, 100)
+    const timeout = window.setTimeout(() => window.clearInterval(interval), 5000)
+    return () => {
+      window.clearInterval(interval)
+      window.clearTimeout(timeout)
+    }
+  }, [resolvedEnvironment])
+
+  if (!resolvedEnvironment) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background" aria-busy="true">
+        <p className="text-sm text-muted-foreground">Resolving your 1health environment…</p>
+      </main>
+    )
+  }
+
+  return (
+    <ResolvedSessionProvider initialEnvironment={resolvedEnvironment}>
+      {children}
+    </ResolvedSessionProvider>
+  )
+}
+
+function ResolvedSessionProvider({
+  children,
+  initialEnvironment,
+}: {
+  children: ReactNode
   initialEnvironment: SessionEnvironment
 }) {
   const [activeEnvironment, setActiveEnvironmentState] = useState<SessionEnvironment>(initialEnvironment)
   const [sessionVersion, setSessionVersion] = useState(0)
 
   useEffect(() => {
-    migrateLegacySession()
-    const connectedEnvironment = getConnectedSessionEnvironment()
+    const connectedEnvironment = migrateLegacySession() ?? getConnectedSessionEnvironment()
     if (connectedEnvironment) setActiveEnvironmentState(connectedEnvironment)
     setSessionVersion((version) => version + 1)
   }, [])

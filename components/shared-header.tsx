@@ -66,7 +66,7 @@ function PublicActions() {
 export function SharedHeader({ authenticated = false }: { authenticated?: boolean }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-2 overflow-x-auto px-4 sm:gap-3 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-2 px-4 sm:gap-3 sm:px-6">
         {authenticated ? (
           <EnvironmentSelector brand />
         ) : (
