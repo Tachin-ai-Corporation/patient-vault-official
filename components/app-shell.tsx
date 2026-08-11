@@ -100,7 +100,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <ProductionRail />
         <div className="flex min-h-screen flex-col">
           <SharedHeader authenticated />
-          <main className="flex-1 px-6 py-8">{children}</main>
+          <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-8 sm:px-6">
+            {children}
+          </main>
         </div>
         {/* Floating API Inspector — fixed-position, only renders once the
             authenticated console is shown (not on bare/onboarding screens). */}
