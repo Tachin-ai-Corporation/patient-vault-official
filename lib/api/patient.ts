@@ -384,6 +384,7 @@ export function gridRowToPatient(row: PatientGridRow): Patient {
     contacts,
     addresses,
     created_at: row.created ?? undefined,
+    updated_at: row.updated ?? undefined,
   }
 }
 

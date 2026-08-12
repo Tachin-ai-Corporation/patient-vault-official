@@ -1,17 +1,65 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import useSWR from 'swr'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
 import { patientFullName, type Patient } from '@/lib/patient-data'
+import { listAddresses, listContacts, type AddressDTO, type ContactDTO } from '@/lib/api/patient'
 import {
   MERGE_FIELDS,
   buildMergePlan,
   isMergeFieldIdentical,
   patientMergeValue,
   type MergeField,
+  type RelationKind,
+  type RelationSelection,
 } from '@/lib/patient-merge'
+
+type PatientRelations = {
+  patientId: string
+  addresses: AddressDTO[]
+  contacts: ContactDTO[]
+}
+
+type RelationItem = {
+  id: string
+  label: string
+  detail: string
+}
+
+const RELATION_SECTIONS: ReadonlyArray<{ kind: RelationKind; label: string }> = [
+  { kind: 'addresses', label: 'Addresses' },
+  { kind: 'contacts', label: 'Contacts' },
+]
+
+async function loadRelations(patientIds: string[]): Promise<PatientRelations[]> {
+  return Promise.all(patientIds.map(async (patientId) => {
+    const [addresses, contacts] = await Promise.all([
+      listAddresses(patientId),
+      listContacts(patientId),
+    ])
+    return { patientId, addresses, contacts }
+  }))
+}
+
+function relationItem(kind: RelationKind, value: AddressDTO | ContactDTO): RelationItem {
+  if (kind === 'addresses') {
+    const address = value as AddressDTO
+    return {
+      id: String(address.id),
+      label: [address.line1, address.line2].filter(Boolean).join(', '),
+      detail: [address.city, address.state, address.postalCode, address.country].filter(Boolean).join(' '),
+    }
+  }
+  const contact = value as ContactDTO
+  return {
+    id: String(contact.id),
+    label: contact.value,
+    detail: [contact.type, contact.label].filter(Boolean).join(' · '),
+  }
+}
 
 type Props = {
   open: boolean
@@ -23,16 +71,39 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
   const [canonicalId, setCanonicalId] = useState(patients[0]?.id ?? '')
   const [mode, setMode] = useState<'record' | 'field'>('record')
   const [fieldSources, setFieldSources] = useState<Partial<Record<MergeField, string>>>({})
+  const [relationKeeps, setRelationKeeps] = useState<Record<string, boolean>>({})
+  const patientIds = useMemo(() => patients.map((patient) => patient.id), [patients])
+  const { data: relations, error: relationsError, isLoading: relationsLoading } = useSWR(
+    open && patientIds.length >= 2 ? ['patient-merge-relations', ...patientIds] : null,
+    () => loadRelations(patientIds),
+  )
 
   const selectedCanonicalId = patients.some((p) => p.id === canonicalId)
     ? canonicalId
     : patients[0]?.id ?? ''
+  const relationSelections = useMemo(() => {
+    const result: Record<RelationKind, RelationSelection[]> = { addresses: [], contacts: [] }
+    for (const relation of relations ?? []) {
+      for (const kind of ['addresses', 'contacts'] as const) {
+        for (const value of relation[kind]) {
+          const itemId = String(value.id)
+          const key = `${kind}:${relation.patientId}:${itemId}`
+          result[kind].push({
+            patientId: relation.patientId,
+            itemId,
+            keep: mode === 'record' ? relation.patientId === selectedCanonicalId : relationKeeps[key] !== false,
+          })
+        }
+      }
+    }
+    return result
+  }, [mode, relationKeeps, relations, selectedCanonicalId])
   const plan = useMemo(
     () =>
       patients.length >= 2 && selectedCanonicalId
-        ? buildMergePlan(patients.map((p) => p.id), selectedCanonicalId, mode === 'field' ? fieldSources : {})
+        ? buildMergePlan(patientIds, selectedCanonicalId, mode === 'field' ? fieldSources : {}, relationSelections)
         : null,
-    [fieldSources, mode, patients, selectedCanonicalId],
+    [fieldSources, mode, patientIds, relationSelections, selectedCanonicalId],
   )
 
   if (!open) return null
@@ -41,6 +112,7 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
     setMode('record')
     setCanonicalId(patients[0]?.id ?? '')
     setFieldSources({})
+    setRelationKeeps({})
     onClose()
   }
 
@@ -74,6 +146,7 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
                         <span>
                           <span className="block font-semibold text-foreground">{patientFullName(patient)}</span>
                           <span className="mt-1 block font-mono text-xs font-normal text-muted-foreground">{patient.id}</span>
+                          {patient.updated_at && <span className="mt-1 block text-xs font-normal text-muted-foreground">Updated {patient.updated_at}</span>}
                           <span className="mt-1 block text-xs font-normal text-accent">{selectedCanonicalId === patient.id ? 'Canonical record' : 'Merge into canonical'}</span>
                         </span>
                       </label>
@@ -113,6 +186,60 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-4">
+            {RELATION_SECTIONS.map(({ kind, label }) => (
+              <section key={kind} className="rounded-card border border-border bg-card p-4" aria-labelledby={`merge-${kind}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 id={`merge-${kind}`} className="text-sm font-semibold text-foreground">{label}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {mode === 'record' ? 'Only items on the canonical record survive.' : 'Keep items from any selected record on the canonical record.'}
+                    </p>
+                  </div>
+                  {relationsLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
+                </div>
+                {relationsError ? (
+                  <p className="mt-3 text-sm text-destructive">Unable to load documented {label.toLowerCase()}.</p>
+                ) : !relationsLoading && (relations ?? []).every((relation) => relation[kind].length === 0) ? (
+                  <p className="mt-3 text-sm text-muted-foreground">No {label.toLowerCase()} returned.</p>
+                ) : (
+                  <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                    {(relations ?? []).map((relation) => {
+                      const patient = patients.find((value) => value.id === relation.patientId)
+                      return (
+                        <div key={relation.patientId} className="rounded-input border border-border bg-muted/20 p-3">
+                          <p className="text-xs font-medium text-foreground">{patient ? patientFullName(patient) : relation.patientId}</p>
+                          <div className="mt-2 flex flex-col gap-2">
+                            {relation[kind].length === 0 ? <p className="text-xs text-muted-foreground">None</p> : relation[kind].map((value) => {
+                              const item = relationItem(kind, value)
+                              const selectionKey = `${kind}:${relation.patientId}:${item.id}`
+                              const kept = mode === 'record' ? relation.patientId === selectedCanonicalId : relationKeeps[selectionKey] !== false
+                              return (
+                                <label key={item.id} className={`flex items-start gap-2 rounded-input border border-border p-2 ${kept ? 'bg-accent/10' : 'bg-background'}`}>
+                                  {mode === 'field' ? (
+                                    <input type="checkbox" checked={kept} onChange={(event) => setRelationKeeps((current) => ({ ...current, [selectionKey]: event.target.checked }))} className="mt-0.5 h-4 w-4 rounded border-border accent-primary" />
+                                  ) : (
+                                    <input type="checkbox" checked={kept} disabled readOnly aria-label={`${kept ? 'Keep' : 'Discard'} ${item.label}`} className="mt-0.5 h-4 w-4 rounded border-border accent-primary" />
+                                  )}
+                                  <span className="min-w-0">
+                                    <span className="block break-words text-xs font-medium text-foreground">{item.label || 'Untitled item'}</span>
+                                    {item.detail && <span className="mt-0.5 block break-words text-xs text-muted-foreground">{item.detail}</span>}
+                                    <span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.id} · {kept ? 'survives' : 'not kept'}</span>
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+            ))}
+            <p className="text-xs text-muted-foreground">Aliases and Identifiers are omitted because the repository endpoint catalog does not document GET operations for those relations.</p>
           </div>
 
           {plan && (
