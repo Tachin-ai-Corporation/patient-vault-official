@@ -17,11 +17,16 @@ test('builds canonical redirects and defaults field sources', () => {
   assert.equal(plan.fieldSources.given_name, 'b')
 })
 
-test('keeps field-level survivor choices separate from canonical identity', () => {
-  const plan = buildMergePlan(['a', 'b'], 'a', { family_name: 'b' })
+test('keeps field-level and relation survivor choices separate from canonical identity', () => {
+  const relationSelections = {
+    addresses: [{ patientId: 'b', itemId: 'address-1', keep: true }],
+    contacts: [{ patientId: 'a', itemId: 'contact-1', keep: false }],
+  }
+  const plan = buildMergePlan(['a', 'b'], 'a', { family_name: 'b' }, relationSelections)
   assert.equal(plan.canonicalId, 'a')
   assert.equal(plan.fieldSources.family_name, 'b')
   assert.equal(plan.fieldSources.date_of_birth, 'a')
+  assert.deepEqual(plan.relationSelections, relationSelections)
 })
 
 test('requires two or three selected patients', () => {

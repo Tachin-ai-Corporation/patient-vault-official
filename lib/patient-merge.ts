@@ -25,10 +25,19 @@ export const MERGE_FIELDS: ReadonlyArray<{ key: MergeField; label: string }> = [
   { key: 'last4_ssn', label: 'Last 4 SSN' },
 ]
 
+export type RelationKind = 'addresses' | 'contacts'
+
+export type RelationSelection = {
+  patientId: string
+  itemId: string
+  keep: boolean
+}
+
 export type MergePlan = {
   canonicalId: string
   mergedIds: string[]
   fieldSources: Record<MergeField, string>
+  relationSelections: Record<RelationKind, RelationSelection[]>
   redirects: Array<{ from: string; to: string; status: 308 }>
 }
 
@@ -51,6 +60,7 @@ export function buildMergePlan(
   patientIds: string[],
   canonicalId: string,
   fieldSources: Partial<Record<MergeField, string>> = {},
+  relationSelections: Partial<Record<RelationKind, RelationSelection[]>> = {},
 ): MergePlan {
   if (patientIds.length < 2 || patientIds.length > 3) {
     throw new Error('Select two or three patients to compare.')
@@ -66,6 +76,10 @@ export function buildMergePlan(
     canonicalId,
     mergedIds,
     fieldSources: resolved,
+    relationSelections: {
+      addresses: relationSelections.addresses ?? [],
+      contacts: relationSelections.contacts ?? [],
+    },
     redirects: mergedIds.map((from) => ({ from, to: canonicalId, status: 308 as const })),
   }
 }

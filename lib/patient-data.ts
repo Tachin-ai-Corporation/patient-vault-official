@@ -64,9 +64,10 @@ export type Patient = {
   }
   contacts: Contact[]
   addresses: Address[]
-  // When the record was created in the vault (ISO datetime), when the API
-  // provides it. Optional so records without a timestamp still render.
+  // Record-level audit dates from the grid response. Optional so absent API
+  // values never produce derived or invented provenance in the UI.
   created_at?: string
+  updated_at?: string
 }
 
 // ---- API-validated value sets -----------------------------------------------
