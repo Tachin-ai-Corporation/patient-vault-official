@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Sparkles, Trash2, Search, X, List, GitMerge } from 'lucide-react'
+import { Plus, Sparkles, Trash2, Search, X, List, GitMerge, ChevronDown } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
 import { patientFullName, type Patient } from '@/lib/patient-data'
 import {
@@ -71,6 +71,7 @@ export function PatientsView() {
   const [candidates, setCandidates] = useState<FindCandidate[] | null>(null)
   const [quickFilter, setQuickFilter] = useState('')
   const [finding, setFinding] = useState(false)
+  const [findOpen, setFindOpen] = useState(true)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [selectedMergeIds, setSelectedMergeIds] = useState<Set<string>>(new Set())
 
@@ -120,6 +121,7 @@ export function PatientsView() {
       setCandidates(ranked)
       setQuickFilter('')
       setSelectedMergeIds(new Set())
+      setFindOpen(false)
       showNotice(
         `Found ${ranked.length} match${ranked.length === 1 ? '' : 'es'} via ${findPath}`,
       )
@@ -149,6 +151,7 @@ export function PatientsView() {
     setCandidates(null)
     setQuickFilter('')
     setSelectedMergeIds(new Set())
+    setFindOpen(true)
   }
 
   function showNotice(text: string) {
@@ -351,21 +354,42 @@ export function PatientsView() {
             className="rounded-card border border-border bg-card p-4"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Find patients</h2>
-                <p className="text-sm text-muted-foreground">Search the vault using documented demographic fields.</p>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={criteria.exact}
-                  onChange={(event) => updateCriteria('exact', event.target.checked)}
-                  className="h-4 w-4 rounded border-border accent-primary"
+              <button
+                type="button"
+                onClick={() => setFindOpen((open) => !open)}
+                aria-expanded={findOpen}
+                aria-controls="find-patients-body"
+                className="flex items-center gap-2 rounded-input text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronDown
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${findOpen ? '' : '-rotate-90'}`}
+                  aria-hidden="true"
                 />
-                Exact
-              </label>
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">Find patients</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {findOpen
+                      ? 'Search the vault using documented demographic fields.'
+                      : candidates
+                        ? `${candidates.length} result${candidates.length === 1 ? '' : 's'} · tap to refine`
+                        : 'Tap to search the vault.'}
+                  </span>
+                </span>
+              </button>
+              {findOpen && (
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={criteria.exact}
+                    onChange={(event) => updateCriteria('exact', event.target.checked)}
+                    className="h-4 w-4 rounded border-border accent-primary"
+                  />
+                  Exact
+                </label>
+              )}
             </div>
 
+            <div id="find-patients-body" hidden={!findOpen}>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
                 First name
@@ -394,7 +418,7 @@ export function PatientsView() {
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <code className="break-all font-mono text-xs text-muted-foreground">{patientFindPreview(criteria)}</code>
-                {!canFind && <p className="mt-1 text-xs text-destructive">Enter at least one demographic field.</p>}
+                {!canFind && <p className="mt-1 text-xs text-warning">Enter at least one demographic field.</p>}
               </div>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="ghost" onClick={clearFind} disabled={!canFind && !candidates}>
@@ -406,6 +430,7 @@ export function PatientsView() {
                   {finding ? 'Finding…' : 'Find'}
                 </Button>
               </div>
+            </div>
             </div>
           </form>
 
