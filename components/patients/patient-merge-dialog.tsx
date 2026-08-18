@@ -6,7 +6,16 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
 import { patientFullName, type Patient } from '@/lib/patient-data'
-import { listAddresses, listContacts, type AddressDTO, type ContactDTO } from '@/lib/api/patient'
+import {
+  listAddresses,
+  listAliases,
+  listContacts,
+  listIdentifiers,
+  type AddressDTO,
+  type ContactDTO,
+  type PatientAlias,
+  type PatientIdentifier,
+} from '@/lib/api/patient'
 import {
   MERGE_FIELDS,
   buildMergePlan,
@@ -21,7 +30,11 @@ type PatientRelations = {
   patientId: string
   addresses: AddressDTO[]
   contacts: ContactDTO[]
+  aliases: PatientAlias[]
+  identifiers: PatientIdentifier[]
 }
+
+type RelationValue = AddressDTO | ContactDTO | PatientAlias | PatientIdentifier
 
 type RelationItem = {
   id: string
@@ -32,19 +45,23 @@ type RelationItem = {
 const RELATION_SECTIONS: ReadonlyArray<{ kind: RelationKind; label: string }> = [
   { kind: 'addresses', label: 'Addresses' },
   { kind: 'contacts', label: 'Contacts' },
+  { kind: 'aliases', label: 'Aliases' },
+  { kind: 'identifiers', label: 'Identities' },
 ]
 
 async function loadRelations(patientIds: string[]): Promise<PatientRelations[]> {
   return Promise.all(patientIds.map(async (patientId) => {
-    const [addresses, contacts] = await Promise.all([
+    const [addresses, contacts, aliases, identifiers] = await Promise.all([
       listAddresses(patientId),
       listContacts(patientId),
+      listAliases(patientId),
+      listIdentifiers(patientId, 'all'),
     ])
-    return { patientId, addresses, contacts }
+    return { patientId, addresses, contacts, aliases, identifiers }
   }))
 }
 
-function relationItem(kind: RelationKind, value: AddressDTO | ContactDTO): RelationItem {
+function relationItem(kind: RelationKind, value: RelationValue): RelationItem {
   if (kind === 'addresses') {
     const address = value as AddressDTO
     return {
@@ -53,11 +70,28 @@ function relationItem(kind: RelationKind, value: AddressDTO | ContactDTO): Relat
       detail: [address.city, address.state, address.postalCode, address.country].filter(Boolean).join(' '),
     }
   }
-  const contact = value as ContactDTO
+  if (kind === 'contacts') {
+    const contact = value as ContactDTO
+    return {
+      id: String(contact.id),
+      label: contact.value,
+      detail: [contact.type, contact.label].filter(Boolean).join(' · '),
+    }
+  }
+  if (kind === 'aliases') {
+    const alias = value as PatientAlias
+    return {
+      id: String(alias.id),
+      label: alias.fullName || [alias.firstName, alias.lastName].filter(Boolean).join(' ') || alias.alias || 'Untitled alias',
+      detail: [alias.type, alias.alias && alias.alias !== alias.fullName ? alias.alias : null, alias.effectiveFrom, alias.effectiveTo].filter(Boolean).join(' · '),
+    }
+  }
+  const identifier = value as PatientIdentifier
+  const authority = [identifier.organization_name, identifier.external_system_name].filter(Boolean).join(' / ')
   return {
-    id: String(contact.id),
-    label: contact.value,
-    detail: [contact.type, contact.label].filter(Boolean).join(' · '),
+    id: `${identifier.organization_id ?? 'unknown'}:${identifier.external_system_id ?? 'unknown'}:${identifier.value}`,
+    label: identifier.value,
+    detail: [identifier.type, authority, identifier.source_name ?? identifier.source, identifier.deletedAt ? 'Inactive' : 'Active'].filter(Boolean).join(' · '),
   }
 }
 
@@ -82,11 +116,16 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
     ? canonicalId
     : patients[0]?.id ?? ''
   const relationSelections = useMemo(() => {
-    const result: Record<RelationKind, RelationSelection[]> = { addresses: [], contacts: [] }
+    const result: Record<RelationKind, RelationSelection[]> = {
+      addresses: [],
+      contacts: [],
+      aliases: [],
+      identifiers: [],
+    }
     for (const relation of relations ?? []) {
-      for (const kind of ['addresses', 'contacts'] as const) {
+      for (const { kind } of RELATION_SECTIONS) {
         for (const value of relation[kind]) {
-          const itemId = String(value.id)
+          const itemId = relationItem(kind, value).id
           const key = `${kind}:${relation.patientId}:${itemId}`
           result[kind].push({
             patientId: relation.patientId,
@@ -239,7 +278,6 @@ export function PatientMergeDialog({ open, patients, onClose }: Props) {
                 )}
               </section>
             ))}
-            <p className="text-xs text-muted-foreground">Aliases and Identifiers are omitted because the repository endpoint catalog does not document GET operations for those relations.</p>
           </div>
 
           {plan && (

@@ -25,7 +25,7 @@ export const MERGE_FIELDS: ReadonlyArray<{ key: MergeField; label: string }> = [
   { key: 'last4_ssn', label: 'Last 4 SSN' },
 ]
 
-export type RelationKind = 'addresses' | 'contacts'
+export type RelationKind = 'addresses' | 'contacts' | 'aliases' | 'identifiers'
 
 export type RelationSelection = {
   patientId: string
@@ -79,6 +79,8 @@ export function buildMergePlan(
     relationSelections: {
       addresses: relationSelections.addresses ?? [],
       contacts: relationSelections.contacts ?? [],
+      aliases: relationSelections.aliases ?? [],
+      identifiers: relationSelections.identifiers ?? [],
     },
     redirects: mergedIds.map((from) => ({ from, to: canonicalId, status: 308 as const })),
   }

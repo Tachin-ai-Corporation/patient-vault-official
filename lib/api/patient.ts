@@ -575,6 +575,33 @@ export async function deleteAddress(patientId: string, addressId: string): Promi
 }
 
 // ============================================================================
+// Aliases
+// ============================================================================
+
+export interface PatientAlias {
+  id: number
+  alias?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  fullName?: string | null
+  type?: string | null
+  effectiveFrom?: string | null
+  effectiveTo?: string | null
+}
+
+export async function listAliases(patientId: string): Promise<PatientAlias[]> {
+  const data = await request<unknown>(`/v3/patient/${encodeURIComponent(patientId)}/alias`, { method: "GET" })
+  return unwrapList<PatientAlias>(data, "aliases", "content", "items", "data")
+}
+
+export function getAlias(patientId: string, aliasId: string): Promise<PatientAlias> {
+  return request<PatientAlias>(
+    `/v3/patient/${encodeURIComponent(patientId)}/alias/${encodeURIComponent(aliasId)}`,
+    { method: "GET" },
+  )
+}
+
+// ============================================================================
 // External identifiers
 // ============================================================================
 

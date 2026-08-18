@@ -21,6 +21,8 @@ test('keeps field-level and relation survivor choices separate from canonical id
   const relationSelections = {
     addresses: [{ patientId: 'b', itemId: 'address-1', keep: true }],
     contacts: [{ patientId: 'a', itemId: 'contact-1', keep: false }],
+    aliases: [{ patientId: 'b', itemId: 'alias-1', keep: true }],
+    identifiers: [{ patientId: 'b', itemId: 'org:system:MRN-1', keep: true }],
   }
   const plan = buildMergePlan(['a', 'b'], 'a', { family_name: 'b' }, relationSelections)
   assert.equal(plan.canonicalId, 'a')

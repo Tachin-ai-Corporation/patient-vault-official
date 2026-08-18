@@ -103,6 +103,15 @@ export const ENDPOINTS: EndpointDef[] = [
     ],
   },
   {
+    key: 'alias-list',
+    name: 'List aliases',
+    method: 'GET',
+    pathTemplate: '/patient/{id}/alias',
+    needsPatient: true,
+    description: 'List all active name aliases for a patient.',
+    fields: [],
+  },
+  {
     key: 'alias',
     name: 'Alias',
     method: 'POST',
@@ -113,6 +122,17 @@ export const ENDPOINTS: EndpointDef[] = [
       { name: 'firstName', label: 'First name', required: true, type: 'text', placeholder: 'Mari', example: 'Mari', in: 'body' },
       { name: 'lastName', label: 'Last name', required: true, type: 'text', placeholder: 'Santos', example: 'Santos', in: 'body' },
       { name: 'use', label: 'Use', required: false, type: 'select', options: opt(['', 'nickname', 'maiden', 'aka']), in: 'body' },
+    ],
+  },
+  {
+    key: 'identifier-list',
+    name: 'List identities',
+    method: 'GET',
+    pathTemplate: '/patient/{id}/identifier',
+    needsPatient: true,
+    description: 'List external identities for a patient.',
+    fields: [
+      { name: 'active', label: 'Activity', required: false, type: 'select', options: opt(['true', 'false', 'all']), defaultValue: 'true', in: 'query' },
     ],
   },
   {
