@@ -25,6 +25,7 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { DocumentsSection } from '@/components/patients/documents-section'
 import { IdentitiesSection } from '@/components/patients/identities-section'
+import { AliasesSection } from '@/components/patients/aliases-section'
 import { EditDemographicsModal } from '@/components/patients/edit-demographics-modal'
 import {
   RelatedRecordModal,
@@ -501,7 +502,10 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
           </dl>
         </RecordSectionCard>
 
-        {/* 2. Contacts */}
+        {/* 2. Aliases */}
+        <AliasesSection patientId={patient.id} />
+
+        {/* 3. Contacts */}
         <RecordSectionCard
           title="contacts"
           summary={contactSummary}
