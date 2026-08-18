@@ -594,11 +594,43 @@ export async function listAliases(patientId: string): Promise<PatientAlias[]> {
   return unwrapList<PatientAlias>(data, "aliases", "content", "items", "data")
 }
 
+export interface PatientAliasInput {
+  alias?: string
+  firstName?: string
+  lastName?: string
+  fullName?: string
+  type: 'maiden' | 'nickname' | 'preferred' | 'previous' | 'legal_change' | 'alias'
+  effectiveFrom?: string
+  effectiveTo?: string
+}
+
+function aliasPath(patientId: string, aliasId?: string) {
+  const base = `/v3/patient/${encodeURIComponent(patientId)}/alias`
+  return aliasId ? `${base}/${encodeURIComponent(aliasId)}` : base
+}
+
 export function getAlias(patientId: string, aliasId: string): Promise<PatientAlias> {
-  return request<PatientAlias>(
-    `/v3/patient/${encodeURIComponent(patientId)}/alias/${encodeURIComponent(aliasId)}`,
-    { method: "GET" },
-  )
+  return request<PatientAlias>(aliasPath(patientId, aliasId), { method: 'GET' })
+}
+
+export function addAlias(patientId: string, body: PatientAliasInput): Promise<PatientAlias> {
+  return request<PatientAlias>(aliasPath(patientId), { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function replaceAlias(patientId: string, aliasId: string, body: PatientAliasInput): Promise<PatientAlias> {
+  return request<PatientAlias>(aliasPath(patientId, aliasId), { method: 'PUT', body: JSON.stringify(body) })
+}
+
+export function patchAlias(patientId: string, aliasId: string, body: Partial<PatientAliasInput>): Promise<PatientAlias> {
+  return request<PatientAlias>(aliasPath(patientId, aliasId), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/merge-patch+json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteAlias(patientId: string, aliasId: string): Promise<{ id?: number; active?: boolean; deletedAt?: string }> {
+  return request(aliasPath(patientId, aliasId), { method: 'DELETE' })
 }
 
 // ============================================================================
