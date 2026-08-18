@@ -196,7 +196,7 @@ function accessTokenLooksExpired(env: SessionEnvironment): boolean {
  * the server-side session/token. Never throws — logout must always proceed to
  * local teardown regardless of the outcome.
  *
- * The endpoint is `POST {OAUTH_ROOT}/auth/user/logout` with a Bearer access
+ * The endpoint is `POST {OAUTH_ROOT}/auth/user/logout/all-devices` with a Bearer access
  * token and credentials included (so platform cookies are sent). OAUTH_ROOT is
  * the base URL with a trailing `/api` stripped — the same convention
  * `refreshToken()` uses for `/auth/oauth2/token`.
@@ -212,16 +212,14 @@ async function platformLogout(env: SessionEnvironment): Promise<void> {
     if (!token) return // nothing to invalidate
 
     const root = ENVIRONMENT_CONFIG[env].apiRoot.replace(/\/api\/?$/, "")
-    const res = await fetch(`${root}/auth/user/logout`, {
+    await fetch(`${root}/auth/user/logout/all-devices`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       credentials: "include", // spec: withCredentials -> send platform cookies
       cache: "no-store",
     })
-    console.log("[v0] platformLogout:", res.status)
-  } catch (e) {
+  } catch {
     // CORS block / network error / missing base URL — fall through to teardown.
-    console.log("[v0] platformLogout failed (continuing):", (e as Error)?.message)
   }
 }
 
@@ -233,8 +231,8 @@ async function platformLogout(env: SessionEnvironment): Promise<void> {
  * be written scoped to the parent domain (`.1health.io`) and/or marked HttpOnly
  * during the 1health launch — neither of which client JS can remove:
  *
- *   0. PLATFORM: POST {OAUTH_ROOT}/auth/user/logout (Bearer + credentials) to
- *      invalidate the server-side token/session. Done FIRST, while we still hold
+ *   0. PLATFORM: POST {OAUTH_ROOT}/auth/user/logout/all-devices (Bearer + credentials) to
+ *      invalidate every server-side token/session. Done FIRST, while we still hold
  *      a valid access token. Best-effort: never blocks the teardown below.
  *   1. SERVER: POST /api/logout, which expires every session cookie across the
  *      host-only AND parent-domain scopes (and can clear HttpOnly cookies). We
