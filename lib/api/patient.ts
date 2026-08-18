@@ -575,6 +575,76 @@ export async function deleteAddress(patientId: string, addressId: string): Promi
 }
 
 // ============================================================================
+// External identifiers
+// ============================================================================
+
+export type IdentifierStatus = 'true' | 'false' | 'all'
+
+export interface PatientIdentifier {
+  organization_name?: string | null
+  organization_id?: string | number | null
+  external_system_name?: string | null
+  external_system_id?: string | number | null
+  value: string
+  type?: string | null
+  source?: string | null
+  source_name?: string | null
+  active_from?: string | null
+  active_until?: string | null
+  deletedAt?: string | null
+}
+
+export interface PatientIdentifierInput {
+  value: string
+  type?: string
+  authority_organization_id?: string
+  authority_organization_name?: string
+  authority_external_system_id?: string
+  authority_external_system_name?: string
+  source_name?: string
+  active_from?: string | null
+  active_until?: string | null
+}
+
+function identifierPath(patientId: string, organizationId?: string, externalSystemId?: string) {
+  const base = `/v3/patient/${encodeURIComponent(patientId)}/identifier`
+  if (!organizationId || !externalSystemId) return base
+  return `${base}/${encodeURIComponent(organizationId)}/${encodeURIComponent(externalSystemId)}`
+}
+
+export async function listIdentifiers(patientId: string, active: IdentifierStatus = 'true'): Promise<PatientIdentifier[]> {
+  const result = await request<{ identifiers?: PatientIdentifier[] } | PatientIdentifier[]>(
+    `${identifierPath(patientId)}?active=${active}`,
+    { method: 'GET' },
+  )
+  return Array.isArray(result) ? result : result?.identifiers ?? []
+}
+
+export function getIdentifier(patientId: string, organizationId: string, externalSystemId: string) {
+  return request<PatientIdentifier>(identifierPath(patientId, organizationId, externalSystemId), { method: 'GET' })
+}
+
+export function addIdentifier(patientId: string, body: PatientIdentifierInput) {
+  return request<PatientIdentifier>(identifierPath(patientId), { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function replaceIdentifier(patientId: string, organizationId: string, externalSystemId: string, body: PatientIdentifierInput) {
+  return request<PatientIdentifier>(identifierPath(patientId, organizationId, externalSystemId), { method: 'PUT', body: JSON.stringify(body) })
+}
+
+export function patchIdentifier(patientId: string, organizationId: string, externalSystemId: string, body: Partial<PatientIdentifierInput>) {
+  return request<PatientIdentifier>(identifierPath(patientId, organizationId, externalSystemId), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/merge-patch+json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteIdentifier(patientId: string, organizationId: string, externalSystemId: string) {
+  return request<PatientIdentifier>(identifierPath(patientId, organizationId, externalSystemId), { method: 'DELETE' })
+}
+
+// ============================================================================
 // Deceased
 // ============================================================================
 
