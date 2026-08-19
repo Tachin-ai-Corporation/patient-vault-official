@@ -186,43 +186,6 @@ export function migrateLegacySession(): SessionEnvironment | null {
   return legacyEnv
 }
 
-/** True if the selected slot is missing or near expiry. */
-function accessTokenLooksExpired(env: SessionEnvironment): boolean {
-  return !hasEnvironmentSession(env)
-}
-
-/**
- * Best-effort call to the 1health platform logout endpoint, which invalidates
- * the server-side session/token. Never throws — logout must always proceed to
- * local teardown regardless of the outcome.
- *
- * The endpoint is `POST {OAUTH_ROOT}/auth/user/logout/all-devices` with a Bearer access
- * token and credentials included (so platform cookies are sent). OAUTH_ROOT is
- * the base URL with a trailing `/api` stripped — the same convention
- * `refreshToken()` uses for `/auth/oauth2/token`.
- */
-async function platformLogout(env: SessionEnvironment): Promise<void> {
-  try {
-    // Refresh once if the access token is (near) expired, so the Bearer we send
-    // is valid and the server-side invalidation actually lands.
-    if (accessTokenLooksExpired(env) && getRefreshToken(env)) {
-      await refreshToken(env)
-    }
-    const token = getAccessToken(env)
-    if (!token) return // nothing to invalidate
-
-    const root = ENVIRONMENT_CONFIG[env].apiRoot.replace(/\/api\/?$/, "")
-    await fetch(`${root}/auth/user/logout/all-devices`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include", // spec: withCredentials -> send platform cookies
-      cache: "no-store",
-    })
-  } catch {
-    // CORS block / network error / missing base URL — fall through to teardown.
-  }
-}
-
 /**
  * Fully logs the user out. Await this before navigating away.
  *
@@ -231,12 +194,10 @@ async function platformLogout(env: SessionEnvironment): Promise<void> {
  * be written scoped to the parent domain (`.1health.io`) and/or marked HttpOnly
  * during the 1health launch — neither of which client JS can remove:
  *
- *   0. PLATFORM: POST {OAUTH_ROOT}/auth/user/logout/all-devices (Bearer + credentials) to
- *      invalidate every server-side token/session. Done FIRST, while we still hold
- *      a valid access token. Best-effort: never blocks the teardown below.
- *   1. SERVER: POST /api/logout, which expires every session cookie across the
- *      host-only AND parent-domain scopes (and can clear HttpOnly cookies). We
- *      await it so the Set-Cookie response is applied before we navigate.
+ *   1. SERVER: POST /api/logout, which calls the platform global-logout endpoint
+ *      for each environment and expires every session cookie across host-only and
+ *      parent-domain scopes (including HttpOnly cookies). We await it so the
+ *      Set-Cookie response is applied before navigating.
  *   2. CLIENT cookies: sweep readable (non-HttpOnly) cookies with path/domain
  *      variants as a fast, belt-and-suspenders clear.
  *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
@@ -247,10 +208,9 @@ async function platformLogout(env: SessionEnvironment): Promise<void> {
  * navigating the browser to that host's own logout page (endpoint TBD).
  */
 export async function signOut(): Promise<void> {
-  // 0. Invalidate the server-side platform session while we still hold a token.
-  await Promise.allSettled(SESSION_ENVIRONMENTS.map((env) => platformLogout(env)))
-
-  // 1. Authoritative server-side clear (handles parent-domain + HttpOnly).
+  // 1. Authoritative server-side platform logout and cookie clear. Keeping the
+  // platform request in /api/logout avoids a duplicate invalidation race and
+  // works even when access-token cookies are HttpOnly.
   try {
     await fetch("/api/logout", { method: "POST", credentials: "include", cache: "no-store" })
   } catch {
