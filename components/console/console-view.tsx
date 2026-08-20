@@ -4,6 +4,7 @@ import { DeveloperProfile } from '@/components/console/developer-profile'
 import { InspectorToggle } from '@/components/console/inspector-toggle'
 import { GoToProduction } from '@/components/console/go-to-production'
 import { CustomFieldDefinitions } from '@/components/console/custom-field-definitions'
+import { PatientVaultApplication } from '@/components/console/patient-vault-application'
 
 // Console is the single settings surface for the developer + this vault. It
 // consolidates the API key, the developer profile (name editable, email
@@ -26,6 +27,7 @@ export function ConsoleView() {
       </div>
 
       <ConsoleApiKey />
+      <PatientVaultApplication />
       <CustomFieldDefinitions />
       <GoToProduction />
       <PromotionCode />
