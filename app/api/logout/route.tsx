@@ -64,24 +64,17 @@ const EXPIRED = "Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
 function buildExpiredCookies(host: string, secure: boolean): string[] {
   const domains = domainVariants(host)
 
-  // A partitioned (CHIPS) cookie lives in a different jar than an unpartitioned
-  // one, and an expiring Set-Cookie only matches a cookie with the same
-  // partition attribute. Session cookies are now written as
-  // `SameSite=None; Secure; Partitioned`, so we must emit BOTH forms — the
-  // partitioned one to clear current cookies, and the legacy `Lax` one to clear
-  // any cookie written before this change. Omitting either silently breaks
-  // sign-out.
-  const variants = secure
-    ? ["SameSite=None; Secure; Partitioned", "SameSite=None; Secure", "SameSite=Lax; Secure"]
-    : ["SameSite=Lax"]
+  // Cookie identity is determined by name, domain, and path. SameSite and Secure
+  // do not create separate cookie identities, so one expiry per domain is enough.
+  // Keeping this compact also prevents the logout response from exceeding proxy
+  // header limits, which previously caused the browser's /api/logout request to fail.
+  const attributes = secure ? "SameSite=None; Secure" : "SameSite=Lax"
 
   const cookies: string[] = []
   for (const name of SESSION_COOKIES) {
     for (const domain of domains) {
       const domainPart = domain ? `; Domain=${domain}` : ""
-      for (const variant of variants) {
-        cookies.push(`${name}=; ${EXPIRED}${domainPart}; ${variant}`)
-      }
+      cookies.push(`${name}=; ${EXPIRED}${domainPart}; ${attributes}`)
     }
   }
   return cookies
@@ -97,7 +90,7 @@ function readCookie(req: Request, name: string): string | null {
 
 /**
  * Server-authoritative platform logout. Forwards the caller's access token (and
- * Cookie header) to `POST {OAUTH_ROOT}/auth/user/logout/all-devices` so every
+ * Cookie header) to `POST {API_ROOT}/api/v2/user/logout/all-devices` so every
  * 1health server-side session/token is invalidated. This runs server-to-server, so it is
  * immune to the browser CORS restrictions that can block the client's own
  * credentialed cross-origin call. Best-effort: any failure is logged and
@@ -109,13 +102,11 @@ async function platformLogout(req: Request, env: "demo" | "prod"): Promise<void>
     if (!accessToken) return
 
     const root = env === "demo"
-      ? "https://pv.demo.1health.io"
+      ? "https://1health.demo.1health.io"
       : "https://1health.app.1health.io"
-    const incomingCookies = req.headers.get("cookie")
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
-    if (incomingCookies) headers.Cookie = incomingCookies
 
-    const res = await fetch(`${root}/auth/user/logout/all-devices`, {
+    const res = await fetch(`${root}/api/v2/user/logout/all-devices`, {
       method: "POST",
       headers,
       cache: "no-store",
