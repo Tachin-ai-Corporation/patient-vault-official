@@ -203,6 +203,8 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
   return (
     <RecordSectionCard
       title="documents"
+      patientId={patientId}
+      customFieldSection="documents"
       summary={summary}
       action={
         <div className="flex items-center gap-2">

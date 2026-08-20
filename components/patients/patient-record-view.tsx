@@ -458,6 +458,8 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         {/* 1. Demographics */}
         <RecordSectionCard
           title="demographics"
+          patientId={patient.id}
+          customFieldSection="demographics"
           summary={`${name} · ${patient.date_of_birth} · ${prettifyCode(patient.sex_at_birth)}`}
           action={
             <Button variant="ghost" size="sm" onClick={() => setEditDemoOpen(true)}>
@@ -508,6 +510,8 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         {/* 3. Contacts */}
         <RecordSectionCard
           title="contacts"
+          patientId={patient.id}
+          customFieldSection="contacts"
           summary={contactSummary}
           action={
             <Button
@@ -625,6 +629,8 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         {/* 3. Addresses */}
         <RecordSectionCard
           title="addresses"
+          patientId={patient.id}
+          customFieldSection="addresses"
           summary={addressSummary}
           action={
             <Button

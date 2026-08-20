@@ -109,7 +109,7 @@ export function AliasesSection({ patientId }: { patientId: string }) {
   }
 
   return <>
-    <RecordSectionCard title="aliases" summary={isLoading ? 'Loading aliases' : `${aliases.length} alias${aliases.length === 1 ? '' : 'es'}`} action={
+    <RecordSectionCard title="aliases" patientId={patientId} customFieldSection="aliases" summary={isLoading ? 'Loading aliases' : `${aliases.length} alias${aliases.length === 1 ? '' : 'es'}`} action={
       <Button variant="outline" size="sm" onClick={openAdd}><Plus className="h-3.5 w-3.5" data-icon="inline-start" />Add alias</Button>
     }>
       {actionError && <div role="alert" className="mb-4 rounded-input border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">{actionError}</div>}

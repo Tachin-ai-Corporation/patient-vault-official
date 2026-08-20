@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Field, Select, TextInput } from '@/components/ui/field'
 import { getConsoleApplication } from '@/lib/api/console-application'
-import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, getInstanceCustomData, listCustomFieldDefinitions, upsertInstanceCustomData, type CustomFieldType } from '@/lib/api/custom-fields'
+import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, listCustomFieldDefinitions, updatePatientCustomData, type CustomFieldType } from '@/lib/api/custom-fields'
 import { useSession } from '@/lib/session-context'
 
 const TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -31,15 +31,16 @@ export function PatientCustomFields({ sectionKey, patientId }: { sectionKey: str
   const numericId = Number(patientId)
   const key = app && section && Number.isFinite(numericId) ? ['patient-custom-fields', currentEnv, app.id, section.key, numericId] as const : null
   const { data, mutate } = useSWR(key, async () => {
-    const [definitions, values] = await Promise.all([listCustomFieldDefinitions(app!.id, section!.boClassId), getInstanceCustomData(numericId)])
-    return { definitions: definitions.filter((definition) => definition.name.startsWith(`${section!.label}:`)), values }
+    const definitions = await listCustomFieldDefinitions(app!.id, section!.boClassId)
+    return { definitions: definitions.filter((definition) => definition.name.startsWith(`${section!.label}:`)) }
   }, { revalidateOnFocus: false })
 
   if (!section) return null
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!app) return
+    if (!app || !section) return
+    const activeSection = section
     const form = new FormData(event.currentTarget)
     const displayName = String(form.get('displayName') ?? '').trim()
     const fieldType = String(form.get('fieldType')) as CustomFieldType
@@ -48,13 +49,13 @@ export function PatientCustomFields({ sectionKey, patientId }: { sectionKey: str
       setSaving(true)
       setMessage(null)
       const definition = await createCustomFieldDefinition(app.id, {
-        name: `${section.label}: ${displayName}`,
-        boClassId: section.boClassId,
+        name: `${activeSection.label}: ${displayName}`,
+        boClassId: activeSection.boClassId,
         fields: [{ displayName, fieldType }],
       })
       const field = definition.fields[0]
       if (!field?.fieldPosition) throw new Error('The API did not return a storage position for this field.')
-      await upsertInstanceCustomData(numericId, { [field.fieldPosition]: parseValue(rawValue, fieldType) })
+      await updatePatientCustomData(numericId, { [field.fieldPosition]: parseValue(rawValue, fieldType) })
       await mutate()
       setOpen(false)
     } catch (cause) {
@@ -71,7 +72,7 @@ export function PatientCustomFields({ sectionKey, patientId }: { sectionKey: str
   return (
     <div className="mt-4 flex flex-col gap-3 border-t pt-4">
       <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Braces className="size-4 text-muted-foreground" aria-hidden="true" /><h4 className="text-sm font-medium text-foreground">Custom fields</h4></div><Dialog open={open} onOpenChange={setOpen}><DialogTrigger render={<Button type="button" size="sm" variant="outline"><Plus data-icon="inline-start" aria-hidden="true" />Add custom field</Button>} /><DialogContent><form onSubmit={save}><DialogHeader><DialogTitle>Add custom field</DialogTitle><DialogDescription>Define a reusable field for {section.label.toLowerCase()} and save its value for this patient.</DialogDescription></DialogHeader><div className="flex flex-col gap-4 py-5"><Field label="Field name" htmlFor={`${section.key}-field-name`}><TextInput id={`${section.key}-field-name`} name="displayName" required maxLength={80} /></Field><Field label="Field type" htmlFor={`${section.key}-field-type`}><Select id={`${section.key}-field-type`} name="fieldType" defaultValue="TEXT">{TYPES.map((type) => <option key={type} value={type}>{type.toLowerCase()}</option>)}</Select></Field><Field label="Value" htmlFor={`${section.key}-field-value`}><TextInput id={`${section.key}-field-value`} name="value" required /></Field>{message && <p className="text-sm text-destructive">{message}</p>}</div><DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Define and save'}</Button></DialogFooter></form></DialogContent></Dialog></div>
-      {data?.definitions.length ? <dl className="grid gap-2 sm:grid-cols-2">{data.definitions.flatMap((definition) => definition.fields.map((field) => <div key={field.id} className="rounded-lg bg-muted/30 px-3 py-2"><dt className="text-xs text-muted-foreground">{field.displayName}</dt><dd className="mt-0.5 break-words text-sm text-foreground">{String(data.values.customData[field.fieldPosition ?? ''] ?? '—')}</dd></div>))}</dl> : <p className="text-xs text-muted-foreground">No custom values for this section.</p>}
+      {data?.definitions.length ? <dl className="grid gap-2 sm:grid-cols-2">{data.definitions.flatMap((definition) => definition.fields.map((field) => <div key={field.id} className="rounded-lg bg-muted/30 px-3 py-2"><dt className="text-xs text-muted-foreground">{field.displayName}</dt><dd className="mt-0.5 break-words text-sm text-muted-foreground">Saved on this patient record</dd></div>))}</dl> : <p className="text-xs text-muted-foreground">No custom values for this section.</p>}
     </div>
   )
 }

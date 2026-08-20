@@ -185,6 +185,8 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
     <>
       <RecordSectionCard
         title="external identities"
+        patientId={patientId}
+        customFieldSection="external-identities"
         summary={summary}
         action={
           <Button variant="outline" size="sm" onClick={openAdd}>

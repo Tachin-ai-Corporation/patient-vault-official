@@ -26,6 +26,8 @@ export function RecordSectionCard({
   children,
   action,
   defaultOpen = false,
+  patientId,
+  customFieldSection,
 }: RecordSectionCardProps) {
   const [open, setOpen] = useState(defaultOpen)
 
@@ -55,7 +57,12 @@ export function RecordSectionCard({
         {action && <div className="shrink-0">{action}</div>}
       </div>
       {open && (
-        <div className="border-t border-border px-4 py-4">{children}</div>
+        <div className="border-t border-border px-4 py-4">
+          {children}
+          {patientId && customFieldSection && (
+            <PatientCustomFields patientId={patientId} sectionKey={customFieldSection} />
+          )}
+        </div>
       )}
     </section>
   )

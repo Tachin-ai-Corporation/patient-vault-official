@@ -61,30 +61,13 @@ export function deleteCustomFieldDefinition(appId: number, definitionId: number)
   return apiRequest<void>(`/v3/custom-data/definition/${definitionId}${query(appId)}`, { method: 'DELETE' })
 }
 
-export type InstanceCustomData = {
-  id: number
-  name?: string
-  typeKey?: string
-  customData: Record<string, unknown>
-}
-
-export async function getInstanceCustomData(instanceId: number) {
-  const rows = await apiRequest<InstanceCustomData[]>('/v2/data/custom-data', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify([instanceId]),
-  })
-  return rows.find((row) => row.id === instanceId) ?? { id: instanceId, customData: {} }
-}
-
-export function upsertInstanceCustomData(
-  instanceId: number,
+export function updatePatientCustomData(
+  patientId: number,
   customData: Record<string, unknown>,
-  operation: 'APPEND' | 'REPLACE' | 'CLEAR' = 'APPEND',
 ) {
-  return apiRequest<void>('/v2/data/custom-data/bulk', {
-    method: 'POST',
+  return apiRequest<void>(`/v3/patient/${patientId}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify([{ instanceId, customData, operation }]),
+    body: JSON.stringify({ customData }),
   })
 }
