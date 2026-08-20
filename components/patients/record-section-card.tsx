@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
+import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
 
 type RecordSectionCardProps = {
   // Section name, rendered mono/uppercase to match the design system.
@@ -15,6 +16,8 @@ type RecordSectionCardProps = {
   action?: ReactNode
   // Collapsed by default each visit — nothing is persisted.
   defaultOpen?: boolean
+  patientId?: string
+  customFieldSection?: string
 }
 
 export function RecordSectionCard({
