@@ -127,7 +127,14 @@ export function PatientVaultApplication({ returnTo }: { returnTo?: string }) {
         <CardHeader className="gap-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-primary"><ShieldCheck aria-hidden="true" /></div>
+              <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-primary">
+                {application?.iconUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={application.iconUrl || "/placeholder.svg"} alt={`${application.name} logo`} className="size-full object-contain" />
+                ) : (
+                  <ShieldCheck aria-hidden="true" />
+                )}
+              </div>
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2"><CardTitle id="patient-vault-app-title" className="text-lg text-balance">Patient Vault application</CardTitle><EnvBadge env={currentEnv} /></div>
                 <CardDescription className="max-w-2xl text-pretty">One private application owns this vault&apos;s reusable custom-field definitions.</CardDescription>
