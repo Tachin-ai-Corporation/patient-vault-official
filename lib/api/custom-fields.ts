@@ -23,7 +23,6 @@ export type CustomFieldDefinition = {
     displayName: string
     fieldKey: string
     fieldType: CustomFieldType
-    fieldPosition?: string
     jsonSchema?: string
   }>
 }
@@ -36,6 +35,14 @@ type DefinitionListResponse = {
 
 function query(appId: number) {
   return `?appId=${encodeURIComponent(appId)}`
+}
+
+export function customFieldDefinitionsKey(environment: string, appId: number, boClassId = 22) {
+  return ['custom-field-definitions', environment, appId, boClassId] as const
+}
+
+export function customFieldValuesKey(environment: string, appId: number, patientId: number) {
+  return ['patient-custom-field-values', environment, appId, patientId] as const
 }
 
 export async function listCustomFieldDefinitions(appId: number, boClassId: number) {
@@ -61,13 +68,18 @@ export function deleteCustomFieldDefinition(appId: number, definitionId: number)
   return apiRequest<void>(`/v3/custom-data/definition/${definitionId}${query(appId)}`, { method: 'DELETE' })
 }
 
+export function getPatientCustomData(appId: number, patientId: number) {
+  return apiRequest<Record<string, unknown>>(`/v3/custom-data/instance/${patientId}${query(appId)}`)
+}
+
 export function updatePatientCustomData(
+  appId: number,
   patientId: number,
   customData: Record<string, unknown>,
 ) {
-  return apiRequest<void>(`/v3/patient/${patientId}`, {
+  return apiRequest<Record<string, unknown>>(`/v3/custom-data/instance/${patientId}${query(appId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customData }),
+    body: JSON.stringify(customData),
   })
 }

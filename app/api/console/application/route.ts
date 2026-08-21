@@ -9,6 +9,7 @@ type StoredApplication = {
   description?: string
   state?: string
   iconUrl?: string
+  launchSecretMasked?: string
 }
 
 const COOKIE_NAMES: Record<Environment, string> = {
@@ -79,11 +80,13 @@ export async function GET(request: NextRequest) {
 
   const data = await platform.json()
   const application: StoredApplication = {
-    ...stored,
-    ...data,
     id: Number(data.id ?? stored.id),
     name: String(data.name ?? stored.name),
     url: String(data.url ?? stored.url),
+    description: typeof data.description === 'string' ? data.description : stored.description,
+    state: typeof data.state === 'string' ? data.state : stored.state,
+    iconUrl: typeof data.iconUrl === 'string' ? data.iconUrl : stored.iconUrl,
+    launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : stored.launchSecretMasked,
   }
   const response = NextResponse.json({ application })
   store(response, environment, application)
@@ -124,8 +127,14 @@ export async function POST(request: NextRequest) {
     description: String(incoming.get('description') ?? ''),
     state: String(data.state ?? 'DRAFT'),
     iconUrl: data.iconUrl,
+    launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : undefined,
   }
-  const response = NextResponse.json({ application }, { status: 201 })
+  if (typeof data.launchSecret !== 'string' || !data.launchSecret) {
+    const response = NextResponse.json({ error: 'The application was created, but its one-time key was not returned. Contact support before continuing.' }, { status: 502 })
+    store(response, environment, application)
+    return response
+  }
+  const response = NextResponse.json({ application, launchSecret: data.launchSecret }, { status: 201 })
   store(response, environment, application)
   return response
 }
@@ -157,11 +166,13 @@ export async function PUT(request: NextRequest) {
 
   const data = await platform.json().catch(() => ({}))
   const application: StoredApplication = {
-    ...stored,
-    ...data,
+    id: stored.id,
     name: String(incoming.get('name') ?? stored.name),
     url: String(incoming.get('url') ?? stored.url),
     description: String(incoming.get('description') ?? stored.description ?? ''),
+    state: typeof data.state === 'string' ? data.state : stored.state,
+    iconUrl: typeof data.iconUrl === 'string' ? data.iconUrl : stored.iconUrl,
+    launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : stored.launchSecretMasked,
   }
   const response = NextResponse.json({ application })
   store(response, environment, application)

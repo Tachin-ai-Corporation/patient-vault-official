@@ -10,7 +10,7 @@ import { PatientVaultApplication } from '@/components/console/patient-vault-appl
 // consolidates the API key, the developer profile (name editable, email
 // locked), and a link to the signed legal agreements. Observability / logs are
 // intentionally NOT here — that surface is deferred to a later release (1.1).
-export function ConsoleView() {
+export function ConsoleView({ returnTo }: { returnTo?: string }) {
   return (
     <div className="flex flex-col gap-8">
       {/* Page header */}
@@ -27,7 +27,7 @@ export function ConsoleView() {
       </div>
 
       <ConsoleApiKey />
-      <PatientVaultApplication />
+      <PatientVaultApplication returnTo={returnTo} />
       <CustomFieldDefinitions />
       <GoToProduction />
       <PromotionCode />

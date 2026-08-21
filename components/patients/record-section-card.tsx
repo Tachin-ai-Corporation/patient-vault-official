@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
 
@@ -30,9 +30,16 @@ export function RecordSectionCard({
   customFieldSection,
 }: RecordSectionCardProps) {
   const [open, setOpen] = useState(defaultOpen)
+  const sectionId = customFieldSection ? `custom-fields-${customFieldSection}` : undefined
+
+  useEffect(() => {
+    if (!sectionId || window.location.hash !== `#${sectionId}`) return
+    setOpen(true)
+    window.requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [sectionId])
 
   return (
-    <section className="overflow-hidden rounded-card border border-border bg-card">
+    <section id={sectionId} className="scroll-mt-24 overflow-hidden rounded-card border border-border bg-card">
       <div className="flex items-center gap-3 px-4 py-3">
         <button
           type="button"

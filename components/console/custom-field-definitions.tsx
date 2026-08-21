@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { getConsoleApplication } from '@/lib/api/console-application'
-import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, deleteCustomFieldDefinition, listCustomFieldDefinitions, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
+import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, customFieldDefinitionsKey, deleteCustomFieldDefinition, listCustomFieldDefinitions, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
 import { useSession } from '@/lib/session-context'
 
 const FIELD_TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -56,8 +56,12 @@ export function CustomFieldDefinitions() {
   const appKey = ['console-application', currentEnv] as const
   const { data: appData, isLoading: appLoading } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
-  const definitionsKey = app ? ['custom-field-definitions', currentEnv, app.id] as const : null
-  const { data: results = [], error, isLoading, mutate } = useSWR(definitionsKey, async () => Promise.all(CUSTOM_FIELD_SECTIONS.map(async (section) => ({ section, definitions: (await listCustomFieldDefinitions(app!.id, section.boClassId)).filter((definition) => definition.name.startsWith(`${section.label}:`)) }))), { revalidateOnFocus: false })
+  const definitionsKey = app ? customFieldDefinitionsKey(currentEnv, app.id) : null
+  const { data: definitions = [], error, isLoading, mutate } = useSWR(definitionsKey, () => listCustomFieldDefinitions(app!.id, 22), { revalidateOnFocus: false })
+  const results = useMemo<SectionResult[]>(() => CUSTOM_FIELD_SECTIONS.map((section) => ({
+    section,
+    definitions: definitions.filter((definition) => definition.name.startsWith(`${section.label}:`)),
+  })), [definitions])
   const count = useMemo(() => results.reduce((total, result) => total + result.definitions.reduce((sum, definition) => sum + definition.fields.length, 0), 0), [results])
   const filenameBase = `patient-vault-${currentEnv}-custom-fields`
 
