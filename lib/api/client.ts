@@ -22,29 +22,92 @@ export function apiUrl(path: string): string {
 }
 
 /**
- * Perform an API request and parse the JSON response. Throws on non-2xx,
- * surfacing the API's `message` field when present so callers can display it.
- * Returns `undefined` for 204 / empty bodies.
+ * Error thrown by `apiRequest` for non-2xx responses. Carries the HTTP status
+ * so callers can branch (e.g. treat a "feature not deployed" 404 differently),
+ * and `.message` is always a human-friendly sentence — never a raw JSON dump.
+ */
+export class ApiError extends Error {
+  status: number
+  /** True when the endpoint itself isn't available in this environment. */
+  unavailable: boolean
+
+  constructor(message: string, status: number, unavailable = false) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+    this.unavailable = unavailable
+  }
+}
+
+/**
+ * Turn a raw error response into a friendly, human-readable message. Handles
+ * RFC 7807 problem-details bodies (`{ title, detail, status }`) and the 1health
+ * `{ message }` shape, and never surfaces raw JSON to the UI.
+ *
+ * Returns `{ message, unavailable }` where `unavailable` marks the case where
+ * the endpoint isn't deployed in the current environment yet (a 404 whose body
+ * reports "No static resource ..."), which we word gently for the user.
+ */
+function friendlyApiError(status: number, body: string): { message: string; unavailable: boolean } {
+  let detail = ""
+  let title = ""
+  let apiMessage = ""
+
+  if (body) {
+    try {
+      const parsed = JSON.parse(body)
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.message === "string") apiMessage = parsed.message
+        if (typeof parsed.detail === "string") detail = parsed.detail
+        if (typeof parsed.title === "string") title = parsed.title
+      }
+    } catch {
+      /* not JSON — fall through to status-based wording */
+    }
+  }
+
+  // The endpoint isn't deployed in this environment (e.g. custom-field APIs in
+  // prod). The API reports this as a 404 with "No static resource ..." — word
+  // it gently rather than showing the technical detail.
+  const notDeployed = status === 404 && /no static resource/i.test(detail)
+  if (notDeployed) {
+    return {
+      message: "This feature isn't available in the current environment yet. Please try again later or switch environments.",
+      unavailable: true,
+    }
+  }
+
+  // Prefer the API's own human-readable text, in order of usefulness.
+  const message = apiMessage || detail || title
+  if (message) return { message, unavailable: false }
+
+  // Last resort: a clean status-based sentence, never raw JSON.
+  const fallback =
+    status === 404
+      ? "The requested resource was not found."
+      : status === 401 || status === 403
+        ? "You don't have permission to perform this action."
+        : status >= 500
+          ? "The service is temporarily unavailable. Please try again."
+          : `The request failed (error ${status}).`
+  return { message: fallback, unavailable: false }
+}
+
+/**
+ * Perform an API request and parse the JSON response. Throws an `ApiError` with
+ * a friendly `.message` on non-2xx. Returns `undefined` for 204 / empty bodies.
  */
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await authFetch(apiUrl(path), init)
   if (!res.ok) {
-    let message = ""
-    let detail = ""
+    let body = ""
     try {
-      detail = await res.text()
-      if (detail) {
-        try {
-          const parsed = JSON.parse(detail)
-          if (parsed && typeof parsed.message === "string") message = parsed.message
-        } catch {
-          /* not JSON */
-        }
-      }
+      body = await res.text()
     } catch {
       /* ignore */
     }
-    throw new Error(message || `1health API ${res.status}: ${detail || res.statusText}`)
+    const { message, unavailable } = friendlyApiError(res.status, body)
+    throw new ApiError(message, res.status, unavailable)
   }
   if (res.status === 204) return undefined as T
   const text = await res.text()
