@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { getConsoleApplication } from '@/lib/api/console-application'
-import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, customFieldDefinitionsKey, deleteCustomFieldDefinition, listCustomFieldDefinitions, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
+import { boClassId, createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, customFieldDefinitionsKey, deleteCustomFieldDefinition, listCustomFieldDefinitions, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
 import { useSession } from '@/lib/session-context'
 
 const FIELD_TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -56,12 +56,27 @@ export function CustomFieldDefinitions() {
   const appKey = ['console-application', currentEnv] as const
   const { data: appData, isLoading: appLoading } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
-  const definitionsKey = app ? customFieldDefinitionsKey(currentEnv, app.id) : null
-  const { data: definitions = [], error, isLoading, mutate } = useSWR(definitionsKey, () => listCustomFieldDefinitions(app!.id, 22), { revalidateOnFocus: false })
-  const results = useMemo<SectionResult[]>(() => CUSTOM_FIELD_SECTIONS.map((section) => ({
-    section,
-    definitions: definitions.filter((definition) => definition.name.startsWith(`${section.label}:`)),
-  })), [definitions])
+  // Each distinct BO class owning a section (Person, File, …), fetched once.
+  const classIds = useMemo(() => Array.from(new Set(CUSTOM_FIELD_SECTIONS.map((section) => boClassId(section.boClass)))).sort((a, b) => a - b), [])
+  const definitionsKey = app ? (['custom-field-definitions', currentEnv, app.id, classIds.join(',')] as const) : null
+  const { data: definitionsByClass = {}, error, isLoading, mutate } = useSWR(
+    definitionsKey,
+    async () => {
+      const entries = await Promise.all(classIds.map(async (classId) => [classId, await listCustomFieldDefinitions(app!.id, classId)] as const))
+      return Object.fromEntries(entries) as Record<number, CustomFieldDefinition[]>
+    },
+    { revalidateOnFocus: false },
+  )
+  const results = useMemo<SectionResult[]>(() => CUSTOM_FIELD_SECTIONS.map((section) => {
+    const classDefs = definitionsByClass[boClassId(section.boClass)] ?? []
+    const definitions = classDefs.filter((definition) => {
+      if (definition.name.startsWith(`${section.label}:`)) return true
+      // Unprefixed legacy definitions on the Person class belong to demographics.
+      const prefixedByAnother = CUSTOM_FIELD_SECTIONS.some((other) => other.key !== section.key && definition.name.startsWith(`${other.label}:`))
+      return !prefixedByAnother && section.key === 'demographics'
+    })
+    return { section, definitions }
+  }), [definitionsByClass])
   const count = useMemo(() => results.reduce((total, result) => total + result.definitions.reduce((sum, definition) => sum + definition.fields.length, 0), 0), [results])
   const filenameBase = `patient-vault-${currentEnv}-custom-fields`
 
@@ -80,7 +95,7 @@ export function CustomFieldDefinitions() {
       if (fieldType === 'JSON' && jsonSchema) JSON.parse(jsonSchema)
       await createCustomFieldDefinition(app.id, {
         name: `${section.label}: ${displayName}`,
-        boClassId: section.boClassId,
+        boClassId: boClassId(section.boClass),
         fields: [{ displayName, fieldType, ...(jsonSchema ? { jsonSchema } : {}) }],
       })
       await mutate()
@@ -110,7 +125,7 @@ export function CustomFieldDefinitions() {
         if (!section) continue
         for (const field of importedSection.fields ?? []) {
           if (!FIELD_TYPES.includes(field.fieldType) || !field.displayName?.trim()) continue
-          await createCustomFieldDefinition(app.id, { name: `${section.label}: ${field.displayName}`, boClassId: section.boClassId, fields: [field] })
+          await createCustomFieldDefinition(app.id, { name: `${section.label}: ${field.displayName}`, boClassId: boClassId(section.boClass), fields: [field] })
         }
       }
       await mutate()

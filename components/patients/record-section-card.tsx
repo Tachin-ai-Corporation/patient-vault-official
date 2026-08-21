@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
+import { CUSTOM_FIELD_SECTIONS } from '@/lib/api/custom-fields'
 
 type RecordSectionCardProps = {
   // Section name, rendered mono/uppercase to match the design system.
@@ -18,6 +19,9 @@ type RecordSectionCardProps = {
   defaultOpen?: boolean
   patientId?: string
   customFieldSection?: string
+  // For record-scoped sections (e.g. documents), the BO instance id that owns
+  // the custom values. Omitted for patient-scoped sections.
+  customFieldInstanceId?: string | number
 }
 
 export function RecordSectionCard({
@@ -31,6 +35,11 @@ export function RecordSectionCard({
 }: RecordSectionCardProps) {
   const [open, setOpen] = useState(defaultOpen)
   const sectionId = customFieldSection ? `custom-fields-${customFieldSection}` : undefined
+  // Record-scoped sections (e.g. documents) own custom values per sub-record,
+  // so their fields live inside each record's detail UI — not this shared
+  // section-level slot. Only render the slot for patient-scoped sections.
+  const sectionMeta = customFieldSection ? CUSTOM_FIELD_SECTIONS.find((item) => item.key === customFieldSection) : undefined
+  const showSharedCustomFields = Boolean(patientId && customFieldSection && sectionMeta?.scope !== 'record')
 
   useEffect(() => {
     if (!sectionId || window.location.hash !== `#${sectionId}`) return
@@ -66,8 +75,8 @@ export function RecordSectionCard({
       {open && (
         <div className="border-t border-border px-4 py-4">
           {children}
-          {patientId && customFieldSection && (
-            <PatientCustomFields patientId={patientId} sectionKey={customFieldSection} />
+          {showSharedCustomFields && (
+            <PatientCustomFields patientId={patientId!} sectionKey={customFieldSection!} />
           )}
         </div>
       )}
