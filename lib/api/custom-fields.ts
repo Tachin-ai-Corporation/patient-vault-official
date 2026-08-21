@@ -2,14 +2,35 @@
 
 import { apiRequest } from '@/lib/api/client'
 
+// Canonical 1health BO Core class names → IDs. Sourced from the tenant's
+// BO Core document; referenced by name so the numeric IDs live in exactly one
+// place. Demographics values live on the patient's Person instance; document
+// values live on each attachment's File instance.
+export const BO_CLASSES = {
+  Person: 22,
+  File: 20,
+} as const
+
+export type BoClassName = keyof typeof BO_CLASSES
+
+export function boClassId(name: BoClassName): number {
+  return BO_CLASSES[name]
+}
+
+// Each patient-record section maps to the BO class that actually owns its
+// custom values. `scope: 'patient'` means values live on the patient's Person
+// instance; `scope: 'record'` means each value belongs to a specific
+// sub-record instance (e.g. one document's File instance).
 export const CUSTOM_FIELD_SECTIONS = [
-  { key: 'demographics', label: 'Demographics', boClassId: 22 },
-  { key: 'aliases', label: 'Aliases', boClassId: 22 },
-  { key: 'contacts', label: 'Contacts', boClassId: 22 },
-  { key: 'addresses', label: 'Addresses', boClassId: 22 },
-  { key: 'documents', label: 'Documents', boClassId: 22 },
-  { key: 'external-identities', label: 'External identities', boClassId: 22 },
-] as const
+  { key: 'demographics', label: 'Demographics', boClass: 'Person', scope: 'patient' },
+  { key: 'contacts', label: 'Contacts', boClass: 'Person', scope: 'patient' },
+  { key: 'addresses', label: 'Addresses', boClass: 'Person', scope: 'patient' },
+  { key: 'aliases', label: 'Aliases', boClass: 'Person', scope: 'patient' },
+  { key: 'external-identities', label: 'External identities', boClass: 'Person', scope: 'patient' },
+  { key: 'documents', label: 'Documents', boClass: 'File', scope: 'record' },
+] as const satisfies ReadonlyArray<{ key: string; label: string; boClass: BoClassName; scope: 'patient' | 'record' }>
+
+export type CustomFieldSection = (typeof CUSTOM_FIELD_SECTIONS)[number]
 
 export type CustomFieldType = 'TEXT' | 'INTEGER' | 'DECIMAL' | 'DATE' | 'TIMESTAMP' | 'JSON'
 
@@ -23,7 +44,6 @@ export type CustomFieldDefinition = {
     displayName: string
     fieldKey: string
     fieldType: CustomFieldType
-    fieldPosition?: string
     jsonSchema?: string
   }>
 }
@@ -36,6 +56,14 @@ type DefinitionListResponse = {
 
 function query(appId: number) {
   return `?appId=${encodeURIComponent(appId)}`
+}
+
+export function customFieldDefinitionsKey(environment: string, appId: number, classId: number) {
+  return ['custom-field-definitions', environment, appId, classId] as const
+}
+
+export function customFieldValuesKey(environment: string, appId: number, classId: number, instanceId: number) {
+  return ['custom-field-values', environment, appId, classId, instanceId] as const
 }
 
 export async function listCustomFieldDefinitions(appId: number, boClassId: number) {
@@ -61,13 +89,22 @@ export function deleteCustomFieldDefinition(appId: number, definitionId: number)
   return apiRequest<void>(`/v3/custom-data/definition/${definitionId}${query(appId)}`, { method: 'DELETE' })
 }
 
-export function updatePatientCustomData(
-  patientId: number,
+// Read all custom-field values for a BO instance (patient Person, document
+// File, etc.). Only fields that have a value are returned.
+export function getInstanceCustomData(appId: number, instanceId: number) {
+  return apiRequest<Record<string, unknown>>(`/v3/custom-data/instance/${instanceId}${query(appId)}`)
+}
+
+// Upsert (or clear, via null) custom-field values on a BO instance. Field keys
+// must belong to the instance's BO class or the API rejects the write.
+export function updateInstanceCustomData(
+  appId: number,
+  instanceId: number,
   customData: Record<string, unknown>,
 ) {
-  return apiRequest<void>(`/v3/patient/${patientId}`, {
+  return apiRequest<Record<string, unknown>>(`/v3/custom-data/instance/${instanceId}${query(appId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customData }),
+    body: JSON.stringify(customData),
   })
 }

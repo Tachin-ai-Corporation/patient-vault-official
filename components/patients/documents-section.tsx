@@ -36,6 +36,7 @@ import {
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { AttachDocumentModal } from '@/components/patients/attach-document-modal'
 import { AttachApiSurface } from '@/components/patients/attach-api-surface'
+import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
 import {
   listDocuments,
   getDocument,
@@ -449,6 +450,14 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
                     Download
                   </Button>
                 </div>
+
+                {/* Custom fields are bound to this document's File instance,
+                    not the patient — values belong to the individual record. */}
+                <PatientCustomFields
+                  sectionKey="documents"
+                  patientId={patientId}
+                  instanceId={detail.documentId}
+                />
               </>
             )}
           </div>
