@@ -553,6 +553,12 @@ function publishInspectorCall(
       path = url
     }
 
+    // The Inspector represents copyable 1health API calls only. Same-origin
+    // application routes (for example, Console configuration) may still use
+    // authFetch to forward the active bearer token, but must not enter the
+    // Inspector because they have no public, versioned 1health API path.
+    if (!/\/v\d+(?:\/|\?|$)/.test(path)) return
+
     let reqBody: unknown = undefined
     if (requestBody instanceof FormData) {
       reqBody = `[FormData with ${Array.from(requestBody.keys()).length} field(s)]`
