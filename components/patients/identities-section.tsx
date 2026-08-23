@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { Eye, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
+import { CheckCircle2, Eye, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
+import { validateAndNormalizeExternalIdentity } from '@/lib/external-identity'
 import {
   addIdentifier,
   deleteIdentifier,
@@ -42,10 +43,6 @@ function toDateTimeLocal(value?: string | null) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
-function toApiDate(value?: string | null) {
-  return value ? new Date(value).toISOString() : null
-}
-
 export function IdentitiesSection({ patientId }: { patientId: string }) {
   const [status, setStatus] = useState<IdentifierStatus>('true')
   const { data, error, isLoading, mutate } = useSWR(
@@ -61,17 +58,32 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
   const [pendingDelete, setPendingDelete] = useState<PatientIdentifier | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [editorError, setEditorError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const identifiers = data ?? []
   const summary = isLoading
     ? 'Loading identities'
     : `${identifiers.length} identit${identifiers.length === 1 ? 'y' : 'ies'}`
 
+  function updateDraft(patch: Partial<PatientIdentifierInput>) {
+    setDraft((current) => ({ ...current, ...patch }))
+    setEditorError(null)
+  }
+
+  function closeEditor() {
+    if (busy) return
+    setEditorOpen(false)
+    setEditorError(null)
+  }
+
   function openAdd() {
     setEditing(null)
     setDraft(EMPTY_INPUT)
     setAdvanced(false)
     setActionError(null)
+    setEditorError(null)
+    setSuccessMessage(null)
     setEditorOpen(true)
   }
 
@@ -91,6 +103,8 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
         active_until: toDateTimeLocal(fresh.active_until),
       })
       setAdvanced(true)
+      setEditorError(null)
+      setSuccessMessage(null)
       setEditorOpen(true)
     } catch (cause) {
       setActionError((cause as Error).message)
@@ -114,35 +128,30 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
   }
 
   async function save() {
-    if (!draft.value.trim()) {
-      setActionError('Identifier value is required.')
+    const validation = validateAndNormalizeExternalIdentity(draft)
+    if (!validation.ok) {
+      setEditorError(validation.message)
+      requestAnimationFrame(() => document.getElementById(validation.fieldId)?.focus())
       return
     }
+
     setBusy(true)
+    setEditorError(null)
     setActionError(null)
-    const body: PatientIdentifierInput = {
-      ...draft,
-      value: draft.value.trim(),
-      type: draft.type?.trim() || undefined,
-      authority_organization_id: draft.authority_organization_id?.trim() || undefined,
-      authority_organization_name: draft.authority_organization_name?.trim() || undefined,
-      authority_external_system_id: draft.authority_external_system_id?.trim() || undefined,
-      authority_external_system_name: draft.authority_external_system_name?.trim() || undefined,
-      source_name: draft.source_name?.trim() || undefined,
-      active_from: toApiDate(draft.active_from),
-      active_until: toApiDate(draft.active_until),
-    }
     try {
       if (editing) {
         const keys = authorityKeys(editing)
-        await replaceIdentifier(patientId, keys.organizationId, keys.externalSystemId, body)
+        await replaceIdentifier(patientId, keys.organizationId, keys.externalSystemId, validation.body)
       } else {
-        await addIdentifier(patientId, body)
+        await addIdentifier(patientId, validation.body)
       }
-      setEditorOpen(false)
       await mutate()
+      setEditorOpen(false)
+      setEditing(null)
+      setDraft(EMPTY_INPUT)
+      setSuccessMessage(editing ? 'External identity updated.' : 'External identity added.')
     } catch (cause) {
-      setActionError((cause as Error).message)
+      setEditorError((cause as Error).message)
     } finally {
       setBusy(false)
     }
@@ -212,6 +221,13 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
           <p className="text-xs text-muted-foreground">Authority pair keys stay out of the URL until an item action is requested.</p>
         </div>
 
+        {successMessage && (
+          <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-input border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-foreground">
+            <span className="flex items-center gap-2"><CheckCircle2 className="size-4 shrink-0 text-accent" aria-hidden="true" />{successMessage}</span>
+            <button type="button" onClick={() => setSuccessMessage(null)} className="text-xs text-muted-foreground hover:text-foreground">Dismiss</button>
+          </div>
+        )}
+
         {actionError && (
           <div role="alert" className="mb-4 flex items-start justify-between gap-3 rounded-input border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
             <span>{actionError}</span>
@@ -265,19 +281,19 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
 
       <Modal
         open={editorOpen}
-        onClose={() => setEditorOpen(false)}
+        onClose={closeEditor}
         title={editing ? 'Edit external identity' : 'Add external identity'}
-        description={editing ? 'PUT replaces the item at its authority pair.' : 'Only the value is required. Blank authority fields use the API defaults.'}
+        description={editing ? 'Replace this identity after reviewing its values.' : 'Only the identifier value is required. Blank authority fields use the API defaults.'}
         className="max-w-2xl"
-        footer={<><Button variant="ghost" onClick={() => setEditorOpen(false)}>Cancel</Button><Button onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Replace identity' : 'Add identity'}</Button></>}
+        footer={<><Button variant="ghost" onClick={closeEditor} disabled={busy}>Cancel</Button><Button onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Replace identity' : 'Add identity'}</Button></>}
       >
         <div className="flex flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Identifier value" htmlFor="identity-value">
-              <TextInput id="identity-value" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} placeholder="MRN-88821" className="font-mono" />
+              <TextInput id="identity-value" value={draft.value} onChange={(event) => updateDraft({ value: event.target.value })} placeholder="MRN-88821" className="font-mono" />
             </Field>
             <Field label="Type" htmlFor="identity-type">
-              <Select id="identity-type" value={draft.type ?? ''} onChange={(event) => setDraft({ ...draft, type: event.target.value })}>
+              <Select id="identity-type" value={draft.type ?? ''} onChange={(event) => updateDraft({ type: event.target.value })}>
                 <option value="">Unspecified</option>
                 {['mrn', 'member_id', 'ssn', 'npi', 'passport', 'driver_license', 'custom'].map((type) => <option key={type} value={type}>{type}</option>)}
               </Select>
@@ -289,15 +305,25 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
           {(advanced || editing) && (
             <div className="grid gap-3 rounded-input border border-border bg-muted/20 p-4 sm:grid-cols-2">
               {!editing && <>
-                <Field label="Organization ID" htmlFor="identity-org-id"><TextInput id="identity-org-id" value={draft.authority_organization_id ?? ''} onChange={(event) => setDraft({ ...draft, authority_organization_id: event.target.value })} /></Field>
-                <Field label="Organization name" htmlFor="identity-org-name"><TextInput id="identity-org-name" value={draft.authority_organization_name ?? ''} onChange={(event) => setDraft({ ...draft, authority_organization_name: event.target.value })} placeholder="org_legacyehr" /></Field>
-                <Field label="External system ID" htmlFor="identity-system-id"><TextInput id="identity-system-id" value={draft.authority_external_system_id ?? ''} onChange={(event) => setDraft({ ...draft, authority_external_system_id: event.target.value })} /></Field>
-                <Field label="External system name" htmlFor="identity-system-name"><TextInput id="identity-system-name" value={draft.authority_external_system_name ?? ''} onChange={(event) => setDraft({ ...draft, authority_external_system_name: event.target.value })} placeholder="Epic" /></Field>
+                <p className="text-pretty text-xs leading-relaxed text-muted-foreground sm:col-span-2">For each authority, enter an ID or a name—not both. IDs must be positive whole numbers.</p>
+                <Field label="Organization ID" htmlFor="identity-org-id"><TextInput id="identity-org-id" inputMode="numeric" value={draft.authority_organization_id ?? ''} onChange={(event) => updateDraft({ authority_organization_id: event.target.value })} placeholder="123" /></Field>
+                <Field label="Organization name" htmlFor="identity-org-name"><TextInput id="identity-org-name" value={draft.authority_organization_name ?? ''} onChange={(event) => updateDraft({ authority_organization_name: event.target.value })} placeholder="Legacy EHR" /></Field>
+                <Field label="External system ID" htmlFor="identity-system-id"><TextInput id="identity-system-id" inputMode="numeric" value={draft.authority_external_system_id ?? ''} onChange={(event) => updateDraft({ authority_external_system_id: event.target.value })} placeholder="456" /></Field>
+                <Field label="External system name" htmlFor="identity-system-name"><TextInput id="identity-system-name" value={draft.authority_external_system_name ?? ''} onChange={(event) => updateDraft({ authority_external_system_name: event.target.value })} placeholder="Epic" /></Field>
               </>}
-              <Field label="Source" htmlFor="identity-source"><TextInput id="identity-source" value={draft.source_name ?? ''} onChange={(event) => setDraft({ ...draft, source_name: event.target.value })} placeholder="ADT import" /></Field>
-              <div />
-              <Field label="Active from" htmlFor="identity-from"><TextInput id="identity-from" type="datetime-local" value={draft.active_from ?? ''} onChange={(event) => setDraft({ ...draft, active_from: event.target.value })} /></Field>
-              <Field label="Active until" htmlFor="identity-until"><TextInput id="identity-until" type="datetime-local" value={draft.active_until ?? ''} onChange={(event) => setDraft({ ...draft, active_until: event.target.value })} /></Field>
+              <Field label="Source" htmlFor="identity-source"><TextInput id="identity-source" value={draft.source_name ?? ''} onChange={(event) => updateDraft({ source_name: event.target.value })} placeholder="ADT import" /></Field>
+              <div className="hidden sm:block" />
+              <Field label="Active from (optional)" htmlFor="identity-from"><TextInput id="identity-from" type="datetime-local" value={draft.active_from ?? ''} onChange={(event) => updateDraft({ active_from: event.target.value })} /></Field>
+              <Field label="Active until (optional)" htmlFor="identity-until"><TextInput id="identity-until" type="datetime-local" min={draft.active_from || undefined} value={draft.active_until ?? ''} onChange={(event) => updateDraft({ active_until: event.target.value })} /></Field>
+              <div className="flex flex-col items-start gap-2 sm:col-span-2">
+                <p className="text-pretty text-xs leading-relaxed text-muted-foreground">Dates are optional. The browser applies your selection immediately; there is no separate OK button. “Active until” cannot be earlier than “Active from”.</p>
+                {(draft.active_from || draft.active_until) && <Button type="button" variant="ghost" size="sm" onClick={() => updateDraft({ active_from: '', active_until: '' })}>Clear dates</Button>}
+              </div>
+            </div>
+          )}
+          {editorError && (
+            <div id="identity-editor-error" role="alert" aria-live="assertive" className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {editorError}
             </div>
           )}
         </div>
