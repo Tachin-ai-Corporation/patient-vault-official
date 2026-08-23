@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { CheckCircle2, Eye, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
+import { CheckCircle2, Eye, Loader2, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
@@ -173,11 +173,13 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
       } else {
         await addIdentifier(patientId, validation.body)
       }
-      await mutate()
+
+      const success = editing ? 'External identity updated.' : 'External identity added.'
       setEditorOpen(false)
       setEditing(null)
       setDraft(EMPTY_INPUT)
-      setSuccessMessage(editing ? 'External identity updated.' : 'External identity added.')
+      setSuccessMessage(success)
+      void mutate()
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 400 && validation.body.authority_organization_id) {
         showEditorError('This organization ID was not accepted. Enter an existing organization ID, use the organization name instead, or leave both organization fields blank.', 'identity-org-id')
@@ -321,12 +323,23 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
         className="max-w-2xl"
         footer={
           <>
-            <div className="min-w-0 flex-1">
-              {editorError ? <p role="alert" className="text-sm font-medium text-destructive">Couldn&apos;t save: {editorError}</p> : <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Required:</span> Identifier value only</p>}
+            <div className="min-w-0 flex-1" aria-live="polite">
+              {busy ? (
+                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
+                  Sending identity to 1health…
+                </p>
+              ) : editorError ? (
+                <p role="alert" className="text-sm font-medium text-destructive">Couldn&apos;t save: {editorError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Required:</span> Identifier value only</p>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Button variant="ghost" onClick={closeEditor} disabled={busy}>Cancel</Button>
-              <Button onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Replace identity' : 'Add identity'}</Button>
+              <Button onClick={save} disabled={busy} aria-busy={busy} className="min-w-32">
+                {busy ? <><Loader2 className="size-4 animate-spin" data-icon="inline-start" aria-hidden="true" />Saving identity…</> : editing ? 'Replace identity' : 'Add identity'}
+              </Button>
             </div>
           </>
         }
