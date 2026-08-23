@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ApiError } from '@/lib/api/client'
 import { validateAndNormalizeExternalIdentity } from '@/lib/external-identity'
 import {
   addIdentifier,
@@ -144,12 +145,20 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
     }
   }
 
+  function showEditorError(message: string, fieldId: string) {
+    setEditorError(message)
+    setEditorErrorField(fieldId)
+    requestAnimationFrame(() => {
+      const field = document.getElementById(fieldId)
+      field?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      field?.focus({ preventScroll: true })
+    })
+  }
+
   async function save() {
     const validation = validateAndNormalizeExternalIdentity(draft)
     if (!validation.ok) {
-      setEditorError(validation.message)
-      setEditorErrorField(validation.fieldId)
-      requestAnimationFrame(() => document.getElementById(validation.fieldId)?.focus())
+      showEditorError(validation.message, validation.fieldId)
       return
     }
 
@@ -170,7 +179,13 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
       setDraft(EMPTY_INPUT)
       setSuccessMessage(editing ? 'External identity updated.' : 'External identity added.')
     } catch (cause) {
-      setEditorError((cause as Error).message)
+      if (cause instanceof ApiError && cause.status === 400 && validation.body.authority_organization_id) {
+        showEditorError('This organization ID was not accepted. Enter an existing organization ID, use the organization name instead, or leave both organization fields blank.', 'identity-org-id')
+      } else if (cause instanceof ApiError && cause.status === 400 && validation.body.authority_external_system_id) {
+        showEditorError('This external system ID was not accepted. Enter an existing external system ID, use the external system name instead, or leave both external-system fields blank.', 'identity-system-id')
+      } else {
+        showEditorError((cause as Error).message, 'identity-value')
+      }
     } finally {
       setBusy(false)
     }
@@ -302,7 +317,7 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
         open={editorOpen}
         onClose={closeEditor}
         title={editing ? 'Edit external identity' : 'Add external identity'}
-        description={editing ? 'Replace this identity after reviewing its values.' : 'Only the identifier value is required. Blank authority fields use the API defaults.'}
+        description={editing ? 'Replace this identity after reviewing its values.' : 'Required: identifier value. Every other field is optional; you may add an identity without opening authority details.'}
         className="max-w-2xl"
         footer={
           <>
@@ -334,11 +349,14 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
           {(advanced || editing) && (
             <div className="grid gap-3 rounded-input border border-border bg-muted/20 p-4 sm:grid-cols-2">
               {!editing && <>
-                <p className="text-pretty text-xs leading-relaxed text-muted-foreground sm:col-span-2">All authority fields are optional. In each row, use either the numeric ID or the name. Entering one automatically clears the other.</p>
-                <Field label="Organization ID (optional, whole number)" htmlFor="identity-org-id" error={editorErrorField === 'identity-org-id' ? editorError ?? undefined : undefined}><TextInput id="identity-org-id" inputMode="numeric" pattern="[0-9]*" aria-invalid={editorErrorField === 'identity-org-id'} invalid={editorErrorField === 'identity-org-id'} value={draft.authority_organization_id ?? ''} onChange={(event) => updateAuthority('authority_organization_id', event.target.value)} placeholder="123" /></Field>
-                <Field label="Organization name (optional)" htmlFor="identity-org-name"><TextInput id="identity-org-name" value={draft.authority_organization_name ?? ''} onChange={(event) => updateAuthority('authority_organization_name', event.target.value)} placeholder="Legacy EHR" /></Field>
-                <Field label="External system ID (optional, whole number)" htmlFor="identity-system-id" error={editorErrorField === 'identity-system-id' ? editorError ?? undefined : undefined}><TextInput id="identity-system-id" inputMode="numeric" pattern="[0-9]*" aria-invalid={editorErrorField === 'identity-system-id'} invalid={editorErrorField === 'identity-system-id'} value={draft.authority_external_system_id ?? ''} onChange={(event) => updateAuthority('authority_external_system_id', event.target.value)} placeholder="456" /></Field>
-                <Field label="External system name (optional)" htmlFor="identity-system-name"><TextInput id="identity-system-name" value={draft.authority_external_system_name ?? ''} onChange={(event) => updateAuthority('authority_external_system_name', event.target.value)} placeholder="Epic" /></Field>
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <p className="text-sm font-medium text-foreground">Authority details are optional</p>
+                  <p className="text-pretty text-xs leading-relaxed text-muted-foreground">Leave all four fields blank to use the API defaults. If you add an organization or external system, choose its name or its ID. A name may be new; an ID must already exist in 1health. Typing in one field clears the alternative beside it.</p>
+                </div>
+                <Field label="Organization ID — optional; existing numeric ID only" htmlFor="identity-org-id" error={editorErrorField === 'identity-org-id' ? editorError ?? undefined : undefined}><TextInput id="identity-org-id" inputMode="numeric" pattern="[0-9]*" aria-invalid={editorErrorField === 'identity-org-id'} invalid={editorErrorField === 'identity-org-id'} value={draft.authority_organization_id ?? ''} onChange={(event) => updateAuthority('authority_organization_id', event.target.value)} placeholder="e.g. 123" /></Field>
+                <Field label="Organization name — optional" htmlFor="identity-org-name"><TextInput id="identity-org-name" value={draft.authority_organization_name ?? ''} onChange={(event) => updateAuthority('authority_organization_name', event.target.value)} placeholder="e.g. Legacy EHR" /></Field>
+                <Field label="External system ID — optional; existing numeric ID only" htmlFor="identity-system-id" error={editorErrorField === 'identity-system-id' ? editorError ?? undefined : undefined}><TextInput id="identity-system-id" inputMode="numeric" pattern="[0-9]*" aria-invalid={editorErrorField === 'identity-system-id'} invalid={editorErrorField === 'identity-system-id'} value={draft.authority_external_system_id ?? ''} onChange={(event) => updateAuthority('authority_external_system_id', event.target.value)} placeholder="e.g. 456" /></Field>
+                <Field label="External system name — optional" htmlFor="identity-system-name"><TextInput id="identity-system-name" value={draft.authority_external_system_name ?? ''} onChange={(event) => updateAuthority('authority_external_system_name', event.target.value)} placeholder="e.g. Epic" /></Field>
               </>}
               <Field label="Source (optional)" htmlFor="identity-source"><TextInput id="identity-source" value={draft.source_name ?? ''} onChange={(event) => updateDraft({ source_name: event.target.value })} placeholder="ADT import" /></Field>
               <div className="hidden sm:block" />
