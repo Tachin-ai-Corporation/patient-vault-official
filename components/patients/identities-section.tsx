@@ -59,6 +59,7 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [editorError, setEditorError] = useState<string | null>(null)
+  const [editorErrorField, setEditorErrorField] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const identifiers = data ?? []
@@ -69,12 +70,28 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
   function updateDraft(patch: Partial<PatientIdentifierInput>) {
     setDraft((current) => ({ ...current, ...patch }))
     setEditorError(null)
+    setEditorErrorField(null)
+  }
+
+  function updateAuthority(
+    field: 'authority_organization_id' | 'authority_organization_name' | 'authority_external_system_id' | 'authority_external_system_name',
+    value: string,
+  ) {
+    const pairedField = {
+      authority_organization_id: 'authority_organization_name',
+      authority_organization_name: 'authority_organization_id',
+      authority_external_system_id: 'authority_external_system_name',
+      authority_external_system_name: 'authority_external_system_id',
+    }[field] as keyof PatientIdentifierInput
+
+    updateDraft({ [field]: value, ...(value ? { [pairedField]: '' } : {}) })
   }
 
   function closeEditor() {
     if (busy) return
     setEditorOpen(false)
     setEditorError(null)
+    setEditorErrorField(null)
   }
 
   function openAdd() {
@@ -131,12 +148,14 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
     const validation = validateAndNormalizeExternalIdentity(draft)
     if (!validation.ok) {
       setEditorError(validation.message)
+      setEditorErrorField(validation.fieldId)
       requestAnimationFrame(() => document.getElementById(validation.fieldId)?.focus())
       return
     }
 
     setBusy(true)
     setEditorError(null)
+    setEditorErrorField(null)
     setActionError(null)
     try {
       if (editing) {
@@ -285,14 +304,24 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
         title={editing ? 'Edit external identity' : 'Add external identity'}
         description={editing ? 'Replace this identity after reviewing its values.' : 'Only the identifier value is required. Blank authority fields use the API defaults.'}
         className="max-w-2xl"
-        footer={<><Button variant="ghost" onClick={closeEditor} disabled={busy}>Cancel</Button><Button onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Replace identity' : 'Add identity'}</Button></>}
+        footer={
+          <>
+            <div className="min-w-0 flex-1">
+              {editorError ? <p role="alert" className="text-sm font-medium text-destructive">Couldn&apos;t save: {editorError}</p> : <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Required:</span> Identifier value only</p>}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button variant="ghost" onClick={closeEditor} disabled={busy}>Cancel</Button>
+              <Button onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Replace identity' : 'Add identity'}</Button>
+            </div>
+          </>
+        }
       >
         <div className="flex flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Identifier value" htmlFor="identity-value">
-              <TextInput id="identity-value" value={draft.value} onChange={(event) => updateDraft({ value: event.target.value })} placeholder="MRN-88821" className="font-mono" />
+            <Field label="Identifier value (required)" htmlFor="identity-value" error={editorErrorField === 'identity-value' ? editorError ?? undefined : undefined}>
+              <TextInput id="identity-value" required aria-invalid={editorErrorField === 'identity-value'} aria-describedby={editorErrorField === 'identity-value' ? 'identity-editor-error' : undefined} invalid={editorErrorField === 'identity-value'} value={draft.value} onChange={(event) => updateDraft({ value: event.target.value })} placeholder="MRN-88821" className="font-mono" />
             </Field>
-            <Field label="Type" htmlFor="identity-type">
+            <Field label="Type (optional)" htmlFor="identity-type">
               <Select id="identity-type" value={draft.type ?? ''} onChange={(event) => updateDraft({ type: event.target.value })}>
                 <option value="">Unspecified</option>
                 {['mrn', 'member_id', 'ssn', 'npi', 'passport', 'driver_license', 'custom'].map((type) => <option key={type} value={type}>{type}</option>)}
@@ -305,16 +334,16 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
           {(advanced || editing) && (
             <div className="grid gap-3 rounded-input border border-border bg-muted/20 p-4 sm:grid-cols-2">
               {!editing && <>
-                <p className="text-pretty text-xs leading-relaxed text-muted-foreground sm:col-span-2">For each authority, enter an ID or a name—not both. IDs must be positive whole numbers.</p>
-                <Field label="Organization ID" htmlFor="identity-org-id"><TextInput id="identity-org-id" inputMode="numeric" value={draft.authority_organization_id ?? ''} onChange={(event) => updateDraft({ authority_organization_id: event.target.value })} placeholder="123" /></Field>
-                <Field label="Organization name" htmlFor="identity-org-name"><TextInput id="identity-org-name" value={draft.authority_organization_name ?? ''} onChange={(event) => updateDraft({ authority_organization_name: event.target.value })} placeholder="Legacy EHR" /></Field>
-                <Field label="External system ID" htmlFor="identity-system-id"><TextInput id="identity-system-id" inputMode="numeric" value={draft.authority_external_system_id ?? ''} onChange={(event) => updateDraft({ authority_external_system_id: event.target.value })} placeholder="456" /></Field>
-                <Field label="External system name" htmlFor="identity-system-name"><TextInput id="identity-system-name" value={draft.authority_external_system_name ?? ''} onChange={(event) => updateDraft({ authority_external_system_name: event.target.value })} placeholder="Epic" /></Field>
+                <p className="text-pretty text-xs leading-relaxed text-muted-foreground sm:col-span-2">All authority fields are optional. In each row, use either the numeric ID or the name. Entering one automatically clears the other.</p>
+                <Field label="Organization ID (optional, whole number)" htmlFor="identity-org-id" error={editorErrorField === 'identity-org-id' ? editorError ?? undefined : undefined}><TextInput id="identity-org-id" inputMode="numeric" pattern="[0-9]*" aria-invalid={editorErrorField === 'identity-org-id'} invalid={editorErrorField === 'identity-org-id'} value={draft.authority_organization_id ?? ''} onChange={(event) => updateAuthority('authority_organization_id', event.target.value)} placeholder="123" /></Field>
+                <Field label="Organization name (optional)" htmlFor="identity-org-name"><TextInput id="identity-org-name" value={draft.authority_organization_name ?? ''} onChange={(event) => updateAuthority('authority_organization_name', event.target.value)} placeholder="Legacy EHR" /></Field>
+                <Field label="External system ID (optional, whole number)" htmlFor="identity-system-id" error={editorErrorField === 'identity-system-id' ? editorError ?? undefined : undefined}><TextInput id="identity-system-id" inputMode="numeric" pattern="[0-9]*" aria-invalid={editorErrorField === 'identity-system-id'} invalid={editorErrorField === 'identity-system-id'} value={draft.authority_external_system_id ?? ''} onChange={(event) => updateAuthority('authority_external_system_id', event.target.value)} placeholder="456" /></Field>
+                <Field label="External system name (optional)" htmlFor="identity-system-name"><TextInput id="identity-system-name" value={draft.authority_external_system_name ?? ''} onChange={(event) => updateAuthority('authority_external_system_name', event.target.value)} placeholder="Epic" /></Field>
               </>}
-              <Field label="Source" htmlFor="identity-source"><TextInput id="identity-source" value={draft.source_name ?? ''} onChange={(event) => updateDraft({ source_name: event.target.value })} placeholder="ADT import" /></Field>
+              <Field label="Source (optional)" htmlFor="identity-source"><TextInput id="identity-source" value={draft.source_name ?? ''} onChange={(event) => updateDraft({ source_name: event.target.value })} placeholder="ADT import" /></Field>
               <div className="hidden sm:block" />
-              <Field label="Active from (optional)" htmlFor="identity-from"><TextInput id="identity-from" type="datetime-local" value={draft.active_from ?? ''} onChange={(event) => updateDraft({ active_from: event.target.value })} /></Field>
-              <Field label="Active until (optional)" htmlFor="identity-until"><TextInput id="identity-until" type="datetime-local" min={draft.active_from || undefined} value={draft.active_until ?? ''} onChange={(event) => updateDraft({ active_until: event.target.value })} /></Field>
+              <Field label="Active from (optional)" htmlFor="identity-from" error={editorErrorField === 'identity-from' ? editorError ?? undefined : undefined}><TextInput id="identity-from" type="datetime-local" aria-invalid={editorErrorField === 'identity-from'} invalid={editorErrorField === 'identity-from'} value={draft.active_from ?? ''} onChange={(event) => updateDraft({ active_from: event.target.value })} /></Field>
+              <Field label="Active until (optional)" htmlFor="identity-until" error={editorErrorField === 'identity-until' ? editorError ?? undefined : undefined}><TextInput id="identity-until" type="datetime-local" aria-invalid={editorErrorField === 'identity-until'} invalid={editorErrorField === 'identity-until'} min={draft.active_from || undefined} value={draft.active_until ?? ''} onChange={(event) => updateDraft({ active_until: event.target.value })} /></Field>
               <div className="flex flex-col items-start gap-2 sm:col-span-2">
                 <p className="text-pretty text-xs leading-relaxed text-muted-foreground">Dates are optional. The browser applies your selection immediately; there is no separate OK button. “Active until” cannot be earlier than “Active from”.</p>
                 {(draft.active_from || draft.active_until) && <Button type="button" variant="ghost" size="sm" onClick={() => updateDraft({ active_from: '', active_until: '' })}>Clear dates</Button>}
