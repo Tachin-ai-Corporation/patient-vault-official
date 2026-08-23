@@ -656,9 +656,9 @@ export interface PatientIdentifier {
 export interface PatientIdentifierInput {
   value: string
   type?: string
-  authority_organization_id?: string
+  authority_organization_id?: string | number
   authority_organization_name?: string
-  authority_external_system_id?: string
+  authority_external_system_id?: string | number
   authority_external_system_name?: string
   source_name?: string
   active_from?: string | null
