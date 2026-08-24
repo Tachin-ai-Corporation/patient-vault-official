@@ -64,15 +64,36 @@ function fieldKeyCandidate(name: string) {
     .toLowerCase()
 }
 
-function findField(definitions: CustomFieldDefinition[], displayName: string) {
+function findField(definitions: CustomFieldDefinition[], displayName: string, definitionName?: string) {
   const expectedKey = fieldKeyCandidate(displayName)
-  for (const definition of definitions) {
+  const candidates = definitionName ? definitions.filter((definition) => definition.name === definitionName) : definitions
+  for (const definition of candidates) {
     const field = definition.fields.find(
       (item) =>
         item.displayName.localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 ||
         item.fieldKey.toLowerCase() === expectedKey,
     )
     if (field) return field
+  }
+}
+
+function assertFieldType(field: ResolvedField, requestedType: CustomFieldType, definitions: CustomFieldDefinition[]) {
+  if (field.fieldType !== requestedType) {
+    throw new Error(
+      `Definition conflict: requested ${requestedType}, but 1health resolved field key “${field.fieldKey}” as ${field.fieldType}. The value request was not sent. Delete or rename the conflicting definition, then try again.`,
+    )
+  }
+
+  const conflictingTypes = new Set(
+    definitions
+      .flatMap((definition) => definition.fields)
+      .filter((candidate) => candidate.fieldKey.toLowerCase() === field.fieldKey.toLowerCase() && candidate.fieldType !== requestedType)
+      .map((candidate) => candidate.fieldType),
+  )
+  if (conflictingTypes.size > 0) {
+    throw new Error(
+      `Field-key conflict: 1health assigned “${field.fieldKey}” to both ${requestedType} and ${[...conflictingTypes].join(', ')} definitions. The value request was not sent because the API may use the wrong type. Delete or rename the older conflicting definition, then try again.`,
+    )
   }
 }
 
@@ -167,31 +188,39 @@ export function PatientCustomFields({
     try {
       setSaving(true)
       setMessage(null)
-      let field = findField(definitions, displayName)
+      const definitionName = `${section.label}: ${displayName}`
+      let resolvedDefinitions = definitions
+      let field = findField(resolvedDefinitions, displayName, definitionName)
       if (!field) {
         try {
-          const definition = await createCustomFieldDefinition(app.id, {
-            name: `${section.label}: ${displayName}`,
+          const createdDefinition = await createCustomFieldDefinition(app.id, {
+            name: definitionName,
             boClassId: classId,
             fields: [{ displayName, fieldType }],
           })
-          field = definition.fields[0]
-          if (field) await mutateDefinitions([...definitions, definition], false)
+          if (createdDefinition) await mutateDefinitions([...definitions, createdDefinition], false)
+
+          // The documented create response may be empty. Reload from 1health
+          // and resolve the exact definition before sending any patient value.
+          const refreshed = await mutateDefinitions()
+          resolvedDefinitions = refreshed ?? (createdDefinition ? [...definitions, createdDefinition] : definitions)
+          field = findField(resolvedDefinitions, displayName, definitionName)
+          if (!field && createdDefinition?.name === definitionName) field = createdDefinition.fields[0]
         } catch (cause) {
           const detail = cause instanceof Error ? cause.message : ''
           if (!/already exists|duplicate/i.test(detail)) throw cause
           const refreshed = await mutateDefinitions()
-          field = findField(refreshed ?? [], displayName)
+          resolvedDefinitions = refreshed ?? definitions
+          field = findField(resolvedDefinitions, displayName, definitionName)
           if (!field) throw new Error('This field already exists, but could not be loaded. Refresh the patient and try again.')
         }
       }
       if (!field?.fieldKey) throw new Error('The field was created, but its API key was not returned. Refresh the patient to load the new field.')
+      assertFieldType(field, fieldType, resolvedDefinitions)
 
-      // Parse against the resolved field's real type (existing fields may
-      // differ from the type chosen in this dialog).
       let parsed: unknown
       try {
-        parsed = parseValue(rawValue, field.fieldType)
+        parsed = parseValue(rawValue, fieldType)
       } catch (cause) {
         setMessage(cause instanceof Error ? cause.message : 'The value is invalid.')
         return
