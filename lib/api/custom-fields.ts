@@ -64,17 +64,17 @@ function query(appId: number) {
   return `?appId=${encodeURIComponent(appId)}`
 }
 
-export function customFieldDefinitionsKey(environment: string, appId: number, classId: number) {
-  return ['custom-field-definitions', environment, appId, classId] as const
+export function customFieldDefinitionsKey(environment: string, appId: number, typeKey: BoClassName) {
+  return ['custom-field-definitions', environment, appId, typeKey] as const
 }
 
 export function customFieldValuesKey(environment: string, appId: number, classId: number, instanceId: number) {
   return ['custom-field-values', environment, appId, classId, instanceId] as const
 }
 
-export async function listCustomFieldDefinitions(appId: number, boClassId: number) {
+export async function listCustomFieldDefinitions(appId: number, typeKey: BoClassName) {
   const response = await apiRequest<DefinitionListResponse | CustomFieldDefinition[]>(
-    `/v3/custom-data/definition/type/${boClassId}${query(appId)}`,
+    `/v3/custom-data/definition/type/${encodeURIComponent(typeKey)}${query(appId)}`,
   )
   if (Array.isArray(response)) return response
   return response.data ?? response.definitions ?? response.content ?? []
