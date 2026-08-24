@@ -78,7 +78,7 @@ export function createCustomFieldDefinition(
   appId: number,
   input: { name: string; boClassId: number; fields: Array<{ displayName: string; fieldType: CustomFieldType; jsonSchema?: string }> },
 ) {
-  return apiRequest<CustomFieldDefinition>(`/v3/custom-data/definition${query(appId)}`, {
+  return apiRequest<CustomFieldDefinition | undefined>(`/v3/custom-data/definition${query(appId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
