@@ -10,14 +10,13 @@ import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
 import {
+  boClassId,
   createCustomFieldDefinition,
   CUSTOM_FIELD_SECTIONS,
   customFieldDefinitionsKey,
   customFieldValuesKey,
-  getAvailableCustomDataTypes,
   getInstanceCustomData,
   listCustomFieldDefinitions,
-  resolveCustomDataType,
   updateInstanceCustomData,
   type CustomFieldDefinition,
   type CustomFieldType,
@@ -144,13 +143,7 @@ export function PatientCustomFields({
   const appKey = userId ? (['console-application', currentEnv, userId] as const) : null
   const { data: appData } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
-  const { data: availableTypes = [], error: typesError, isLoading: typesLoading } = useSWR(
-    app ? ['custom-data-available-types', currentEnv, userId] : null,
-    getAvailableCustomDataTypes,
-    { revalidateOnFocus: false },
-  )
-
-  const classId = section ? resolveCustomDataType(availableTypes, section.boClass)?.id : undefined
+  const classId = section ? boClassId(section.boClass) : undefined
   // Record-scoped sections need an explicit instance id; patient-scoped ones
   // fall back to the patient's Person instance.
   const targetInstance = Number(instanceId ?? patientId)
@@ -166,11 +159,6 @@ export function PatientCustomFields({
   const { data: values = {}, mutate: mutateValues } = useSWR(valuesKey, () => getInstanceCustomData(app!.id, targetInstance), { revalidateOnFocus: false })
 
   if (!section) return null
-  if (typesError) return <p className="mt-4 text-xs text-destructive" role="alert">{typesError.message}</p>
-  if (app && typesLoading) return <div className="mt-4 h-10 rounded-lg bg-muted/40" />
-  if (app && classId === undefined) {
-    return <p className="mt-4 text-xs text-muted-foreground">{section.boClass} is not enabled for custom data in this 1health environment.</p>
-  }
 
   const sectionFields: ResolvedField[] = definitions
     .filter((definition) => {

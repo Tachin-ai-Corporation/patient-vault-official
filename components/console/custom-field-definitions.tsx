@@ -12,7 +12,7 @@ import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/client'
 import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
-import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, deleteCustomFieldDefinition, getAvailableCustomDataTypes, listCustomFieldDefinitions, resolveCustomDataType, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
+import { boClassId, createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, deleteCustomFieldDefinition, listCustomFieldDefinitions, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
 import { useSession } from '@/lib/session-context'
 
 const FIELD_TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -62,15 +62,9 @@ export function CustomFieldDefinitions() {
   const appKey = userId ? (['console-application', currentEnv, userId] as const) : null
   const { data: appData, isLoading: appLoading } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
-  const { data: availableTypes = [], error: typesError, isLoading: typesLoading } = useSWR(
-    app ? ['custom-data-available-types', currentEnv, userId] : null,
-    getAvailableCustomDataTypes,
-    { revalidateOnFocus: false },
-  )
   const classIds = useMemo(() => Array.from(new Set(CUSTOM_FIELD_SECTIONS
-    .map((section) => resolveCustomDataType(availableTypes, section.boClass)?.id)
-    .filter((id): id is number => id !== undefined))).sort((a, b) => a - b), [availableTypes])
-  const definitionsKey = app && !typesLoading && classIds.length ? (['custom-field-definitions', currentEnv, app.id, classIds.join(',')] as const) : null
+    .map((section) => boClassId(section.boClass)))).sort((a, b) => a - b), [])
+  const definitionsKey = app ? (['custom-field-definitions', currentEnv, app.id, classIds.join(',')] as const) : null
   const { data: definitionsByClass = {}, error, isLoading, mutate } = useSWR(
     definitionsKey,
     async () => {
@@ -80,8 +74,8 @@ export function CustomFieldDefinitions() {
     { revalidateOnFocus: false },
   )
   const results = useMemo<SectionResult[]>(() => CUSTOM_FIELD_SECTIONS.map((section) => {
-    const classId = resolveCustomDataType(availableTypes, section.boClass)?.id
-    const classDefs = classId ? definitionsByClass[classId] ?? [] : []
+    const classId = boClassId(section.boClass)
+    const classDefs = definitionsByClass[classId] ?? []
     const definitions = classDefs.filter((definition) => {
       if (definition.name.startsWith(`${section.label}:`)) return true
       // Unprefixed legacy definitions on the Person class belong to demographics.
@@ -89,7 +83,7 @@ export function CustomFieldDefinitions() {
       return !prefixedByAnother && section.key === 'demographics'
     })
     return { section, definitions }
-  }), [availableTypes, definitionsByClass])
+  }), [definitionsByClass])
   const count = useMemo(() => results.reduce((total, result) => total + result.definitions.reduce((sum, definition) => sum + definition.fields.length, 0), 0), [results])
   const filenameBase = `patient-vault-${currentEnv}-custom-fields`
 
@@ -105,12 +99,10 @@ export function CustomFieldDefinitions() {
     if (!section || !displayName) return
     try {
       setSaving(true)
-      const availableType = resolveCustomDataType(availableTypes, section.boClass)
-      if (!availableType) throw new Error(`${section.boClass} is not enabled for custom data in this 1health environment.`)
       if (fieldType === 'JSON' && jsonSchema) JSON.parse(jsonSchema)
       await createCustomFieldDefinition(app.id, {
         name: `${section.label}: ${displayName}`,
-        boClassId: availableType.id,
+        boClassId: boClassId(section.boClass),
         fields: [{ displayName, fieldType, ...(jsonSchema ? { jsonSchema } : {}) }],
       })
       await mutate()
@@ -161,11 +153,9 @@ export function CustomFieldDefinitions() {
       for (const importedSection of parsed.sections) {
         const section = CUSTOM_FIELD_SECTIONS.find((item) => item.key === importedSection.key)
         if (!section) continue
-        const availableType = resolveCustomDataType(availableTypes, section.boClass)
-        if (!availableType) throw new Error(`${section.boClass} is not enabled for custom data in this 1health environment.`)
         for (const field of importedSection.fields ?? []) {
           if (!FIELD_TYPES.includes(field.fieldType) || !field.displayName?.trim()) continue
-          await createCustomFieldDefinition(app.id, { name: `${section.label}: ${field.displayName}`, boClassId: availableType.id, fields: [field] })
+          await createCustomFieldDefinition(app.id, { name: `${section.label}: ${field.displayName}`, boClassId: boClassId(section.boClass), fields: [field] })
         }
       }
       await mutate()
@@ -187,7 +177,7 @@ export function CustomFieldDefinitions() {
           </div>
         </CardHeader>
         <CardContent>
-          {appLoading || typesLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : !app ? <Alert><FileJson aria-hidden="true" /><AlertTitle>Set up the application first</AlertTitle><AlertDescription>Custom field definitions are enabled after the Patient Vault application above has been created.</AlertDescription></Alert> : typesError ? <Alert variant="destructive"><AlertTitle>Business object classes unavailable</AlertTitle><AlertDescription>{typesError.message}</AlertDescription></Alert> : classIds.length === 0 ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom data types aren&apos;t enabled</AlertTitle><AlertDescription>Person and File are not enabled for custom data in this 1health environment.</AlertDescription></Alert> : error ? (error instanceof ApiError && error.unavailable ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom fields aren&apos;t available here yet</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> : <Alert variant="destructive"><AlertTitle>Definitions unavailable</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>) : isLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : count === 0 ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 p-6 text-center"><Braces className="text-muted-foreground" aria-hidden="true" /><p className="font-medium text-foreground">No custom fields yet</p><p className="max-w-md text-sm text-muted-foreground">Create a reusable field for demographics, aliases, contacts, addresses, documents, or external identities.</p></div> : <div className="flex flex-col gap-6">{results.filter(({ definitions }) => definitions.length > 0).map(({ section, definitions }) => <div key={section.key} className="flex flex-col gap-2"><h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{section.label}</h3><ul className="flex flex-col gap-2">{definitions.map((definition) => definition.fields.map((field) => <li key={`${definition.id}-${field.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-medium text-foreground">{field.displayName}</span><span className="font-mono text-xs text-muted-foreground">{field.fieldKey} · {field.fieldType}</span></div><Button type="button" variant="ghost" size="sm" disabled={deleting} onClick={() => requestDelete(definition)} aria-label={`Delete definition ${definition.name}`}><Trash2 data-icon="inline-start" aria-hidden="true" />Delete definition</Button></li>))}</ul></div>)}</div>}
+          {appLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : !app ? <Alert><FileJson aria-hidden="true" /><AlertTitle>Set up the application first</AlertTitle><AlertDescription>Custom field definitions are enabled after the Patient Vault application above has been created.</AlertDescription></Alert> : error ? (error instanceof ApiError && error.unavailable ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom fields aren&apos;t available here yet</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> : <Alert variant="destructive"><AlertTitle>Definitions unavailable</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>) : isLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : count === 0 ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 p-6 text-center"><Braces className="text-muted-foreground" aria-hidden="true" /><p className="font-medium text-foreground">No custom fields yet</p><p className="max-w-md text-sm text-muted-foreground">Create a reusable field for demographics, aliases, contacts, addresses, documents, or external identities.</p></div> : <div className="flex flex-col gap-6">{results.filter(({ definitions }) => definitions.length > 0).map(({ section, definitions }) => <div key={section.key} className="flex flex-col gap-2"><h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{section.label}</h3><ul className="flex flex-col gap-2">{definitions.map((definition) => definition.fields.map((field) => <li key={`${definition.id}-${field.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-medium text-foreground">{field.displayName}</span><span className="font-mono text-xs text-muted-foreground">{field.fieldKey} · {field.fieldType}</span></div><Button type="button" variant="ghost" size="sm" disabled={deleting} onClick={() => requestDelete(definition)} aria-label={`Delete definition ${definition.name}`}><Trash2 data-icon="inline-start" aria-hidden="true" />Delete definition</Button></li>))}</ul></div>)}</div>}
           {successMessage && <Alert className="mt-4" role="status"><AlertTitle>Definition deleted</AlertTitle><AlertDescription>{successMessage}</AlertDescription></Alert>}
           {errorMessage && <Alert variant="destructive" className="mt-4"><AlertTitle>Custom field action failed</AlertTitle><AlertDescription>{errorMessage}</AlertDescription></Alert>}
         </CardContent>
