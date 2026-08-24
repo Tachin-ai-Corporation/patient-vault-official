@@ -19,8 +19,8 @@ const TEST_BO_CLASS_IDS: Record<BoClassName, number> = {
   File: 20,
 }
 
-export function resolveCustomDataType(_types: AvailableCustomDataType[], key: BoClassName): AvailableCustomDataType {
-  return { id: TEST_BO_CLASS_IDS[key], key, name: key }
+export function boClassId(key: BoClassName) {
+  return TEST_BO_CLASS_IDS[key]
 }
 
 // Each patient-record section maps to the BO class that actually owns its
