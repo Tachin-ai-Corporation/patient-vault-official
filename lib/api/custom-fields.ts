@@ -2,19 +2,21 @@
 
 import { apiRequest } from '@/lib/api/client'
 
-// Canonical 1health BO Core class names → IDs. Sourced from the tenant's
-// BO Core document; referenced by name so the numeric IDs live in exactly one
-// place. Demographics values live on the patient's Person instance; document
-// values live on each attachment's File instance.
-export const BO_CLASSES = {
-  Person: 22,
-  File: 20,
-} as const
+export type BoClassName = 'Person' | 'File'
 
-export type BoClassName = keyof typeof BO_CLASSES
+export interface AvailableCustomDataType {
+  id: number
+  key: string
+  name: string
+}
 
-export function boClassId(name: BoClassName): number {
-  return BO_CLASSES[name]
+export function getAvailableCustomDataTypes() {
+  return apiRequest<AvailableCustomDataType[]>('/v3/custom-data/available-types')
+}
+
+export function resolveCustomDataType(types: AvailableCustomDataType[], key: BoClassName) {
+  return types.find((type) => type.key.localeCompare(key, undefined, { sensitivity: 'accent' }) === 0)
+    ?? types.find((type) => type.name.localeCompare(key, undefined, { sensitivity: 'accent' }) === 0)
 }
 
 // Each patient-record section maps to the BO class that actually owns its

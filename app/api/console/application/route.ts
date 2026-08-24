@@ -1,4 +1,7 @@
+import { and, eq } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { onehealthApplications } from '@/lib/db/schema'
 
 type Environment = 'demo' | 'production'
 
@@ -52,14 +55,40 @@ function readLegacyStored(request: NextRequest, environment: Environment): Store
   return decodeStored(request.cookies.get(LEGACY_COOKIE_NAMES[environment])?.value)
 }
 
-function store(response: NextResponse, environment: Environment, userId: number, app: StoredApplication) {
-  response.cookies.set(cookieName(environment, userId), Buffer.from(JSON.stringify(app)).toString('base64url'), {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 365,
+async function readPersisted(userId: number, environment: Environment): Promise<StoredApplication | null> {
+  const [row] = await db.select().from(onehealthApplications).where(
+    and(eq(onehealthApplications.userId, String(userId)), eq(onehealthApplications.environment, environment)),
+  ).limit(1)
+  if (!row) return null
+  return {
+    id: row.applicationId,
+    name: row.applicationName,
+    url: row.applicationUrl,
+    description: row.description ?? undefined,
+    state: row.state ?? undefined,
+    iconUrl: row.iconUrl ?? undefined,
+    launchSecretMasked: row.launchSecretMasked ?? undefined,
+  }
+}
+
+async function persist(userId: number, environment: Environment, app: StoredApplication) {
+  await db.insert(onehealthApplications).values({
+    userId: String(userId), environment, applicationId: app.id, applicationName: app.name,
+    applicationUrl: app.url, description: app.description, state: app.state, iconUrl: app.iconUrl,
+    launchSecretMasked: app.launchSecretMasked, updatedAt: new Date(),
+  }).onConflictDoUpdate({
+    target: [onehealthApplications.userId, onehealthApplications.environment],
+    set: {
+      applicationId: app.id, applicationName: app.name, applicationUrl: app.url,
+      description: app.description, state: app.state, iconUrl: app.iconUrl,
+      launchSecretMasked: app.launchSecretMasked, updatedAt: new Date(),
+    },
   })
+}
+
+async function store(response: NextResponse, environment: Environment, userId: number, app: StoredApplication) {
+  await persist(userId, environment, app)
+  response.cookies.delete(cookieName(environment, userId))
 }
 
 function authorization(request: NextRequest) {
@@ -80,8 +109,9 @@ export async function GET(request: NextRequest) {
   const environment = environmentFrom(request)
   const userId = userIdFrom(request)
   if (!userId) return NextResponse.json({ error: 'A valid authenticated user ID is required.' }, { status: 400 })
+  const persisted = await readPersisted(userId, environment)
   const scoped = readStored(request, environment, userId)
-  const stored = scoped ?? readLegacyStored(request, environment)
+  const stored = persisted ?? scoped ?? readLegacyStored(request, environment)
   if (!stored) return NextResponse.json({ application: null })
 
   const auth = authorization(request)
@@ -92,7 +122,12 @@ export async function GET(request: NextRequest) {
     cache: 'no-store',
   })
   if (!platform.ok) {
-    if (!scoped || platform.status === 404) {
+    if (!persisted || platform.status === 404) {
+      if (persisted && platform.status === 404) {
+        await db.delete(onehealthApplications).where(
+          and(eq(onehealthApplications.userId, String(userId)), eq(onehealthApplications.environment, environment)),
+        )
+      }
       const response = NextResponse.json({ application: null })
       response.cookies.delete(cookieName(environment, userId))
       response.cookies.delete(LEGACY_COOKIE_NAMES[environment])
@@ -112,7 +147,7 @@ export async function GET(request: NextRequest) {
     launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : stored.launchSecretMasked,
   }
   const response = NextResponse.json({ application })
-  store(response, environment, userId, application)
+  await store(response, environment, userId, application)
   if (!scoped) response.cookies.delete(LEGACY_COOKIE_NAMES[environment])
   return response
 }
@@ -121,7 +156,7 @@ export async function POST(request: NextRequest) {
   const environment = environmentFrom(request)
   const userId = userIdFrom(request)
   if (!userId) return NextResponse.json({ error: 'A valid authenticated user ID is required.' }, { status: 400 })
-  if (readStored(request, environment, userId)) {
+  if (await readPersisted(userId, environment)) {
     return NextResponse.json({ error: 'This environment already has a Patient Vault application.' }, { status: 409 })
   }
   const auth = authorization(request)
@@ -157,11 +192,11 @@ export async function POST(request: NextRequest) {
   }
   if (typeof data.launchSecret !== 'string' || !data.launchSecret) {
     const response = NextResponse.json({ error: 'The application was created, but its one-time key was not returned. Contact support before continuing.' }, { status: 502 })
-    store(response, environment, userId, application)
+    await store(response, environment, userId, application)
     return response
   }
   const response = NextResponse.json({ application, launchSecret: data.launchSecret }, { status: 201 })
-  store(response, environment, userId, application)
+  await store(response, environment, userId, application)
   return response
 }
 
@@ -201,7 +236,7 @@ export async function PATCH(request: NextRequest) {
     launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : undefined,
   }
   const response = NextResponse.json({ application })
-  store(response, environment, userId, application)
+  await store(response, environment, userId, application)
   response.cookies.delete(LEGACY_COOKIE_NAMES[environment])
   return response
 }
@@ -210,7 +245,7 @@ export async function PUT(request: NextRequest) {
   const environment = environmentFrom(request)
   const userId = userIdFrom(request)
   if (!userId) return NextResponse.json({ error: 'A valid authenticated user ID is required.' }, { status: 400 })
-  const stored = readStored(request, environment, userId)
+  const stored = await readPersisted(userId, environment)
   if (!stored) return NextResponse.json({ error: 'Create or connect an application first.' }, { status: 409 })
   const auth = authorization(request)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -244,6 +279,6 @@ export async function PUT(request: NextRequest) {
     launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : stored.launchSecretMasked,
   }
   const response = NextResponse.json({ application })
-  store(response, environment, userId, application)
+  await store(response, environment, userId, application)
   return response
 }
