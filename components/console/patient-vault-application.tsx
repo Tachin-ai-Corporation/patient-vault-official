@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { createConsoleApplication, getConsoleApplication, updateConsoleApplication } from '@/lib/api/console-application'
+import { connectConsoleApplication, consoleApplicationUserId, createConsoleApplication, getConsoleApplication, updateConsoleApplication } from '@/lib/api/console-application'
 import { useSession } from '@/lib/session-context'
 
 const MAX_ICON_SIZE = 5 * 1024 * 1024
@@ -77,6 +77,37 @@ function ApplicationForm({ initial, submitLabel, onCancel, onSubmit }: AppFormPr
   )
 }
 
+function ConnectApplicationForm({ onConnect }: { onConnect: (applicationId: number) => Promise<void> }) {
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    const applicationId = Number(new FormData(event.currentTarget).get('applicationId'))
+    if (!Number.isSafeInteger(applicationId) || applicationId <= 0) return setError('Enter a valid positive application ID.')
+    try {
+      setPending(true)
+      await onConnect(applicationId)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to connect the application.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <form className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4" onSubmit={submit}>
+      <div className="flex flex-col gap-1"><strong className="text-sm text-foreground">Connect an existing application</strong><p className="text-sm leading-relaxed text-muted-foreground">Use the application ID owned by your current 1health account. Access is verified before it is saved for this user.</p></div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <Field label="Application ID" htmlFor="existing-application-id"><TextInput id="existing-application-id" name="applicationId" type="number" min="1" step="1" inputMode="numeric" required placeholder="91" /></Field>
+        <Button type="submit" variant="outline" disabled={pending}>{pending ? 'Connecting…' : 'Connect application'}</Button>
+      </div>
+      {error && <Alert variant="destructive"><AlertTitle>Application was not connected</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+    </form>
+  )
+}
+
 function safeReturnTo(value?: string) {
   if (!value?.startsWith('/') || value.startsWith('//') || !value.startsWith('/patients/')) return null
   return value
@@ -89,7 +120,9 @@ export function PatientVaultApplication({ returnTo }: { returnTo?: string }) {
   const [editing, setEditing] = useState(false)
   const [copied, setCopied] = useState(false)
   const [oneTimeKey, setOneTimeKey] = useState<string | null>(null)
-  const { data, error, isLoading, mutate } = useSWR(['console-application', currentEnv], () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
+  const userId = consoleApplicationUserId(currentEnv)
+  const appKey = userId ? ['console-application', currentEnv, userId] as const : null
+  const { data, error, isLoading, mutate } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const application = data?.application
 
   useEffect(() => {
@@ -108,6 +141,11 @@ export function PatientVaultApplication({ returnTo }: { returnTo?: string }) {
       setOneTimeKey(result.launchSecret)
     }
     setEditing(false)
+  }
+
+  async function connect(applicationId: number) {
+    const result = await connectConsoleApplication(currentEnv, applicationId)
+    await mutate(result, false)
   }
 
   async function copyValue(value: string) {
@@ -157,7 +195,7 @@ export function PatientVaultApplication({ returnTo }: { returnTo?: string }) {
               <div className="flex justify-end"><Button type="button" onClick={finishKeySetup}>{destination ? 'I saved it — return to patient' : 'I saved it — continue'}</Button></div>
             </div>
           ) : !application ? (
-            <div className="flex flex-col gap-5"><Alert><ShieldCheck aria-hidden="true" /><AlertTitle>Application setup required</AlertTitle><AlertDescription>Create the single application for this environment before defining custom fields. It will be private and unavailable to patient launchers.</AlertDescription></Alert><ApplicationForm submitLabel="Create application" onSubmit={save} /></div>
+            <div className="flex flex-col gap-5"><Alert><ShieldCheck aria-hidden="true" /><AlertTitle>Application setup required</AlertTitle><AlertDescription>Connect the application already owned by this 1health user, or create a new private application for this environment.</AlertDescription></Alert><ConnectApplicationForm onConnect={connect} /><div className="flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground"><span className="h-px flex-1 bg-border" /><span>or create new</span><span className="h-px flex-1 bg-border" /></div><ApplicationForm submitLabel="Create application" onSubmit={save} /></div>
           ) : editing ? (
             <ApplicationForm initial={application} submitLabel="Save changes" onCancel={() => setEditing(false)} onSubmit={save} />
           ) : (

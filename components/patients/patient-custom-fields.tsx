@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { getConsoleApplication } from '@/lib/api/console-application'
+import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
 import {
   boClassId,
   createCustomFieldDefinition,
@@ -139,7 +139,9 @@ export function PatientCustomFields({
   const [details, setDetails] = useState<ResolvedField | null>(null)
 
   const section = CUSTOM_FIELD_SECTIONS.find((item) => item.key === sectionKey)
-  const { data: appData } = useSWR(['console-application', currentEnv], () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
+  const userId = consoleApplicationUserId(currentEnv)
+  const appKey = userId ? (['console-application', currentEnv, userId] as const) : null
+  const { data: appData } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
 
   const classId = section ? boClassId(section.boClass) : undefined
