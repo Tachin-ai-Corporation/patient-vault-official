@@ -64,10 +64,9 @@ function fieldKeyCandidate(name: string) {
     .toLowerCase()
 }
 
-function findField(definitions: CustomFieldDefinition[], displayName: string, definitionName?: string) {
+function findField(definitions: CustomFieldDefinition[], displayName: string) {
   const expectedKey = fieldKeyCandidate(displayName)
-  const candidates = definitionName ? definitions.filter((definition) => definition.name === definitionName) : definitions
-  for (const definition of candidates) {
+  for (const definition of definitions) {
     const field = definition.fields.find(
       (item) =>
         item.displayName.localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 ||
@@ -152,16 +151,11 @@ export function PatientCustomFields({
 
   if (!section) return null
 
-  // Definitions belonging to this section. Existing definitions were created
-  // with a "Label: name" prefix, so match on that while treating unprefixed
-  // ones on the same BO class as belonging to the primary (patient) section.
+  // 1health may append new fields to an existing definition for the BO class
+  // instead of preserving the submitted definition name. Keep Person fields
+  // discoverable in Demographics, while named section views remain scoped.
   const sectionFields: ResolvedField[] = definitions
-    .filter((definition) => {
-      const prefix = `${section.label}:`
-      if (definition.name.startsWith(prefix)) return true
-      const prefixedByAnother = CUSTOM_FIELD_SECTIONS.some((other) => other.key !== section.key && definition.name.startsWith(`${other.label}:`))
-      return !prefixedByAnother && section.scope === 'patient' && section.key === 'demographics'
-    })
+    .filter((definition) => section.key === 'demographics' || definition.name.startsWith(`${section.label}:`))
     .flatMap((definition) => definition.fields)
 
   async function saveValue(field: ResolvedField, rawValue: string) {
@@ -190,7 +184,8 @@ export function PatientCustomFields({
       setMessage(null)
       const definitionName = `${section.label}: ${displayName}`
       let resolvedDefinitions = definitions
-      let field = findField(resolvedDefinitions, displayName, definitionName)
+      let field = findField(resolvedDefinitions, displayName)
+      let created = false
       if (!field) {
         try {
           const createdDefinition = await createCustomFieldDefinition(app.id, {
@@ -198,24 +193,25 @@ export function PatientCustomFields({
             boClassId: classId,
             fields: [{ displayName, fieldType }],
           })
+          created = true
           if (createdDefinition) await mutateDefinitions([...definitions, createdDefinition], false)
 
           // The documented create response may be empty. Reload from 1health
           // and resolve the exact definition before sending any patient value.
           const refreshed = await mutateDefinitions()
           resolvedDefinitions = refreshed ?? (createdDefinition ? [...definitions, createdDefinition] : definitions)
-          field = findField(resolvedDefinitions, displayName, definitionName)
-          if (!field && createdDefinition?.name === definitionName) field = createdDefinition.fields[0]
+          field = findField(resolvedDefinitions, displayName)
+          if (!field && createdDefinition) field = findField([createdDefinition], displayName)
         } catch (cause) {
           const detail = cause instanceof Error ? cause.message : ''
           if (!/already exists|duplicate/i.test(detail)) throw cause
           const refreshed = await mutateDefinitions()
           resolvedDefinitions = refreshed ?? definitions
-          field = findField(resolvedDefinitions, displayName, definitionName)
-          if (!field) throw new Error('This field already exists, but could not be loaded. Refresh the patient and try again.')
+          field = findField(resolvedDefinitions, displayName)
+          if (!field) throw new Error('1health reports that this field key already exists, but it was not included in the definition list for this application and record type.')
         }
       }
-      if (!field?.fieldKey) throw new Error('The field was created, but its API key was not returned. Refresh the patient to load the new field.')
+      if (!field?.fieldKey) throw new Error('The definition response did not include a usable field key, so the value was not sent.')
       assertFieldType(field, fieldType, resolvedDefinitions)
 
       let parsed: unknown
@@ -231,7 +227,8 @@ export function PatientCustomFields({
         setAddOpen(false)
       } catch (cause) {
         await mutateDefinitions()
-        throw new Error(`The field “${displayName}” was created, but its value was not saved. Reopen it and try again. ${cause instanceof Error ? cause.message : ''}`.trim())
+        const status = created ? `The field “${displayName}” was created, but its value was not saved.` : `The value for existing field “${displayName}” was not saved.`
+        throw new Error(`${status} Reopen it and try again. ${cause instanceof Error ? cause.message : ''}`.trim())
       }
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Unable to save the custom field.')
