@@ -67,6 +67,29 @@ test('accepts a valid activity range and serializes it', () => {
   }
 })
 
+test('retains every editable identity field in a normalized payload', () => {
+  const result = validateAndNormalizeExternalIdentity({
+    value: '  MEMBER-9  ',
+    type: ' custom_member ',
+    authority_organization_name: ' Health Plan ',
+    authority_external_system_id: '34',
+    source_name: ' Portal import ',
+    active_from: '2026-08-23T09:30',
+    active_until: '2026-08-24T09:30',
+  })
+
+  assert.equal(result.ok, true)
+  if (result.ok) {
+    assert.equal(result.body.value, 'MEMBER-9')
+    assert.equal(result.body.type, 'custom_member')
+    assert.equal(result.body.authority_organization_name, 'Health Plan')
+    assert.equal(result.body.authority_external_system_id, 34)
+    assert.equal(result.body.source_name, 'Portal import')
+    assert.ok(result.body.active_from?.endsWith('Z'))
+    assert.ok(result.body.active_until?.endsWith('Z'))
+  }
+})
+
 test('rejects an activity end before its start', () => {
   const result = validateAndNormalizeExternalIdentity({
     value: 'MRN-42',
