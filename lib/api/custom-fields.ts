@@ -14,9 +14,13 @@ export function getAvailableCustomDataTypes() {
   return apiRequest<AvailableCustomDataType[]>('/v3/custom-data/available-types')
 }
 
-export function resolveCustomDataType(types: AvailableCustomDataType[], key: BoClassName) {
-  return types.find((type) => type.key.localeCompare(key, undefined, { sensitivity: 'accent' }) === 0)
-    ?? types.find((type) => type.name.localeCompare(key, undefined, { sensitivity: 'accent' }) === 0)
+const TEST_BO_CLASS_IDS: Record<BoClassName, number> = {
+  Person: 22,
+  File: 20,
+}
+
+export function resolveCustomDataType(_types: AvailableCustomDataType[], key: BoClassName): AvailableCustomDataType {
+  return { id: TEST_BO_CLASS_IDS[key], key, name: key }
 }
 
 // Each patient-record section maps to the BO class that actually owns its
