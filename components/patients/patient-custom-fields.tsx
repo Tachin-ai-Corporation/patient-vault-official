@@ -64,7 +64,7 @@ function fieldKeyCandidate(name: string) {
     .toLowerCase()
 }
 
-function findField(definitions: CustomFieldDefinition[], displayName: string) {
+function findFieldLocation(definitions: CustomFieldDefinition[], displayName: string) {
   const expectedKey = fieldKeyCandidate(displayName)
   for (const definition of definitions) {
     const field = definition.fields.find(
@@ -72,8 +72,16 @@ function findField(definitions: CustomFieldDefinition[], displayName: string) {
         item.displayName.localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 ||
         item.fieldKey.toLowerCase() === expectedKey,
     )
-    if (field) return field
+    if (field) return { definition, field }
   }
+}
+
+function findField(definitions: CustomFieldDefinition[], displayName: string) {
+  return findFieldLocation(definitions, displayName)?.field
+}
+
+function definitionSection(definition: CustomFieldDefinition) {
+  return CUSTOM_FIELD_SECTIONS.find((candidate) => definition.name.startsWith(`${candidate.label}:`))
 }
 
 function assertFieldType(field: ResolvedField, requestedType: CustomFieldType, definitions: CustomFieldDefinition[]) {
@@ -151,11 +159,12 @@ export function PatientCustomFields({
 
   if (!section) return null
 
-  // 1health may append new fields to an existing definition for the BO class
-  // instead of preserving the submitted definition name. Keep Person fields
-  // discoverable in Demographics, while named section views remain scoped.
   const sectionFields: ResolvedField[] = definitions
-    .filter((definition) => section.key === 'demographics' || definition.name.startsWith(`${section.label}:`))
+    .filter((definition) => {
+      if (definition.name.startsWith(`${section.label}:`)) return true
+      const owner = definitionSection(definition)
+      return !owner && section.key === 'demographics'
+    })
     .flatMap((definition) => definition.fields)
 
   async function saveValue(field: ResolvedField, rawValue: string) {
@@ -184,7 +193,14 @@ export function PatientCustomFields({
       setMessage(null)
       const definitionName = `${section.label}: ${displayName}`
       let resolvedDefinitions = definitions
-      let field = findField(resolvedDefinitions, displayName)
+      const existingLocation = findFieldLocation(resolvedDefinitions, displayName)
+      const existingSection = existingLocation ? definitionSection(existingLocation.definition) : undefined
+      if (existingLocation && existingSection && existingSection.key !== section.key) {
+        throw new Error(
+          `The custom field name “${displayName}” is already taken in the ${existingSection.label} card. Custom field names must be unique across this patient record. Choose a different name or edit it in ${existingSection.label}.`,
+        )
+      }
+      let field = existingLocation?.field
       let created = false
       if (!field) {
         try {
@@ -207,8 +223,15 @@ export function PatientCustomFields({
           if (!/already exists|duplicate/i.test(detail)) throw cause
           const refreshed = await mutateDefinitions()
           resolvedDefinitions = refreshed ?? definitions
-          field = findField(resolvedDefinitions, displayName)
-          if (!field) throw new Error('1health reports that this field key already exists, but it was not included in the definition list for this application and record type.')
+          const refreshedLocation = findFieldLocation(resolvedDefinitions, displayName)
+          const owner = refreshedLocation ? definitionSection(refreshedLocation.definition) : undefined
+          if (refreshedLocation && owner && owner.key !== section.key) {
+            throw new Error(
+              `The custom field name “${displayName}” is already taken in the ${owner.label} card. Custom field names must be unique across this patient record. Choose a different name or edit it in ${owner.label}.`,
+            )
+          }
+          field = refreshedLocation?.field
+          if (!field) throw new Error(`The custom field name “${displayName}” is already taken elsewhere in 1health, but its definition is not available in this patient view. Choose a different name.`)
         }
       }
       if (!field?.fieldKey) throw new Error('The definition response did not include a usable field key, so the value was not sent.')
