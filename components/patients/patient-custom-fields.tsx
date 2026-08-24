@@ -13,11 +13,14 @@ import {
   createCustomFieldDefinition,
   CUSTOM_FIELD_SECTIONS,
   customFieldDefinitionsKey,
+  customFieldDisplayName,
   customFieldValuesKey,
+  encodeCustomFieldDisplayName,
   getAvailableCustomDataTypes,
   getInstanceCustomData,
   listCustomFieldDefinitions,
   resolveCustomDataType,
+  resolveCustomFieldSection,
   updateInstanceCustomData,
   type CustomFieldDefinition,
   type CustomFieldType,
@@ -65,24 +68,29 @@ function fieldKeyCandidate(name: string) {
     .toLowerCase()
 }
 
-function findFieldLocation(definitions: CustomFieldDefinition[], displayName: string) {
-  const expectedKey = fieldKeyCandidate(displayName)
+function findFieldLocation(
+  definitions: CustomFieldDefinition[],
+  section: (typeof CUSTOM_FIELD_SECTIONS)[number],
+  displayName: string,
+) {
+  const expectedKey = fieldKeyCandidate(encodeCustomFieldDisplayName(section.key, displayName))
   for (const definition of definitions) {
+    if (resolveCustomFieldSection(definition, section.boClass)?.key !== section.key) continue
     const field = definition.fields.find(
       (item) =>
-        item.displayName.localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 ||
+        customFieldDisplayName(item).localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 ||
         item.fieldKey.toLowerCase() === expectedKey,
     )
     if (field) return { definition, field }
   }
 }
 
-function findField(definitions: CustomFieldDefinition[], displayName: string) {
-  return findFieldLocation(definitions, displayName)?.field
-}
-
-function definitionSection(definition: CustomFieldDefinition) {
-  return CUSTOM_FIELD_SECTIONS.find((candidate) => definition.name.startsWith(`${candidate.label}:`))
+function findField(
+  definitions: CustomFieldDefinition[],
+  section: (typeof CUSTOM_FIELD_SECTIONS)[number],
+  displayName: string,
+) {
+  return findFieldLocation(definitions, section, displayName)?.field
 }
 
 function assertFieldType(field: ResolvedField, requestedType: CustomFieldType, definitions: CustomFieldDefinition[]) {
@@ -167,11 +175,7 @@ export function PatientCustomFields({
   if (!section) return null
 
   const sectionFields: ResolvedField[] = definitions
-    .filter((definition) => {
-      if (definition.name.startsWith(`${section.label}:`)) return true
-      const owner = definitionSection(definition)
-      return !owner && section.key === 'demographics'
-    })
+    .filter((definition) => resolveCustomFieldSection(definition, section.boClass)?.key === section.key)
     .flatMap((definition) => definition.fields)
 
   async function saveValue(field: ResolvedField, rawValue: string) {
@@ -200,14 +204,9 @@ export function PatientCustomFields({
       setMessage(null)
       if (!availableType) throw new Error(`${section.boClass} is not returned by the available custom data types API.`)
       const definitionName = `${section.label}: ${displayName}`
+      const apiDisplayName = encodeCustomFieldDisplayName(section.key, displayName)
       let resolvedDefinitions = definitions
-      const existingLocation = findFieldLocation(resolvedDefinitions, displayName)
-      const existingSection = existingLocation ? definitionSection(existingLocation.definition) : undefined
-      if (existingLocation && existingSection && existingSection.key !== section.key) {
-        throw new Error(
-          `The custom field name “${displayName}” is already taken in the ${existingSection.label} card. Custom field names must be unique across this patient record. Choose a different name or edit it in ${existingSection.label}.`,
-        )
-      }
+      const existingLocation = findFieldLocation(resolvedDefinitions, section, displayName)
       let field = existingLocation?.field
       let created = false
       if (!field) {
@@ -215,7 +214,7 @@ export function PatientCustomFields({
           const createdDefinition = await createCustomFieldDefinition(app.id, {
             name: definitionName,
             boClassId: availableType.id,
-            fields: [{ displayName, fieldType }],
+            fields: [{ displayName: apiDisplayName, fieldType }],
           })
           created = true
           if (createdDefinition) await mutateDefinitions([...definitions, createdDefinition], false)
@@ -224,22 +223,16 @@ export function PatientCustomFields({
           // and resolve the exact definition before sending any patient value.
           const refreshed = await mutateDefinitions()
           resolvedDefinitions = refreshed ?? (createdDefinition ? [...definitions, createdDefinition] : definitions)
-          field = findField(resolvedDefinitions, displayName)
-          if (!field && createdDefinition) field = findField([createdDefinition], displayName)
+          field = findField(resolvedDefinitions, section, displayName)
+          if (!field && createdDefinition) field = findField([createdDefinition], section, displayName)
         } catch (cause) {
           const detail = cause instanceof Error ? cause.message : ''
           if (!/already exists|duplicate/i.test(detail)) throw cause
           const refreshed = await mutateDefinitions()
           resolvedDefinitions = refreshed ?? definitions
-          const refreshedLocation = findFieldLocation(resolvedDefinitions, displayName)
-          const owner = refreshedLocation ? definitionSection(refreshedLocation.definition) : undefined
-          if (refreshedLocation && owner && owner.key !== section.key) {
-            throw new Error(
-              `The custom field name “${displayName}” is already taken in the ${owner.label} card. Custom field names must be unique across this patient record. Choose a different name or edit it in ${owner.label}.`,
-            )
-          }
+          const refreshedLocation = findFieldLocation(resolvedDefinitions, section, displayName)
           field = refreshedLocation?.field
-          if (!field) throw new Error(`The custom field name “${displayName}” is already taken elsewhere in 1health, but its definition is not available in this patient view. Choose a different name.`)
+          if (!field) throw new Error(`The custom field name “${displayName}” is already taken elsewhere in 1health, but its definition is not available in ${section.label}. Choose a different name.`)
         }
       }
       if (!field?.fieldKey) throw new Error('The definition response did not include a usable field key, so the value was not sent.')
@@ -321,12 +314,12 @@ export function PatientCustomFields({
           {sectionFields.map((field) => (
             <div key={field.id} className="group flex items-start justify-between gap-2 rounded-lg bg-muted/30 px-3 py-2">
               <div className="min-w-0">
-                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">{field.displayName}<span className="font-mono text-[10px] uppercase tracking-wider opacity-70">{field.fieldType.toLowerCase()}</span></dt>
+                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">{customFieldDisplayName(field)}<span className="font-mono text-[10px] uppercase tracking-wider opacity-70">{field.fieldType.toLowerCase()}</span></dt>
                 <dd className="mt-0.5 break-words text-sm text-foreground">{formatValue(values[field.fieldKey])}</dd>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
-                <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${field.displayName}`} onClick={() => { setMessage(null); setEditing(field) }}><Pencil className="size-3.5" aria-hidden="true" /></Button>
-                <Button type="button" variant="ghost" size="icon" aria-label={`Details for ${field.displayName}`} onClick={() => setDetails(field)}><Info className="size-3.5" aria-hidden="true" /></Button>
+                <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${customFieldDisplayName(field)}`} onClick={() => { setMessage(null); setEditing(field) }}><Pencil className="size-3.5" aria-hidden="true" /></Button>
+                <Button type="button" variant="ghost" size="icon" aria-label={`Details for ${customFieldDisplayName(field)}`} onClick={() => setDetails(field)}><Info className="size-3.5" aria-hidden="true" /></Button>
               </div>
             </div>
           ))}
@@ -355,7 +348,7 @@ export function PatientCustomFields({
               }}
             >
               <DialogHeader>
-                <DialogTitle>Edit {editing.displayName}</DialogTitle>
+                <DialogTitle>Edit {customFieldDisplayName(editing)}</DialogTitle>
                 <DialogDescription>Update the {editing.fieldType.toLowerCase()} value stored for this {section.scope === 'record' ? 'record' : 'patient'}.</DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4 py-5">
@@ -384,7 +377,7 @@ export function PatientCustomFields({
           {details && (
             <>
               <DialogHeader>
-                <DialogTitle>{details.displayName}</DialogTitle>
+                <DialogTitle>{customFieldDisplayName(details)}</DialogTitle>
                 <DialogDescription>Field definition details. Definitions are shared across every {section.label.toLowerCase()} record.</DialogDescription>
               </DialogHeader>
               <dl className="flex flex-col gap-3 py-5 text-sm">

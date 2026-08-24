@@ -16,7 +16,6 @@ import {
   getIdentifier,
   listIdentifiers,
   patchIdentifier,
-  replaceIdentifier,
   type IdentifierStatus,
   type PatientIdentifier,
   type PatientIdentifierInput,
@@ -169,7 +168,7 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
     try {
       if (editing) {
         const keys = authorityKeys(editing)
-        await replaceIdentifier(patientId, keys.organizationId, keys.externalSystemId, validation.body)
+        await patchIdentifier(patientId, keys.organizationId, keys.externalSystemId, validation.body)
       } else {
         await addIdentifier(patientId, validation.body)
       }
@@ -304,7 +303,7 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Button variant="ghost" size="icon-sm" onClick={() => viewIdentifier(identifier)} disabled={!keys.available || busy} aria-label={`Fetch ${identifier.value}`} title={keys.available ? 'GET item' : 'Authority IDs were not returned'}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(identifier)} disabled={!keys.available || busy} aria-label={`Edit ${identifier.value}`} title="GET item, then PUT replacement"><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(identifier)} disabled={!keys.available || busy} aria-label={`Edit ${identifier.value}`} title="GET item, then PATCH update"><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon-sm" onClick={() => toggleActive(identifier)} disabled={!keys.available || busy} aria-label={`${inactive ? 'Reactivate' : 'Deactivate'} ${identifier.value}`} title="PATCH activity">{inactive ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}</Button>
                     <Button variant="ghost" size="icon-sm" onClick={() => setPendingDelete(identifier)} disabled={!keys.available || busy} aria-label={`Delete ${identifier.value}`} className="text-muted-foreground hover:text-destructive" title="DELETE (soft-delete)"><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>

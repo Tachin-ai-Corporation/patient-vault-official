@@ -12,7 +12,7 @@ import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/client'
 import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
-import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, deleteCustomFieldDefinition, getAvailableCustomDataTypes, listCustomFieldDefinitions, resolveCustomDataType, type BoClassName, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
+import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, customFieldDisplayName, deleteCustomFieldDefinition, encodeCustomFieldDisplayName, getAvailableCustomDataTypes, listCustomFieldDefinitions, resolveCustomDataType, resolveCustomFieldSection, type BoClassName, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
 import { useSession } from '@/lib/session-context'
 
 const FIELD_TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -35,7 +35,7 @@ function portableSchema(results: SectionResult[]) {
     sections: results.map(({ section, definitions }) => ({
       key: section.key,
       fields: definitions.flatMap((definition) => definition.fields.map((field) => ({
-        displayName: field.displayName,
+        displayName: customFieldDisplayName(field),
         fieldType: field.fieldType,
         jsonSchema: field.jsonSchema || undefined,
       }))),
@@ -44,7 +44,7 @@ function portableSchema(results: SectionResult[]) {
 }
 
 function toMarkdown(results: SectionResult[], environment: string) {
-  const rows = results.flatMap(({ section, definitions }) => definitions.flatMap((definition) => definition.fields.map((field) => `| ${section.label} | ${field.displayName.replaceAll('|', '\\|')} | ${field.fieldType} |`)))
+  const rows = results.flatMap(({ section, definitions }) => definitions.flatMap((definition) => definition.fields.map((field) => `| ${section.label} | ${customFieldDisplayName(field).replaceAll('|', '\\|')} | ${field.fieldType} |`)))
   return ['# Patient Vault custom fields', '', `Environment: ${environment}`, '', '| Section | Field | Type |', '| --- | --- | --- |', ...rows, ''].join('\n')
 }
 
@@ -79,12 +79,9 @@ export function CustomFieldDefinitions() {
   )
   const results = useMemo<SectionResult[]>(() => CUSTOM_FIELD_SECTIONS.map((section) => {
     const classDefs = definitionsByClass[section.boClass] ?? []
-    const definitions = classDefs.filter((definition) => {
-      if (definition.name.startsWith(`${section.label}:`)) return true
-      // Unprefixed legacy definitions on the Person class belong to demographics.
-      const prefixedByAnother = CUSTOM_FIELD_SECTIONS.some((other) => other.key !== section.key && definition.name.startsWith(`${other.label}:`))
-      return !prefixedByAnother && section.key === 'demographics'
-    })
+    const definitions = classDefs.filter(
+      (definition) => resolveCustomFieldSection(definition, section.boClass)?.key === section.key,
+    )
     return { section, definitions }
   }), [definitionsByClass])
   const count = useMemo(() => results.reduce((total, result) => total + result.definitions.reduce((sum, definition) => sum + definition.fields.length, 0), 0), [results])
@@ -108,7 +105,7 @@ export function CustomFieldDefinitions() {
       await createCustomFieldDefinition(app.id, {
         name: `${section.label}: ${displayName}`,
         boClassId: availableType.id,
-        fields: [{ displayName, fieldType, ...(jsonSchema ? { jsonSchema } : {}) }],
+        fields: [{ displayName: encodeCustomFieldDisplayName(section.key, displayName), fieldType, ...(jsonSchema ? { jsonSchema } : {}) }],
       })
       await mutate()
       setOpen(false)
@@ -162,7 +159,11 @@ export function CustomFieldDefinitions() {
         if (!availableType) throw new Error(`${section.boClass} is not returned by the available custom data types API.`)
         for (const field of importedSection.fields ?? []) {
           if (!FIELD_TYPES.includes(field.fieldType) || !field.displayName?.trim()) continue
-          await createCustomFieldDefinition(app.id, { name: `${section.label}: ${field.displayName}`, boClassId: availableType.id, fields: [field] })
+          await createCustomFieldDefinition(app.id, {
+            name: `${section.label}: ${field.displayName}`,
+            boClassId: availableType.id,
+            fields: [{ ...field, displayName: encodeCustomFieldDisplayName(section.key, field.displayName) }],
+          })
         }
       }
       await mutate()
@@ -184,7 +185,7 @@ export function CustomFieldDefinitions() {
           </div>
         </CardHeader>
         <CardContent>
-          {appLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : !app ? <Alert><FileJson aria-hidden="true" /><AlertTitle>Set up the application first</AlertTitle><AlertDescription>Custom field definitions are enabled after the Patient Vault application above has been created.</AlertDescription></Alert> : error ? (error instanceof ApiError && error.unavailable ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom fields aren&apos;t available here yet</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> : <Alert variant="destructive"><AlertTitle>Definitions unavailable</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>) : isLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : count === 0 ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 p-6 text-center"><Braces className="text-muted-foreground" aria-hidden="true" /><p className="font-medium text-foreground">No custom fields yet</p><p className="max-w-md text-sm text-muted-foreground">Create a reusable field for demographics, aliases, contacts, addresses, documents, or external identities.</p></div> : <div className="flex flex-col gap-6">{results.filter(({ definitions }) => definitions.length > 0).map(({ section, definitions }) => <div key={section.key} className="flex flex-col gap-2"><h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{section.label}</h3><ul className="flex flex-col gap-2">{definitions.map((definition) => definition.fields.map((field) => <li key={`${definition.id}-${field.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-medium text-foreground">{field.displayName}</span><span className="font-mono text-xs text-muted-foreground">{field.fieldKey} · {field.fieldType}</span></div><Button type="button" variant="ghost" size="sm" disabled={deleting} onClick={() => requestDelete(definition)} aria-label={`Delete definition ${definition.name}`}><Trash2 data-icon="inline-start" aria-hidden="true" />Delete definition</Button></li>))}</ul></div>)}</div>}
+          {appLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : !app ? <Alert><FileJson aria-hidden="true" /><AlertTitle>Set up the application first</AlertTitle><AlertDescription>Custom field definitions are enabled after the Patient Vault application above has been created.</AlertDescription></Alert> : error ? (error instanceof ApiError && error.unavailable ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom fields aren&apos;t available here yet</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> : <Alert variant="destructive"><AlertTitle>Definitions unavailable</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>) : isLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : count === 0 ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 p-6 text-center"><Braces className="text-muted-foreground" aria-hidden="true" /><p className="font-medium text-foreground">No custom fields yet</p><p className="max-w-md text-sm text-muted-foreground">Create a reusable field for demographics, aliases, contacts, addresses, documents, or external identities.</p></div> : <div className="flex flex-col gap-6">{results.filter(({ definitions }) => definitions.length > 0).map(({ section, definitions }) => <div key={section.key} className="flex flex-col gap-2"><h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{section.label}</h3><ul className="flex flex-col gap-2">{definitions.map((definition) => definition.fields.map((field) => <li key={`${definition.id}-${field.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-medium text-foreground">{customFieldDisplayName(field)}</span><span className="font-mono text-xs text-muted-foreground">{field.fieldKey} · {field.fieldType}</span></div><Button type="button" variant="ghost" size="sm" disabled={deleting} onClick={() => requestDelete(definition)} aria-label={`Delete definition ${definition.name}`}><Trash2 data-icon="inline-start" aria-hidden="true" />Delete definition</Button></li>))}</ul></div>)}</div>}
           {successMessage && <Alert className="mt-4" role="status"><AlertTitle>Definition deleted</AlertTitle><AlertDescription>{successMessage}</AlertDescription></Alert>}
           {errorMessage && <Alert variant="destructive" className="mt-4"><AlertTitle>Custom field action failed</AlertTitle><AlertDescription>{errorMessage}</AlertDescription></Alert>}
         </CardContent>

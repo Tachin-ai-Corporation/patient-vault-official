@@ -687,10 +687,6 @@ export function addIdentifier(patientId: string, body: PatientIdentifierInput) {
   return request<PatientIdentifier>(identifierPath(patientId), { method: 'POST', body: JSON.stringify(body) })
 }
 
-export function replaceIdentifier(patientId: string, organizationId: string, externalSystemId: string, body: PatientIdentifierInput) {
-  return request<PatientIdentifier>(identifierPath(patientId, organizationId, externalSystemId), { method: 'PUT', body: JSON.stringify(body) })
-}
-
 export function patchIdentifier(patientId: string, organizationId: string, externalSystemId: string, body: Partial<PatientIdentifierInput>) {
   return request<PatientIdentifier>(identifierPath(patientId, organizationId, externalSystemId), {
     method: 'PATCH',
