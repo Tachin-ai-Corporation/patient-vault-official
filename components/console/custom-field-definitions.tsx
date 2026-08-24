@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import useSWR from 'swr'
-import { Braces, Download, FileJson, FileText, Info, Plus, Trash2, Upload } from 'lucide-react'
+import { Braces, Download, FileJson, FileText, Info, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { EnvBadge } from '@/components/env-badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -52,6 +52,10 @@ export function CustomFieldDefinitions() {
   const { currentEnv } = useSession()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [definitionToDelete, setDefinitionToDelete] = useState<CustomFieldDefinition | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const appKey = ['console-application', currentEnv] as const
@@ -108,10 +112,33 @@ export function CustomFieldDefinitions() {
     }
   }
 
-  async function retire(definition: CustomFieldDefinition) {
-    if (!app || !window.confirm(`Retire “${definition.name}”? Existing stored values may no longer be shown.`)) return
-    await deleteCustomFieldDefinition(app.id, definition.id)
-    await mutate()
+  function requestDelete(definition: CustomFieldDefinition) {
+    setDeleteError(null)
+    setDefinitionToDelete(definition)
+  }
+
+  function closeDeleteDialog() {
+    if (deleting) return
+    setDefinitionToDelete(null)
+    setDeleteError(null)
+  }
+
+  async function confirmDelete() {
+    if (!app || !definitionToDelete) return
+    setDeleting(true)
+    setDeleteError(null)
+    setSuccessMessage(null)
+    try {
+      await deleteCustomFieldDefinition(app.id, definitionToDelete.id)
+      const deletedName = definitionToDelete.name
+      setDefinitionToDelete(null)
+      setSuccessMessage(`Deleted definition “${deletedName}”.`)
+      void mutate()
+    } catch (cause) {
+      setDeleteError(cause instanceof Error ? cause.message : 'Unable to delete the definition.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function importJson(file: File) {
@@ -148,9 +175,27 @@ export function CustomFieldDefinitions() {
           </div>
         </CardHeader>
         <CardContent>
-          {appLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : !app ? <Alert><FileJson aria-hidden="true" /><AlertTitle>Set up the application first</AlertTitle><AlertDescription>Custom field definitions are enabled after the Patient Vault application above has been created.</AlertDescription></Alert> : error ? (error instanceof ApiError && error.unavailable ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom fields aren&apos;t available here yet</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> : <Alert variant="destructive"><AlertTitle>Definitions unavailable</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>) : isLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : count === 0 ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 p-6 text-center"><Braces className="text-muted-foreground" aria-hidden="true" /><p className="font-medium text-foreground">No custom fields yet</p><p className="max-w-md text-sm text-muted-foreground">Create a reusable field for demographics, aliases, contacts, addresses, documents, or external identities.</p></div> : <div className="flex flex-col gap-6">{results.filter(({ definitions }) => definitions.length > 0).map(({ section, definitions }) => <div key={section.key} className="flex flex-col gap-2"><h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{section.label}</h3><ul className="flex flex-col gap-2">{definitions.map((definition) => definition.fields.map((field) => <li key={`${definition.id}-${field.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-medium text-foreground">{field.displayName}</span><span className="font-mono text-xs text-muted-foreground">{field.fieldKey} · {field.fieldType}</span></div><Button type="button" variant="ghost" size="icon" onClick={() => retire(definition)} aria-label={`Retire ${field.displayName}`}><Trash2 aria-hidden="true" /></Button></li>))}</ul></div>)}</div>}
+          {appLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : !app ? <Alert><FileJson aria-hidden="true" /><AlertTitle>Set up the application first</AlertTitle><AlertDescription>Custom field definitions are enabled after the Patient Vault application above has been created.</AlertDescription></Alert> : error ? (error instanceof ApiError && error.unavailable ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom fields aren&apos;t available here yet</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> : <Alert variant="destructive"><AlertTitle>Definitions unavailable</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>) : isLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : count === 0 ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 p-6 text-center"><Braces className="text-muted-foreground" aria-hidden="true" /><p className="font-medium text-foreground">No custom fields yet</p><p className="max-w-md text-sm text-muted-foreground">Create a reusable field for demographics, aliases, contacts, addresses, documents, or external identities.</p></div> : <div className="flex flex-col gap-6">{results.filter(({ definitions }) => definitions.length > 0).map(({ section, definitions }) => <div key={section.key} className="flex flex-col gap-2"><h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{section.label}</h3><ul className="flex flex-col gap-2">{definitions.map((definition) => definition.fields.map((field) => <li key={`${definition.id}-${field.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-medium text-foreground">{field.displayName}</span><span className="font-mono text-xs text-muted-foreground">{field.fieldKey} · {field.fieldType}</span></div><Button type="button" variant="ghost" size="sm" disabled={deleting} onClick={() => requestDelete(definition)} aria-label={`Delete definition ${definition.name}`}><Trash2 data-icon="inline-start" aria-hidden="true" />Delete definition</Button></li>))}</ul></div>)}</div>}
+          {successMessage && <Alert className="mt-4" role="status"><AlertTitle>Definition deleted</AlertTitle><AlertDescription>{successMessage}</AlertDescription></Alert>}
           {errorMessage && <Alert variant="destructive" className="mt-4"><AlertTitle>Custom field action failed</AlertTitle><AlertDescription>{errorMessage}</AlertDescription></Alert>}
         </CardContent>
+        <Dialog open={definitionToDelete !== null} onOpenChange={(nextOpen) => { if (!nextOpen) closeDeleteDialog() }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete custom field definition?</DialogTitle>
+              <DialogDescription>
+                This deletes the entire definition “{definitionToDelete?.name}”, including {definitionToDelete?.fields.length ?? 0} {(definitionToDelete?.fields.length ?? 0) === 1 ? 'field' : 'fields'}. Existing stored values for these fields may no longer be available. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            {deleteError && <Alert variant="destructive" role="alert"><AlertTitle>Definition was not deleted</AlertTitle><AlertDescription>{deleteError}</AlertDescription></Alert>}
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={deleting} onClick={closeDeleteDialog}>Cancel</Button>
+              <Button type="button" variant="destructive" disabled={deleting} aria-busy={deleting} onClick={() => void confirmDelete()}>
+                {deleting ? <><Loader2 className="size-4 animate-spin" data-icon="inline-start" aria-hidden="true" />Deleting…</> : <><Trash2 data-icon="inline-start" aria-hidden="true" />Delete definition</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {app && <CardFooter className="flex-wrap justify-between gap-2 border-t"><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={saving} onClick={() => importRef.current?.click()}><Upload data-icon="inline-start" aria-hidden="true" />Import JSON</Button><input ref={importRef} type="file" accept="application/json,.json" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importJson(file) }} />{count > 0 && <><Button type="button" variant="outline" onClick={() => downloadFile(`${filenameBase}.json`, `${JSON.stringify(portableSchema(results), null, 2)}\n`, 'application/json')}><Download data-icon="inline-start" aria-hidden="true" />JSON</Button><Button type="button" variant="outline" onClick={() => downloadFile(`${filenameBase}.md`, toMarkdown(results, currentEnv), 'text/markdown')}><FileText data-icon="inline-start" aria-hidden="true" />Markdown</Button></>}</div><Dialog open={open} onOpenChange={setOpen}><DialogTrigger render={<Button type="button"><Plus data-icon="inline-start" aria-hidden="true" />Add field</Button>} /><DialogContent><form onSubmit={createField}><DialogHeader><DialogTitle>Add custom field</DialogTitle><DialogDescription>Create one reusable definition for a patient record section.</DialogDescription></DialogHeader><div className="flex flex-col gap-4 py-5"><Field label="Patient record section" htmlFor="field-section"><Select id="field-section" name="section" defaultValue="demographics">{CUSTOM_FIELD_SECTIONS.map((section) => <option key={section.key} value={section.key}>{section.label}</option>)}</Select></Field><Field label="Field name" htmlFor="field-name"><TextInput id="field-name" name="displayName" required maxLength={80} placeholder="Preferred pharmacy" /></Field><Field label="Field type" htmlFor="field-type"><Select id="field-type" name="fieldType" defaultValue="TEXT">{FIELD_TYPES.map((type) => <option key={type} value={type}>{type.toLowerCase()}</option>)}</Select></Field><Field label="JSON schema (JSON fields only)" htmlFor="json-schema"><Textarea id="json-schema" name="jsonSchema" rows={3} placeholder={'{"type":"object"}'} /></Field>{errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}</div><DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create field'}</Button></DialogFooter></form></DialogContent></Dialog></CardFooter>}
       </Card>
     </section>
