@@ -1,8 +1,18 @@
 'use client'
 
 import { apiRequest } from '@/lib/api/client'
+import type { BoClassName } from '@/lib/custom-field-sections'
 
-export type BoClassName = 'Person' | 'File'
+export {
+  CUSTOM_FIELD_SECTIONS,
+  customFieldDisplayName,
+  decodeCustomFieldDisplayName,
+  encodeCustomFieldDisplayName,
+  resolveCustomFieldSection,
+  type BoClassName,
+  type CustomFieldSection,
+  type CustomFieldSectionKey,
+} from '@/lib/custom-field-sections'
 
 export interface AvailableCustomDataType {
   id: number
@@ -17,21 +27,6 @@ export function getAvailableCustomDataTypes() {
 export function resolveCustomDataType(types: AvailableCustomDataType[], typeKey: BoClassName) {
   return types.find((type) => type.key.localeCompare(typeKey, undefined, { sensitivity: 'accent' }) === 0)
 }
-
-// Each patient-record section maps to the BO class that actually owns its
-// custom values. `scope: 'patient'` means values live on the patient's Person
-// instance; `scope: 'record'` means each value belongs to a specific
-// sub-record instance (e.g. one document's File instance).
-export const CUSTOM_FIELD_SECTIONS = [
-  { key: 'demographics', label: 'Demographics', boClass: 'Person', scope: 'patient' },
-  { key: 'contacts', label: 'Contacts', boClass: 'Person', scope: 'patient' },
-  { key: 'addresses', label: 'Addresses', boClass: 'Person', scope: 'patient' },
-  { key: 'aliases', label: 'Aliases', boClass: 'Person', scope: 'patient' },
-  { key: 'external-identities', label: 'External identities', boClass: 'Person', scope: 'patient' },
-  { key: 'documents', label: 'Documents', boClass: 'File', scope: 'record' },
-] as const satisfies ReadonlyArray<{ key: string; label: string; boClass: BoClassName; scope: 'patient' | 'record' }>
-
-export type CustomFieldSection = (typeof CUSTOM_FIELD_SECTIONS)[number]
 
 export type CustomFieldType = 'TEXT' | 'INTEGER' | 'DECIMAL' | 'DATE' | 'TIMESTAMP' | 'JSON'
 
