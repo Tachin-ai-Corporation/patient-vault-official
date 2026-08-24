@@ -10,13 +10,14 @@ import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
 import {
-  boClassId,
   createCustomFieldDefinition,
   CUSTOM_FIELD_SECTIONS,
   customFieldDefinitionsKey,
   customFieldValuesKey,
+  getAvailableCustomDataTypes,
   getInstanceCustomData,
   listCustomFieldDefinitions,
+  resolveCustomDataType,
   updateInstanceCustomData,
   type CustomFieldDefinition,
   type CustomFieldType,
@@ -143,7 +144,12 @@ export function PatientCustomFields({
   const appKey = userId ? (['console-application', currentEnv, userId] as const) : null
   const { data: appData } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
-  const classId = section ? boClassId(section.boClass) : undefined
+  const { data: availableTypes = [] } = useSWR(
+    app ? ['custom-data-available-types', currentEnv] : null,
+    getAvailableCustomDataTypes,
+    { revalidateOnFocus: false },
+  )
+  const availableType = section ? resolveCustomDataType(availableTypes, section.boClass) : undefined
   // Record-scoped sections need an explicit instance id; patient-scoped ones
   // fall back to the patient's Person instance.
   const targetInstance = Number(instanceId ?? patientId)
@@ -155,7 +161,7 @@ export function PatientCustomFields({
     () => listCustomFieldDefinitions(app!.id, section!.boClass),
     { revalidateOnFocus: false },
   )
-  const valuesKey = app && classId && hasInstance ? customFieldValuesKey(currentEnv, app.id, classId, targetInstance) : null
+  const valuesKey = app && section && hasInstance ? customFieldValuesKey(currentEnv, app.id, section.boClass, targetInstance) : null
   const { data: values = {}, mutate: mutateValues } = useSWR(valuesKey, () => getInstanceCustomData(app!.id, targetInstance), { revalidateOnFocus: false })
 
   if (!section) return null
@@ -184,7 +190,7 @@ export function PatientCustomFields({
 
   async function addField(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!app || !section || classId === undefined) return
+    if (!app || !section) return
     const form = new FormData(event.currentTarget)
     const displayName = String(form.get('displayName') ?? '').trim()
     const rawValue = String(form.get('value') ?? '')
@@ -192,6 +198,7 @@ export function PatientCustomFields({
     try {
       setSaving(true)
       setMessage(null)
+      if (!availableType) throw new Error(`${section.boClass} is not returned by the available custom data types API.`)
       const definitionName = `${section.label}: ${displayName}`
       let resolvedDefinitions = definitions
       const existingLocation = findFieldLocation(resolvedDefinitions, displayName)
@@ -207,7 +214,7 @@ export function PatientCustomFields({
         try {
           const createdDefinition = await createCustomFieldDefinition(app.id, {
             name: definitionName,
-            boClassId: classId,
+            boClassId: availableType.id,
             fields: [{ displayName, fieldType }],
           })
           created = true
@@ -383,7 +390,7 @@ export function PatientCustomFields({
               <dl className="flex flex-col gap-3 py-5 text-sm">
                 <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Field key</dt><dd className="font-mono text-foreground">{details.fieldKey}</dd></div>
                 <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Field type</dt><dd className="text-foreground">{details.fieldType}</dd></div>
-                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Owning BO class</dt><dd className="text-foreground">{section.boClass} · {classId}</dd></div>
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Owning BO class</dt><dd className="text-foreground">{section.boClass} · {availableType?.id ?? 'Unavailable'}</dd></div>
                 <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Application</dt><dd className="text-foreground">{app.name} · {app.id}</dd></div>
                 {details.jsonSchema && (
                   <div className="flex flex-col gap-1"><dt className="text-muted-foreground">JSON schema</dt><dd><pre className="overflow-x-auto rounded-md bg-muted/40 p-3 font-mono text-xs text-foreground">{details.jsonSchema}</pre></dd></div>
