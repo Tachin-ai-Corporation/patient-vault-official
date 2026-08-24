@@ -77,10 +77,22 @@ function findField(definitions: CustomFieldDefinition[], displayName: string, de
   }
 }
 
-function assertFieldType(field: ResolvedField, requestedType: CustomFieldType) {
+function assertFieldType(field: ResolvedField, requestedType: CustomFieldType, definitions: CustomFieldDefinition[]) {
   if (field.fieldType !== requestedType) {
     throw new Error(
       `Definition conflict: requested ${requestedType}, but 1health resolved field key “${field.fieldKey}” as ${field.fieldType}. The value request was not sent. Delete or rename the conflicting definition, then try again.`,
+    )
+  }
+
+  const conflictingTypes = new Set(
+    definitions
+      .flatMap((definition) => definition.fields)
+      .filter((candidate) => candidate.fieldKey.toLowerCase() === field.fieldKey.toLowerCase() && candidate.fieldType !== requestedType)
+      .map((candidate) => candidate.fieldType),
+  )
+  if (conflictingTypes.size > 0) {
+    throw new Error(
+      `Field-key conflict: 1health assigned “${field.fieldKey}” to both ${requestedType} and ${[...conflictingTypes].join(', ')} definitions. The value request was not sent because the API may use the wrong type. Delete or rename the older conflicting definition, then try again.`,
     )
   }
 }
@@ -177,7 +189,8 @@ export function PatientCustomFields({
       setSaving(true)
       setMessage(null)
       const definitionName = `${section.label}: ${displayName}`
-      let field = findField(definitions, displayName, definitionName)
+      let resolvedDefinitions = definitions
+      let field = findField(resolvedDefinitions, displayName, definitionName)
       if (!field) {
         try {
           const createdDefinition = await createCustomFieldDefinition(app.id, {
@@ -190,18 +203,20 @@ export function PatientCustomFields({
           // The documented create response may be empty. Reload from 1health
           // and resolve the exact definition before sending any patient value.
           const refreshed = await mutateDefinitions()
-          field = findField(refreshed ?? [], displayName, definitionName)
+          resolvedDefinitions = refreshed ?? (createdDefinition ? [...definitions, createdDefinition] : definitions)
+          field = findField(resolvedDefinitions, displayName, definitionName)
           if (!field && createdDefinition?.name === definitionName) field = createdDefinition.fields[0]
         } catch (cause) {
           const detail = cause instanceof Error ? cause.message : ''
           if (!/already exists|duplicate/i.test(detail)) throw cause
           const refreshed = await mutateDefinitions()
-          field = findField(refreshed ?? [], displayName, definitionName)
+          resolvedDefinitions = refreshed ?? definitions
+          field = findField(resolvedDefinitions, displayName, definitionName)
           if (!field) throw new Error('This field already exists, but could not be loaded. Refresh the patient and try again.')
         }
       }
       if (!field?.fieldKey) throw new Error('The field was created, but its API key was not returned. Refresh the patient to load the new field.')
-      assertFieldType(field, fieldType)
+      assertFieldType(field, fieldType, resolvedDefinitions)
 
       let parsed: unknown
       try {
