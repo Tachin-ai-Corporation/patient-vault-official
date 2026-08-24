@@ -62,13 +62,12 @@ export function CustomFieldDefinitions() {
   const appKey = userId ? (['console-application', currentEnv, userId] as const) : null
   const { data: appData, isLoading: appLoading } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
-  const classIds = useMemo(() => Array.from(new Set(CUSTOM_FIELD_SECTIONS
-    .map((section) => boClassId(section.boClass)))).sort((a, b) => a - b), [])
-  const definitionsKey = app ? (['custom-field-definitions', currentEnv, app.id, classIds.join(',')] as const) : null
+  const typeKeys = useMemo(() => Array.from(new Set(CUSTOM_FIELD_SECTIONS.map((section) => section.boClass))), [])
+  const definitionsKey = app ? (['custom-field-definitions', currentEnv, app.id, typeKeys.join(',')] as const) : null
   const { data: definitionsByClass = {}, error, isLoading, mutate } = useSWR(
     definitionsKey,
     async () => {
-      const entries = await Promise.all(classIds.map(async (classId) => [classId, await listCustomFieldDefinitions(app!.id, classId)] as const))
+      const entries = await Promise.all(typeKeys.map(async (typeKey) => [boClassId(typeKey), await listCustomFieldDefinitions(app!.id, typeKey)] as const))
       return Object.fromEntries(entries) as Record<number, CustomFieldDefinition[]>
     },
     { revalidateOnFocus: false },

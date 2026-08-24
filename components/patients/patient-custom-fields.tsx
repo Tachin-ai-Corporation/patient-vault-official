@@ -149,10 +149,10 @@ export function PatientCustomFields({
   const targetInstance = Number(instanceId ?? patientId)
   const hasInstance = Number.isFinite(targetInstance) && targetInstance > 0
 
-  const definitionsKey = app && classId ? customFieldDefinitionsKey(currentEnv, app.id, classId) : null
+  const definitionsKey = app && section ? customFieldDefinitionsKey(currentEnv, app.id, section.boClass) : null
   const { data: definitions = [], mutate: mutateDefinitions } = useSWR(
     definitionsKey,
-    () => listCustomFieldDefinitions(app!.id, classId!),
+    () => listCustomFieldDefinitions(app!.id, section!.boClass),
     { revalidateOnFocus: false },
   )
   const valuesKey = app && classId && hasInstance ? customFieldValuesKey(currentEnv, app.id, classId, targetInstance) : null
