@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/client'
-import { getConsoleApplication } from '@/lib/api/console-application'
+import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
 import { boClassId, createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, customFieldDefinitionsKey, deleteCustomFieldDefinition, listCustomFieldDefinitions, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
 import { useSession } from '@/lib/session-context'
 
@@ -58,7 +58,8 @@ export function CustomFieldDefinitions() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
-  const appKey = ['console-application', currentEnv] as const
+  const userId = consoleApplicationUserId(currentEnv)
+  const appKey = userId ? (['console-application', currentEnv, userId] as const) : null
   const { data: appData, isLoading: appLoading } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
   // Each distinct BO class owning a section (Person, File, …), fetched once.

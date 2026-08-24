@@ -12,9 +12,19 @@ type StoredApplication = {
   launchSecretMasked?: string
 }
 
-const COOKIE_NAMES: Record<Environment, string> = {
+const LEGACY_COOKIE_NAMES: Record<Environment, string> = {
   demo: 'pv_console_app_demo',
   production: 'pv_console_app_production',
+}
+
+function userIdFrom(request: NextRequest) {
+  const raw = request.nextUrl.searchParams.get('userId')
+  const userId = raw ? Number(raw) : Number.NaN
+  return Number.isSafeInteger(userId) && userId > 0 ? userId : null
+}
+
+function cookieName(environment: Environment, userId: number) {
+  return `pv_console_app_${environment}_${userId}`
 }
 
 function environmentFrom(request: NextRequest): Environment {
@@ -25,8 +35,7 @@ function apiRoot(environment: Environment) {
   return environment === 'demo' ? 'https://1health.demo.1health.io/api' : 'https://1health.app.1health.io/api'
 }
 
-function readStored(request: NextRequest, environment: Environment): StoredApplication | null {
-  const value = request.cookies.get(COOKIE_NAMES[environment])?.value
+function decodeStored(value?: string): StoredApplication | null {
   if (!value) return null
   try {
     return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as StoredApplication
@@ -35,8 +44,16 @@ function readStored(request: NextRequest, environment: Environment): StoredAppli
   }
 }
 
-function store(response: NextResponse, environment: Environment, app: StoredApplication) {
-  response.cookies.set(COOKIE_NAMES[environment], Buffer.from(JSON.stringify(app)).toString('base64url'), {
+function readStored(request: NextRequest, environment: Environment, userId: number): StoredApplication | null {
+  return decodeStored(request.cookies.get(cookieName(environment, userId))?.value)
+}
+
+function readLegacyStored(request: NextRequest, environment: Environment): StoredApplication | null {
+  return decodeStored(request.cookies.get(LEGACY_COOKIE_NAMES[environment])?.value)
+}
+
+function store(response: NextResponse, environment: Environment, userId: number, app: StoredApplication) {
+  response.cookies.set(cookieName(environment, userId), Buffer.from(JSON.stringify(app)).toString('base64url'), {
     httpOnly: true,
     secure: true,
     sameSite: 'lax',
@@ -61,7 +78,10 @@ async function platformError(response: Response) {
 
 export async function GET(request: NextRequest) {
   const environment = environmentFrom(request)
-  const stored = readStored(request, environment)
+  const userId = userIdFrom(request)
+  if (!userId) return NextResponse.json({ error: 'A valid authenticated user ID is required.' }, { status: 400 })
+  const scoped = readStored(request, environment, userId)
+  const stored = scoped ?? readLegacyStored(request, environment)
   if (!stored) return NextResponse.json({ application: null })
 
   const auth = authorization(request)
@@ -71,12 +91,15 @@ export async function GET(request: NextRequest) {
     headers: { Authorization: auth },
     cache: 'no-store',
   })
-  if (platform.status === 404) {
-    const response = NextResponse.json({ application: null })
-    response.cookies.delete(COOKIE_NAMES[environment])
-    return response
+  if (!platform.ok) {
+    if (!scoped || platform.status === 404) {
+      const response = NextResponse.json({ application: null })
+      response.cookies.delete(cookieName(environment, userId))
+      response.cookies.delete(LEGACY_COOKIE_NAMES[environment])
+      return response
+    }
+    return NextResponse.json({ error: await platformError(platform) }, { status: platform.status })
   }
-  if (!platform.ok) return NextResponse.json({ error: await platformError(platform) }, { status: platform.status })
 
   const data = await platform.json()
   const application: StoredApplication = {
@@ -89,13 +112,16 @@ export async function GET(request: NextRequest) {
     launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : stored.launchSecretMasked,
   }
   const response = NextResponse.json({ application })
-  store(response, environment, application)
+  store(response, environment, userId, application)
+  if (!scoped) response.cookies.delete(LEGACY_COOKIE_NAMES[environment])
   return response
 }
 
 export async function POST(request: NextRequest) {
   const environment = environmentFrom(request)
-  if (readStored(request, environment)) {
+  const userId = userIdFrom(request)
+  if (!userId) return NextResponse.json({ error: 'A valid authenticated user ID is required.' }, { status: 400 })
+  if (readStored(request, environment, userId)) {
     return NextResponse.json({ error: 'This environment already has a Patient Vault application.' }, { status: 409 })
   }
   const auth = authorization(request)
@@ -131,18 +157,61 @@ export async function POST(request: NextRequest) {
   }
   if (typeof data.launchSecret !== 'string' || !data.launchSecret) {
     const response = NextResponse.json({ error: 'The application was created, but its one-time key was not returned. Contact support before continuing.' }, { status: 502 })
-    store(response, environment, application)
+    store(response, environment, userId, application)
     return response
   }
   const response = NextResponse.json({ application, launchSecret: data.launchSecret }, { status: 201 })
-  store(response, environment, application)
+  store(response, environment, userId, application)
+  return response
+}
+
+export async function PATCH(request: NextRequest) {
+  const environment = environmentFrom(request)
+  const userId = userIdFrom(request)
+  if (!userId) return NextResponse.json({ error: 'A valid authenticated user ID is required.' }, { status: 400 })
+  const auth = authorization(request)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = (await request.json().catch(() => null)) as { applicationId?: unknown } | null
+  const applicationId = Number(body?.applicationId)
+  if (!Number.isSafeInteger(applicationId) || applicationId <= 0) {
+    return NextResponse.json({ error: 'Enter a valid positive application ID.' }, { status: 400 })
+  }
+
+  const platform = await fetch(`${apiRoot(environment)}/v2/external-application/${applicationId}`, {
+    headers: { Authorization: auth },
+    cache: 'no-store',
+  })
+  if (!platform.ok) {
+    const detail = await platformError(platform)
+    return NextResponse.json(
+      { error: `Application ${applicationId} could not be connected for this signed-in user. ${detail}` },
+      { status: platform.status },
+    )
+  }
+
+  const data = await platform.json()
+  const application: StoredApplication = {
+    id: Number(data.id ?? applicationId),
+    name: String(data.name ?? `Application ${applicationId}`),
+    url: String(data.url ?? ''),
+    description: typeof data.description === 'string' ? data.description : undefined,
+    state: typeof data.state === 'string' ? data.state : undefined,
+    iconUrl: typeof data.iconUrl === 'string' ? data.iconUrl : undefined,
+    launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : undefined,
+  }
+  const response = NextResponse.json({ application })
+  store(response, environment, userId, application)
+  response.cookies.delete(LEGACY_COOKIE_NAMES[environment])
   return response
 }
 
 export async function PUT(request: NextRequest) {
   const environment = environmentFrom(request)
-  const stored = readStored(request, environment)
-  if (!stored) return NextResponse.json({ error: 'Create an application first.' }, { status: 409 })
+  const userId = userIdFrom(request)
+  if (!userId) return NextResponse.json({ error: 'A valid authenticated user ID is required.' }, { status: 400 })
+  const stored = readStored(request, environment, userId)
+  if (!stored) return NextResponse.json({ error: 'Create or connect an application first.' }, { status: 409 })
   const auth = authorization(request)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -175,6 +244,6 @@ export async function PUT(request: NextRequest) {
     launchSecretMasked: typeof data.launchSecretMasked === 'string' ? data.launchSecretMasked : stored.launchSecretMasked,
   }
   const response = NextResponse.json({ application })
-  store(response, environment, application)
+  store(response, environment, userId, application)
   return response
 }
