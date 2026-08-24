@@ -690,7 +690,7 @@ export function addIdentifier(patientId: string, body: PatientIdentifierInput) {
 export function patchIdentifier(patientId: string, organizationId: string, externalSystemId: string, body: Partial<PatientIdentifierInput>) {
   return request<PatientIdentifier>(identifierPath(patientId, organizationId, externalSystemId), {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/merge-patch+json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 }
