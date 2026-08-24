@@ -14,13 +14,8 @@ export function getAvailableCustomDataTypes() {
   return apiRequest<AvailableCustomDataType[]>('/v3/custom-data/available-types')
 }
 
-const TEST_BO_CLASS_IDS: Record<BoClassName, number> = {
-  Person: 22,
-  File: 20,
-}
-
-export function boClassId(key: BoClassName) {
-  return TEST_BO_CLASS_IDS[key]
+export function resolveCustomDataType(types: AvailableCustomDataType[], typeKey: BoClassName) {
+  return types.find((type) => type.key.localeCompare(typeKey, undefined, { sensitivity: 'accent' }) === 0)
 }
 
 // Each patient-record section maps to the BO class that actually owns its
@@ -68,8 +63,8 @@ export function customFieldDefinitionsKey(environment: string, appId: number, ty
   return ['custom-field-definitions', environment, appId, typeKey] as const
 }
 
-export function customFieldValuesKey(environment: string, appId: number, classId: number, instanceId: number) {
-  return ['custom-field-values', environment, appId, classId, instanceId] as const
+export function customFieldValuesKey(environment: string, appId: number, typeKey: BoClassName, instanceId: number) {
+  return ['custom-field-values', environment, appId, typeKey, instanceId] as const
 }
 
 export async function listCustomFieldDefinitions(appId: number, typeKey: BoClassName) {

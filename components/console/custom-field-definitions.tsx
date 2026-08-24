@@ -12,7 +12,7 @@ import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/client'
 import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
-import { boClassId, createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, deleteCustomFieldDefinition, listCustomFieldDefinitions, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
+import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, deleteCustomFieldDefinition, getAvailableCustomDataTypes, listCustomFieldDefinitions, resolveCustomDataType, type BoClassName, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
 import { useSession } from '@/lib/session-context'
 
 const FIELD_TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -63,18 +63,22 @@ export function CustomFieldDefinitions() {
   const { data: appData, isLoading: appLoading } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
   const app = appData?.application
   const typeKeys = useMemo(() => Array.from(new Set(CUSTOM_FIELD_SECTIONS.map((section) => section.boClass))), [])
+  const { data: availableTypes = [] } = useSWR(
+    app ? ['custom-data-available-types', currentEnv] : null,
+    getAvailableCustomDataTypes,
+    { revalidateOnFocus: false },
+  )
   const definitionsKey = app ? (['custom-field-definitions', currentEnv, app.id, typeKeys.join(',')] as const) : null
   const { data: definitionsByClass = {}, error, isLoading, mutate } = useSWR(
     definitionsKey,
     async () => {
-      const entries = await Promise.all(typeKeys.map(async (typeKey) => [boClassId(typeKey), await listCustomFieldDefinitions(app!.id, typeKey)] as const))
-      return Object.fromEntries(entries) as Record<number, CustomFieldDefinition[]>
+      const entries = await Promise.all(typeKeys.map(async (typeKey) => [typeKey, await listCustomFieldDefinitions(app!.id, typeKey)] as const))
+      return Object.fromEntries(entries) as Partial<Record<BoClassName, CustomFieldDefinition[]>>
     },
     { revalidateOnFocus: false },
   )
   const results = useMemo<SectionResult[]>(() => CUSTOM_FIELD_SECTIONS.map((section) => {
-    const classId = boClassId(section.boClass)
-    const classDefs = definitionsByClass[classId] ?? []
+    const classDefs = definitionsByClass[section.boClass] ?? []
     const definitions = classDefs.filter((definition) => {
       if (definition.name.startsWith(`${section.label}:`)) return true
       // Unprefixed legacy definitions on the Person class belong to demographics.
@@ -98,10 +102,12 @@ export function CustomFieldDefinitions() {
     if (!section || !displayName) return
     try {
       setSaving(true)
+      const availableType = resolveCustomDataType(availableTypes, section.boClass)
+      if (!availableType) throw new Error(`${section.boClass} is not returned by the available custom data types API.`)
       if (fieldType === 'JSON' && jsonSchema) JSON.parse(jsonSchema)
       await createCustomFieldDefinition(app.id, {
         name: `${section.label}: ${displayName}`,
-        boClassId: boClassId(section.boClass),
+        boClassId: availableType.id,
         fields: [{ displayName, fieldType, ...(jsonSchema ? { jsonSchema } : {}) }],
       })
       await mutate()
@@ -152,9 +158,11 @@ export function CustomFieldDefinitions() {
       for (const importedSection of parsed.sections) {
         const section = CUSTOM_FIELD_SECTIONS.find((item) => item.key === importedSection.key)
         if (!section) continue
+        const availableType = resolveCustomDataType(availableTypes, section.boClass)
+        if (!availableType) throw new Error(`${section.boClass} is not returned by the available custom data types API.`)
         for (const field of importedSection.fields ?? []) {
           if (!FIELD_TYPES.includes(field.fieldType) || !field.displayName?.trim()) continue
-          await createCustomFieldDefinition(app.id, { name: `${section.label}: ${field.displayName}`, boClassId: boClassId(section.boClass), fields: [field] })
+          await createCustomFieldDefinition(app.id, { name: `${section.label}: ${field.displayName}`, boClassId: availableType.id, fields: [field] })
         }
       }
       await mutate()
