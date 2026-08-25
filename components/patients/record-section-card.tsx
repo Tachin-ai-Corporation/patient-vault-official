@@ -19,9 +19,6 @@ type RecordSectionCardProps = {
   defaultOpen?: boolean
   patientId?: string
   customFieldSection?: string
-  // For record-scoped sections (e.g. documents), the BO instance id that owns
-  // the custom values. Omitted for patient-scoped sections.
-  customFieldInstanceId?: string | number
 }
 
 export function RecordSectionCard({
@@ -35,11 +32,8 @@ export function RecordSectionCard({
 }: RecordSectionCardProps) {
   const [open, setOpen] = useState(defaultOpen)
   const sectionId = customFieldSection ? `custom-fields-${customFieldSection}` : undefined
-  // Record-scoped sections (e.g. documents) own custom values per sub-record,
-  // so their fields live inside each record's detail UI — not this shared
-  // section-level slot. Only render the slot for patient-scoped sections.
   const sectionMeta = customFieldSection ? CUSTOM_FIELD_SECTIONS.find((item) => item.key === customFieldSection) : undefined
-  const showSharedCustomFields = Boolean(patientId && customFieldSection && sectionMeta?.scope !== 'record')
+  const showSharedCustomFields = Boolean(patientId && customFieldSection && sectionMeta)
 
   useEffect(() => {
     if (!sectionId || window.location.hash !== `#${sectionId}`) return
@@ -76,7 +70,11 @@ export function RecordSectionCard({
         <div className="border-t border-border px-4 py-4">
           {children}
           {showSharedCustomFields && (
-            <PatientCustomFields patientId={patientId!} sectionKey={customFieldSection!} />
+            <PatientCustomFields
+              patientId={patientId!}
+              sectionKey={customFieldSection!}
+              definitionOnly={sectionMeta?.scope === 'record'}
+            />
           )}
         </div>
       )}

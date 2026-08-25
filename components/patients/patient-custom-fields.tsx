@@ -123,10 +123,12 @@ export function PatientCustomFields({
   sectionKey,
   patientId,
   instanceId,
+  definitionOnly = false,
 }: {
   sectionKey: string
   patientId: string
   instanceId?: string | number
+  definitionOnly?: boolean
 }) {
   const { currentEnv } = useSession()
   const [addOpen, setAddOpen] = useState(false)
@@ -148,9 +150,10 @@ export function PatientCustomFields({
   )
   const availableType = section ? resolveCustomDataType(availableTypes, section.boClass) : undefined
   // Record-scoped sections need an explicit instance id; patient-scoped ones
-  // fall back to the patient's Person instance.
-  const targetInstance = Number(instanceId ?? patientId)
-  const hasInstance = Number.isFinite(targetInstance) && targetInstance > 0
+  // fall back to the patient's Person instance. Definition-only mode never
+  // manufactures an instance, so it cannot write values accidentally.
+  const targetInstance = Number(instanceId ?? (section?.scope === 'patient' ? patientId : Number.NaN))
+  const hasInstance = !definitionOnly && Number.isFinite(targetInstance) && targetInstance > 0
 
   const definitionsKey = app && section ? customFieldDefinitionsKey(currentEnv, app.id, section.boClass) : null
   const { data: definitions = [], mutate: mutateDefinitions } = useSWR(
@@ -267,6 +270,11 @@ export function PatientCustomFields({
       }
       assertFieldType(field, fieldType, resolvedDefinitions)
 
+      if (definitionOnly) {
+        setAddOpen(false)
+        return
+      }
+
       let parsed: unknown
       try {
         parsed = parseValue(rawValue, fieldType)
@@ -300,9 +308,7 @@ export function PatientCustomFields({
     )
   }
 
-  // Record-scoped sections without a concrete instance (e.g. before a document
-  // is attached) can't own values; explain instead of failing silently.
-  const canAdd = hasInstance
+  const canAdd = definitionOnly || hasInstance
 
   return (
     <div className="mt-4 flex flex-col gap-3 border-t pt-4">
@@ -318,23 +324,27 @@ export function PatientCustomFields({
               <form onSubmit={addField}>
                 <DialogHeader>
                   <DialogTitle>Add custom field</DialogTitle>
-                  <DialogDescription>Define a reusable field for {section.label.toLowerCase()} and save its value for this {section.scope === 'record' ? 'record' : 'patient'}.</DialogDescription>
+                  <DialogDescription>{definitionOnly ? `Define a reusable field for ${section.label.toLowerCase()}. Assign its value from an individual document’s details.` : `Define a reusable field for ${section.label.toLowerCase()} and save its value for this ${section.scope === 'record' ? 'record' : 'patient'}.`}</DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col gap-4 py-5">
                   <Field label="Field name" htmlFor={`${section.key}-field-name`}><TextInput id={`${section.key}-field-name`} name="displayName" required maxLength={80} /></Field>
                   <Field label="Field type" htmlFor={`${section.key}-field-type`}><Select id={`${section.key}-field-type`} name="fieldType" value={fieldType} onChange={(event) => setFieldType(event.target.value as CustomFieldType)}>{TYPES.map((type) => <option key={type} value={type}>{type.toLowerCase()}</option>)}</Select></Field>
-                  <Field label="Value" htmlFor={`${section.key}-field-value`}>{fieldType === 'JSON' ? <Textarea id={`${section.key}-field-value`} name="value" required rows={4} placeholder={'{"genre":"bluegrass"}'} /> : <TextInput id={`${section.key}-field-value`} name="value" type={inputTypeFor(fieldType)} step={fieldType === 'DECIMAL' ? 'any' : undefined} required />}</Field>
+                  {!definitionOnly && <Field label="Value" htmlFor={`${section.key}-field-value`}>{fieldType === 'JSON' ? <Textarea id={`${section.key}-field-value`} name="value" required rows={4} placeholder={'{"genre":"bluegrass"}'} /> : <TextInput id={`${section.key}-field-value`} name="value" type={inputTypeFor(fieldType)} step={fieldType === 'DECIMAL' ? 'any' : undefined} required />}</Field>}
                   {message && <p className="text-sm text-destructive" role="alert">{message}</p>}
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Define and save'}</Button>
+                  <Button type="submit" disabled={saving}>{saving ? 'Saving…' : definitionOnly ? 'Define field' : 'Define and save'}</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         )}
       </div>
+
+      {definitionOnly && (
+        <p className="text-xs leading-relaxed text-muted-foreground">These definitions are shared by all documents. Open a document&apos;s details to assign or edit its values.</p>
+      )}
 
       {!canAdd ? (
         <p className="text-xs text-muted-foreground">Create a {section.label.toLowerCase().replace(/s$/, '')} record first to attach custom field values.</p>
@@ -344,10 +354,10 @@ export function PatientCustomFields({
             <div key={field.id} className="group flex items-start justify-between gap-2 rounded-lg bg-muted/30 px-3 py-2">
               <div className="min-w-0">
                 <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">{customFieldDisplayName(field)}<span className="font-mono text-[10px] uppercase tracking-wider opacity-70">{field.fieldType.toLowerCase()}</span></dt>
-                <dd className="mt-0.5 break-words text-sm text-foreground">{formatValue(values[field.fieldKey])}</dd>
+                <dd className="mt-0.5 break-words text-sm text-foreground">{definitionOnly ? 'Set on individual documents' : formatValue(values[field.fieldKey])}</dd>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
-                <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${customFieldDisplayName(field)}`} onClick={() => { setMessage(null); setEditing(field) }}><Pencil className="size-3.5" aria-hidden="true" /></Button>
+                {!definitionOnly && <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${customFieldDisplayName(field)}`} onClick={() => { setMessage(null); setEditing(field) }}><Pencil className="size-3.5" aria-hidden="true" /></Button>}
                 <Button type="button" variant="ghost" size="icon" aria-label={`Details for ${customFieldDisplayName(field)}`} onClick={() => setDetails(field)}><Info className="size-3.5" aria-hidden="true" /></Button>
               </div>
             </div>
