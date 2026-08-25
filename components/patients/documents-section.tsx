@@ -209,10 +209,7 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
       summary={summary}
       action={
         <div className="flex items-center gap-2">
-          <AttachApiSurface
-            patientId={patientId}
-            sampleDocumentId={documents?.[0]?.documentId}
-          />
+          <AttachApiSurface />
           <Button
             variant="outline"
             size="sm"
