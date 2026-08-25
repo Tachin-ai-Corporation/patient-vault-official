@@ -2,35 +2,35 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
-  validateDefinitionDeletion,
+  validateFieldDeletion,
   // @ts-expect-error Node's strip-types runner requires the runtime extension.
 } from './custom-field-deletion.ts'
 
 test('allows the selected field when it is the definition’s only field', () => {
   assert.deepEqual(
-    validateDefinitionDeletion({ definition: { id: 10, fields: [{ id: 21 }] }, field: { id: 21 } }),
+    validateFieldDeletion({ definition: { id: 10, fields: [{ id: 21 }] }, field: { id: 21 } }),
     { safe: true },
   )
 })
 
-test('blocks deletion of a field in a multi-field definition', () => {
-  const result = validateDefinitionDeletion({
-    definition: { id: 10, fields: [{ id: 21 }, { id: 22 }] },
-    field: { id: 21 },
-  })
-
-  assert.equal(result.safe, false)
-  if (!result.safe) assert.match(result.reason, /contains 2 fields/)
+test('allows one selected field in a multi-field definition', () => {
+  assert.deepEqual(
+    validateFieldDeletion({
+      definition: { id: 10, fields: [{ id: 21 }, { id: 22 }] },
+      field: { id: 21 },
+    }),
+    { safe: true },
+  )
 })
 
-test('blocks a selected field that does not match the owning definition', () => {
-  const result = validateDefinitionDeletion({ definition: { id: 10, fields: [{ id: 21 }] }, field: { id: 22 } })
+test('blocks a selected field that does not belong to the expected definition', () => {
+  const result = validateFieldDeletion({ definition: { id: 10, fields: [{ id: 21 }] }, field: { id: 22 } })
   assert.equal(result.safe, false)
-  if (!result.safe) assert.match(result.reason, /does not match/)
+  if (!result.safe) assert.match(result.reason, /does not belong/)
 })
 
-test('blocks deletion of an empty definition', () => {
-  const result = validateDefinitionDeletion({ definition: { id: 10, fields: [] }, field: { id: 21 } })
+test('blocks a missing or invalid field id without falling back to definition deletion', () => {
+  const result = validateFieldDeletion({ definition: { id: 10, fields: [{ id: 0 }] }, field: { id: 0 } })
   assert.equal(result.safe, false)
-  if (!result.safe) assert.match(result.reason, /no fields/)
+  if (!result.safe) assert.match(result.reason, /invalid field identifier/)
 })
