@@ -107,8 +107,10 @@ async function platformLogout(req: Request, env: "demo" | "prod"): Promise<void>
       ? "https://1health.demo.1health.io"
       : "https://1health.app.1health.io"
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
+    const logoutUrl = `${root}/auth/user/logout/all-devices`
 
-    const res = await fetch(`${root}/auth/user/logout/all-devices`, {
+    console.log("[v0] Global logout request URL:", logoutUrl)
+    const res = await fetch(logoutUrl, {
       method: "POST",
       headers,
       cache: "no-store",
