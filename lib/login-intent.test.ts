@@ -6,6 +6,10 @@ import { validateLoginIntent } from './login-intent.ts'
 test('accepts same-origin application paths with query strings', () => {
   assert.equal(validateLoginIntent('/documentation?resource=find'), '/documentation?resource=find')
   assert.equal(validateLoginIntent('/patients'), '/patients')
+  assert.equal(
+    validateLoginIntent('/patients/91563114?tab=documents&type=clinical_note'),
+    '/patients/91563114?tab=documents&type=clinical_note',
+  )
 })
 
 test('rejects external, protocol-relative, and callback targets', () => {

@@ -98,7 +98,9 @@ function readCookie(req: Request, name: string): string | null {
  */
 async function platformLogout(req: Request, env: "demo" | "prod"): Promise<void> {
   try {
+    const activeEnvironment = readCookie(req, "active_environment")
     const accessToken = readCookie(req, `${env}_access_token`)
+      ?? (activeEnvironment === env ? readCookie(req, "access_token") : null)
     if (!accessToken) return
 
     const root = env === "demo"

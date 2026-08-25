@@ -15,6 +15,8 @@ import { Faq, faqs } from '@/components/faq'
 import { ForAgents } from '@/components/for-agents'
 import { Footer } from '@/components/footer'
 import { Parallax } from '@/components/parallax'
+import { SessionLoginRedirect } from '@/components/session-login-redirect'
+import { validateLoginIntent } from '@/lib/login-intent'
 import type { Metadata } from 'next'
 
 const PAGE_TITLE = 'Patient Vault — The patient database for your healthcare app'
@@ -94,13 +96,22 @@ const jsonLdArticle = {
   },
 }
 
-export default async function PatientVaultPage() {
+export default async function PatientVaultPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string }>
+}) {
   // Either environment slot is sufficient to enter the console. The client
   // session provider validates expiry and falls back to the other valid slot.
-  const cookieStore = await cookies()
+  const [cookieStore, params] = await Promise.all([cookies(), searchParams])
   const initialEnvironment = connectedSessionEnvironment(
     (name) => cookieStore.get(name)?.value ?? null,
   )
+  const returnTo = validateLoginIntent(params.returnTo)
+  if (!initialEnvironment && returnTo) {
+    return <SessionLoginRedirect returnTo={returnTo} />
+  }
+
   return (
     <>
       <script

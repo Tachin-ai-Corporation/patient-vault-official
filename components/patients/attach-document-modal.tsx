@@ -308,7 +308,7 @@ export function AttachDocumentModal({
 
           {rows.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Optional. Add key/value pairs to store alongside the document.
+              Optional. Stored by BO Core with the attachment and shown in Document details after upload.
             </p>
           ) : (
             <div className="flex flex-col gap-2">

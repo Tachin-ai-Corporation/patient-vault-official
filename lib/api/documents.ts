@@ -2,7 +2,7 @@
  * Client-side Patient Vault document (attachment) API (1health v3).
  *
  * Typed wrappers for the patient attachment endpoints. Every call goes through
- * the shared client (`apiRequest` / `apiFetch` in lib/api/client.ts) so it uses
+ * the shared client (`apiRequest` in lib/api/client.ts) so it uses
  * the same versioned base path, auth header, and API Inspector logging as the
  * patient module.
  *
@@ -14,7 +14,7 @@
 
 'use client'
 
-import { apiRequest, apiFetch } from '@/lib/api/client'
+import { apiRequest } from '@/lib/api/client'
 
 // ============================================================================
 // Types
@@ -187,31 +187,4 @@ export async function deleteDocument(
   await apiRequest<unknown>(`/v3/patient/${patientId}/attach/${documentId}`, {
     method: 'DELETE',
   })
-}
-
-// ============================================================================
-// Method-not-allowed probe (API surface demo)
-// ============================================================================
-
-/**
- * Fire a raw request against an attachment URL for a method the resource does
- * not support, so the resulting 405 is recorded live in the API Inspector.
- *
- * This intentionally goes through `apiFetch` (the non-throwing shared client)
- * so it emits the exact same inspector entry an integrating developer's backend
- * would produce — same base path + masked auth header — and never throws on the
- * expected non-2xx status. Returns the HTTP status code.
- */
-export async function probeAttachEndpoint(
-  patientId: string,
-  method: 'PUT' | 'PATCH' | 'POST' | 'DELETE',
-  scope: 'collection' | 'item',
-  documentId?: string,
-): Promise<number> {
-  const path =
-    scope === 'collection'
-      ? `/v3/patient/${patientId}/attach`
-      : `/v3/patient/${patientId}/attach/${documentId || 'sample-document-id'}`
-  const res = await apiFetch(path, { method })
-  return res.status
 }
