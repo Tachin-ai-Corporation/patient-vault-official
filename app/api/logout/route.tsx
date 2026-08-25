@@ -109,7 +109,6 @@ async function platformLogout(req: Request, env: "demo" | "prod"): Promise<void>
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
     const logoutUrl = `${root}/auth/user/logout/all-devices`
 
-    console.log("[v0] Global logout request URL:", logoutUrl)
     const res = await fetch(logoutUrl, {
       method: "POST",
       headers,
