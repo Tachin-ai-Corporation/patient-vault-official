@@ -24,10 +24,11 @@ export default async function AppLayout({
       requestHeaders.get('x-invoke-path') ??
       requestHeaders.get('next-url') ??
       '/patients'
+    const preservedSearch = requestHeaders.get('x-search')
     const invokeQuery = requestHeaders.get('x-invoke-query')
-    let query = ''
+    let query = preservedSearch?.startsWith('?') ? preservedSearch : ''
 
-    if (invokeQuery && !pathname.includes('?')) {
+    if (!query && invokeQuery && !pathname.includes('?')) {
       try {
         const values = JSON.parse(invokeQuery) as Record<string, string | string[]>
         const params = new URLSearchParams()

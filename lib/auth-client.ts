@@ -42,6 +42,7 @@
 "use client"
 
 import { recordApiCall, type BusApiMethod } from "@/lib/api-inspector-bus"
+import { saveLoginIntent } from "@/lib/login-intent"
 import {
   ENVIRONMENT_CONFIG,
   SESSION_ENVIRONMENTS,
@@ -202,10 +203,8 @@ export function migrateLegacySession(): SessionEnvironment | null {
  *      variants as a fast, belt-and-suspenders clear.
  *   3. WEB STORAGE: clear local/session storage so nothing rehydrates identity.
  *
- * NOTE: this ends THIS app's session (token + cookies + storage). The broader
- * 1health platform SSO session lives on the sibling host
- * `1health.<env>.1health.io` and cannot be cleared from here; ending it requires
- * navigating the browser to that host's own logout page (endpoint TBD).
+ * The server route uses BO Core's global logout operation, so the platform
+ * invalidates all device sessions before this app clears its local state.
  */
 export async function signOut(): Promise<void> {
   // 1. Authoritative server-side platform logout and cookie clear. Keeping the
@@ -524,6 +523,22 @@ export class SessionExpiredError extends Error {
   }
 }
 
+let sessionRedirectStarted = false
+
+/**
+ * Preserve the current in-app location and hand authentication back to the
+ * connected 1health environment. Concurrent failed requests share this guard,
+ * preventing a patient screen from launching several login navigations.
+ */
+function recoverExpiredSession(env: SessionEnvironment): never {
+  if (typeof window !== "undefined" && !sessionRedirectStarted) {
+    sessionRedirectStarted = true
+    saveLoginIntent(`${window.location.pathname}${window.location.search}`)
+    window.location.assign(ENVIRONMENT_CONFIG[env].loginUrl)
+  }
+  throw new SessionExpiredError()
+}
+
 /**
  * Publish a completed round-trip to the API Inspector bus so the in-app
  * inspector can render it as a live call. Best-effort: any failure here must
@@ -636,11 +651,11 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   if (!accessToken) {
     const refreshed = await refreshToken(env)
     if (!refreshed) {
-      throw new SessionExpiredError()
+      recoverExpiredSession(env)
     }
     accessToken = getAccessToken(env)
     if (!accessToken) {
-      throw new SessionExpiredError()
+      recoverExpiredSession(env)
     }
   }
 
@@ -712,13 +727,13 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     const refreshed = await refreshToken(env)
 
     if (!refreshed) {
-      throw new SessionExpiredError()
+      recoverExpiredSession(env)
     }
 
     // Get the new token from the same request slot and retry.
     const newAccessToken = getAccessToken(env)
     if (!newAccessToken) {
-      throw new SessionExpiredError()
+      recoverExpiredSession(env)
     }
 
     headers.set("Authorization", `Bearer ${newAccessToken}`)
@@ -763,6 +778,10 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     })
 
     publishInspectorCall(url, connectedBaseUrl, method, options.body, retryResponse.status, retryBody, retryDuration)
+
+    if (retryResponse.status === 401) {
+      recoverExpiredSession(env)
+    }
 
     return retryResponse
   }

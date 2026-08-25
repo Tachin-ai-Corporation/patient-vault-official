@@ -20,20 +20,14 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Clear THIS app's session: invalidate the platform token server-side,
-      // then drop cookies/storage (incl. the /api/logout route, which handles
-      // parent-domain + HttpOnly + partitioned cookies).
+      // Invalidate every BO Core device session first, then clear this app's
+      // cookies and storage before navigating away.
       await signOut()
 
       // Re-request the current documentation URL so its server component sees
       // the cleared cookies and swaps to the public header/content in place.
       // Other authenticated routes return to the public landing page.
       window.location.replace(pathname.startsWith('/documentation') ? pathname : '/')
-
-      // NOTE: the 1health *platform* SSO session is separate from this app's
-      // tokens and lives on a sibling host we can't clear here, so relaunching
-      // from 1health while it is still active can mint a fresh session without
-      // re-prompting for credentials.
     }
   }
 
