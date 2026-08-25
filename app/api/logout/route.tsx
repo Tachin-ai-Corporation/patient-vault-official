@@ -90,7 +90,7 @@ function readCookie(req: Request, name: string): string | null {
 
 /**
  * Server-authoritative platform logout. Forwards the caller's access token (and
- * Cookie header) to `POST {API_ROOT}/user/logout/all-devices` so every
+ * Cookie header) to `POST {API_ROOT}/auth/user/logout/all-devices` so every
  * 1health server-side session/token is invalidated. This runs server-to-server, so it is
  * immune to the browser CORS restrictions that can block the client's own
  * credentialed cross-origin call. Best-effort: any failure is logged and
@@ -107,7 +107,7 @@ async function platformLogout(req: Request, env: "demo" | "prod"): Promise<void>
       ? "https://1health.demo.1health.io"
       : "https://1health.app.1health.io"
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
-    const logoutUrl = `${root}/user/logout/all-devices`
+    const logoutUrl = `${root}/auth/user/logout/all-devices`
 
     console.log("[v0] Global logout request URL:", logoutUrl)
     const res = await fetch(logoutUrl, {
