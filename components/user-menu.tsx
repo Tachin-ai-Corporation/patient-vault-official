@@ -20,7 +20,6 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      console.log('[v0] Sign out selected; calling /api/logout')
       // Invalidate every BO Core device session first, then clear this app's
       // cookies and storage before navigating away.
       await signOut()
