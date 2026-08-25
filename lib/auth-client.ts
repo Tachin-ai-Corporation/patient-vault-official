@@ -213,51 +213,51 @@ export async function signOut(): Promise<void> {
   try {
     await fetch("/api/logout", { method: "POST", credentials: "include", cache: "no-store" })
   } catch {
-    // Network failure shouldn't block the local clear + redirect below.
-  }
+    // Network failure must not prevent browser-owned session state cleanup.
+  } finally {
+    // 2. Client-side cookie sweep (known cookies + any other readable ones).
+    if (typeof document !== "undefined") {
+      const host = window.location.hostname
+      const labels = host.split(".")
+      const domains = [undefined, host, `.${host}`]
+      // Add every parent-domain scope (e.g. `.1health.io`) so a broadly-scoped
+      // cookie is also targeted.
+      for (let i = 1; i < labels.length - 1; i++) {
+        domains.push("." + labels.slice(i).join("."))
+      }
+      const paths = ["/", window.location.pathname]
 
-  // 2. Client-side cookie sweep (known cookies + any other readable ones).
-  if (typeof document !== "undefined") {
-    const host = window.location.hostname
-    const labels = host.split(".")
-    const domains = [undefined, host, `.${host}`]
-    // Add every parent-domain scope (e.g. `.1health.io`) so a broadly-scoped
-    // cookie is also targeted.
-    for (let i = 1; i < labels.length - 1; i++) {
-      domains.push("." + labels.slice(i).join("."))
-    }
-    const paths = ["/", window.location.pathname]
+      const names = new Set<string>(SESSION_COOKIES as readonly string[])
+      for (const cookie of document.cookie.split(";")) {
+        const name = cookie.split("=")[0]?.trim()
+        if (name) names.add(name)
+      }
 
-    const names = new Set<string>(SESSION_COOKIES as readonly string[])
-    for (const cookie of document.cookie.split(";")) {
-      const name = cookie.split("=")[0]?.trim()
-      if (name) names.add(name)
-    }
+      // Partitioned (CHIPS) cookies occupy a different jar than unpartitioned ones,
+      // and an expiry only matches the same partition attribute — so clear both.
+      const partitionVariants = isSecureContext()
+        ? ["", "; SameSite=None; Secure; Partitioned"]
+        : [""]
 
-    // Partitioned (CHIPS) cookies occupy a different jar than unpartitioned ones,
-    // and an expiry only matches the same partition attribute — so clear both.
-    const partitionVariants = isSecureContext()
-      ? ["", "; SameSite=None; Secure; Partitioned"]
-      : [""]
-
-    for (const name of names) {
-      for (const path of paths) {
-        for (const domain of domains) {
-          const domainPart = domain ? `; domain=${domain}` : ""
-          for (const partition of partitionVariants) {
-            document.cookie = `${name}=; path=${path}; max-age=0${domainPart}${partition}`
+      for (const name of names) {
+        for (const path of paths) {
+          for (const domain of domains) {
+            const domainPart = domain ? `; domain=${domain}` : ""
+            for (const partition of partitionVariants) {
+              document.cookie = `${name}=; path=${path}; max-age=0${domainPart}${partition}`
+            }
           }
         }
       }
     }
-  }
 
-  // 3. Clear web storage so nothing can rehydrate the old session.
-  try {
-    window.localStorage?.clear()
-    window.sessionStorage?.clear()
-  } catch {
-    // Storage may be unavailable (private mode / SSR) — safe to ignore.
+    // 3. Clear web storage so nothing can rehydrate the old session.
+    try {
+      window.localStorage?.clear()
+      window.sessionStorage?.clear()
+    } catch {
+      // Storage may be unavailable (private mode / SSR) — safe to ignore.
+    }
   }
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/session-context'
 import { signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils'
 export function UserMenu() {
   const { session } = useSession()
   const router = useRouter()
-  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -24,10 +23,9 @@ export function UserMenu() {
       // cookies and storage before navigating away.
       await signOut()
 
-      // Re-request the current documentation URL so its server component sees
-      // the cleared cookies and swaps to the public header/content in place.
-      // Other authenticated routes return to the public landing page.
-      window.location.replace(pathname.startsWith('/documentation') ? pathname : '/')
+      // Force a fresh document load so no in-memory authenticated state can
+      // survive the transition back to the public home page.
+      window.location.href = '/'
     }
   }
 
