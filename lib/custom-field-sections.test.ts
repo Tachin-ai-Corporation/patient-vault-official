@@ -6,6 +6,7 @@ import {
   decodeCustomFieldDisplayName,
   encodeCustomFieldDisplayName,
   resolveCustomFieldSection,
+  resolveCustomFieldSectionForField,
   // @ts-expect-error Node's strip-types runner requires the runtime extension.
 } from './custom-field-sections.ts'
 
@@ -25,6 +26,15 @@ test('field metadata wins when the API does not preserve the definition name', (
     'Person',
   )
   assert.equal(section?.key, 'aliases')
+})
+
+test('each tagged field owns its section inside a mixed definition', () => {
+  const contactField = { displayName: encodeCustomFieldDisplayName('contacts', 'Shared') }
+  const demographicField = { displayName: encodeCustomFieldDisplayName('demographics', 'Shared') }
+  const definition = { name: 'Mixed', fields: [contactField, demographicField] }
+
+  assert.equal(resolveCustomFieldSectionForField(definition, contactField, 'Person')?.key, 'contacts')
+  assert.equal(resolveCustomFieldSectionForField(definition, demographicField, 'Person')?.key, 'demographics')
 })
 
 test('legacy definition prefixes remain supported', () => {

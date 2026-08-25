@@ -2,6 +2,7 @@
 
 import { apiRequest } from '@/lib/api/client'
 import type { BoClassName } from '@/lib/custom-field-sections'
+import { normalizeCustomFieldDefinitions } from '@/lib/custom-field-resolution'
 
 export {
   CUSTOM_FIELD_SECTIONS,
@@ -9,6 +10,7 @@ export {
   decodeCustomFieldDisplayName,
   encodeCustomFieldDisplayName,
   resolveCustomFieldSection,
+  resolveCustomFieldSectionForField,
   type BoClassName,
   type CustomFieldSection,
   type CustomFieldSectionKey,
@@ -44,12 +46,6 @@ export type CustomFieldDefinition = {
   }>
 }
 
-type DefinitionListResponse = {
-  data?: CustomFieldDefinition[]
-  definitions?: CustomFieldDefinition[]
-  content?: CustomFieldDefinition[]
-}
-
 function query(appId: number) {
   return `?appId=${encodeURIComponent(appId)}`
 }
@@ -63,22 +59,22 @@ export function customFieldValuesKey(environment: string, appId: number, typeKey
 }
 
 export async function listCustomFieldDefinitions(appId: number, typeKey: BoClassName) {
-  const response = await apiRequest<DefinitionListResponse | CustomFieldDefinition[]>(
+  const response = await apiRequest<unknown>(
     `/v3/custom-data/definition/type/${encodeURIComponent(typeKey)}${query(appId)}`,
   )
-  if (Array.isArray(response)) return response
-  return response.data ?? response.definitions ?? response.content ?? []
+  return normalizeCustomFieldDefinitions(response) as CustomFieldDefinition[]
 }
 
-export function createCustomFieldDefinition(
+export async function createCustomFieldDefinition(
   appId: number,
   input: { name: string; boClassId: number; fields: Array<{ displayName: string; fieldType: CustomFieldType; jsonSchema?: string }> },
 ) {
-  return apiRequest<CustomFieldDefinition | undefined>(`/v3/custom-data/definition${query(appId)}`, {
+  const response = await apiRequest<unknown>(`/v3/custom-data/definition${query(appId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
+  return normalizeCustomFieldDefinitions(response)[0] as CustomFieldDefinition | undefined
 }
 
 export function deleteCustomFieldDefinition(appId: number, definitionId: number) {

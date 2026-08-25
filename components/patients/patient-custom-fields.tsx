@@ -20,11 +20,12 @@ import {
   getInstanceCustomData,
   listCustomFieldDefinitions,
   resolveCustomDataType,
-  resolveCustomFieldSection,
+  resolveCustomFieldSectionForField,
   updateInstanceCustomData,
   type CustomFieldDefinition,
   type CustomFieldType,
 } from '@/lib/api/custom-fields'
+import { resolveCustomFieldAfterWrite } from '@/lib/custom-field-resolution'
 import { useSession } from '@/lib/session-context'
 
 const TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -58,28 +59,16 @@ function toInputValue(value: unknown, type: CustomFieldType): string {
   return String(value)
 }
 
-// Mirror of the API's key derivation so a just-created field can be located
-// before the definition list refetch resolves.
-function fieldKeyCandidate(name: string) {
-  const words = name.trim().replace(/[^a-zA-Z0-9]+/g, ' ').split(/\s+/).filter(Boolean)
-  return words
-    .map((word, index) => (index === 0 ? word.charAt(0).toLowerCase() + word.slice(1) : word.charAt(0).toUpperCase() + word.slice(1)))
-    .join('')
-    .toLowerCase()
-}
-
 function findFieldLocation(
   definitions: CustomFieldDefinition[],
   section: (typeof CUSTOM_FIELD_SECTIONS)[number],
   displayName: string,
 ) {
-  const expectedKey = fieldKeyCandidate(encodeCustomFieldDisplayName(section.key, displayName))
   for (const definition of definitions) {
-    if (resolveCustomFieldSection(definition, section.boClass)?.key !== section.key) continue
     const field = definition.fields.find(
       (item) =>
-        customFieldDisplayName(item).localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 ||
-        item.fieldKey.toLowerCase() === expectedKey,
+        resolveCustomFieldSectionForField(definition, item, section.boClass)?.key === section.key &&
+        customFieldDisplayName(item).localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0,
     )
     if (field) return { definition, field }
   }
@@ -174,9 +163,11 @@ export function PatientCustomFields({
 
   if (!section) return null
 
-  const sectionFields: ResolvedField[] = definitions
-    .filter((definition) => resolveCustomFieldSection(definition, section.boClass)?.key === section.key)
-    .flatMap((definition) => definition.fields)
+  const sectionFields: ResolvedField[] = definitions.flatMap((definition) =>
+    definition.fields.filter(
+      (field) => resolveCustomFieldSectionForField(definition, field, section.boClass)?.key === section.key,
+    ),
+  )
 
   async function saveValue(field: ResolvedField, rawValue: string) {
     if (!app) return
@@ -206,9 +197,40 @@ export function PatientCustomFields({
       const definitionName = `${section.label}: ${displayName}`
       const apiDisplayName = encodeCustomFieldDisplayName(section.key, displayName)
       let resolvedDefinitions = definitions
-      const existingLocation = findFieldLocation(resolvedDefinitions, section, displayName)
-      let field = existingLocation?.field
+      let field = findFieldLocation(resolvedDefinitions, section, displayName)?.field
       let created = false
+
+      const loadDefinitions = async () => {
+        const latest = await listCustomFieldDefinitions(app.id, section.boClass)
+        await mutateDefinitions(latest, false)
+        return latest
+      }
+      const resolveField = () =>
+        resolveCustomFieldAfterWrite(loadDefinitions, {
+          sectionKey: section.key,
+          boClass: section.boClass,
+          displayName,
+        })
+
+      // Refresh before POSTing so a previous successful create whose response was
+      // incomplete is reused instead of producing a duplicate request.
+      if (!field?.fieldKey) {
+        const latest = await loadDefinitions()
+        resolvedDefinitions = latest
+        field = findFieldLocation(latest, section, displayName)?.field
+      }
+
+      // A matching definition without a generated key means an earlier create is
+      // still propagating. Resolve it first and never POST a duplicate.
+      if (field && !field.fieldKey) {
+        const resolved = await resolveField()
+        resolvedDefinitions = resolved.definitions as CustomFieldDefinition[]
+        field = resolved.field as ResolvedField | undefined
+        if (!field) {
+          throw new Error(`The field “${displayName}” already exists, but 1health has not made its generated key available yet. Close this dialog and try saving it again shortly; do not define it again.`)
+        }
+      }
+
       if (!field) {
         try {
           const createdDefinition = await createCustomFieldDefinition(app.id, {
@@ -217,25 +239,32 @@ export function PatientCustomFields({
             fields: [{ displayName: apiDisplayName, fieldType }],
           })
           created = true
-          if (createdDefinition) await mutateDefinitions([...definitions, createdDefinition], false)
-
-          // The documented create response may be empty. Reload from 1health
-          // and resolve the exact definition before sending any patient value.
-          const refreshed = await mutateDefinitions()
-          resolvedDefinitions = refreshed ?? (createdDefinition ? [...definitions, createdDefinition] : definitions)
-          field = findField(resolvedDefinitions, section, displayName)
-          if (!field && createdDefinition) field = findField([createdDefinition], section, displayName)
+          const createdField = createdDefinition
+            ? findField([createdDefinition], section, displayName)
+            : undefined
+          if (createdField?.fieldKey) {
+            resolvedDefinitions = [...resolvedDefinitions, createdDefinition!]
+            await mutateDefinitions(resolvedDefinitions, false)
+            field = createdField
+          } else {
+            const resolved = await resolveField()
+            resolvedDefinitions = resolved.definitions as CustomFieldDefinition[]
+            field = resolved.field as ResolvedField | undefined
+          }
         } catch (cause) {
           const detail = cause instanceof Error ? cause.message : ''
           if (!/already exists|duplicate/i.test(detail)) throw cause
-          const refreshed = await mutateDefinitions()
-          resolvedDefinitions = refreshed ?? definitions
-          const refreshedLocation = findFieldLocation(resolvedDefinitions, section, displayName)
-          field = refreshedLocation?.field
-          if (!field) throw new Error(`The custom field name “${displayName}” is already taken elsewhere in 1health, but its definition is not available in ${section.label}. Choose a different name.`)
+          const resolved = await resolveField()
+          resolvedDefinitions = resolved.definitions as CustomFieldDefinition[]
+          field = resolved.field as ResolvedField | undefined
+          if (!field) {
+            throw new Error(`The custom field name “${displayName}” is already taken in 1health, but no usable matching field appeared in ${section.label}. Choose a different name.`)
+          }
         }
       }
-      if (!field?.fieldKey) throw new Error('The definition response did not include a usable field key, so the value was not sent.')
+      if (!field?.fieldKey) {
+        throw new Error(`The field “${displayName}” was created, but 1health has not made its generated key available yet. Close this dialog, reopen the field, and save its value without defining it again.`)
+      }
       assertFieldType(field, fieldType, resolvedDefinitions)
 
       let parsed: unknown
