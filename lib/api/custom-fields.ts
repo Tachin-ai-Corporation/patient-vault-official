@@ -81,6 +81,10 @@ export function deleteCustomFieldDefinition(appId: number, definitionId: number)
   return apiRequest<void>(`/v3/custom-data/definition/${definitionId}${query(appId)}`, { method: 'DELETE' })
 }
 
+export function deleteCustomField(appId: number, fieldId: number) {
+  return apiRequest<void>(`/v3/custom-data/field/${fieldId}${query(appId)}`, { method: 'DELETE' })
+}
+
 // Read all custom-field values for a BO instance (patient Person, document
 // File, etc.). Only fields that have a value are returned.
 export function getInstanceCustomData(appId: number, instanceId: number) {

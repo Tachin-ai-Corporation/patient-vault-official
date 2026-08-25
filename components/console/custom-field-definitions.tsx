@@ -12,8 +12,8 @@ import { Field, Select, TextInput } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/client'
 import { consoleApplicationUserId, getConsoleApplication } from '@/lib/api/console-application'
-import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, customFieldDisplayName, deleteCustomFieldDefinition, encodeCustomFieldDisplayName, getAvailableCustomDataTypes, listCustomFieldDefinitions, resolveCustomDataType, resolveCustomFieldSection, type BoClassName, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
-import { validateDefinitionDeletion } from '@/lib/custom-field-deletion'
+import { createCustomFieldDefinition, CUSTOM_FIELD_SECTIONS, customFieldDisplayName, deleteCustomField, encodeCustomFieldDisplayName, getAvailableCustomDataTypes, listCustomFieldDefinitions, resolveCustomDataType, resolveCustomFieldSection, type BoClassName, type CustomFieldDefinition, type CustomFieldType } from '@/lib/api/custom-fields'
+import { validateFieldDeletion } from '@/lib/custom-field-deletion'
 import { useSession } from '@/lib/session-context'
 
 const FIELD_TYPES: CustomFieldType[] = ['TEXT', 'INTEGER', 'DECIMAL', 'DATE', 'TIMESTAMP', 'JSON']
@@ -125,7 +125,7 @@ export function CustomFieldDefinitions() {
     field: CustomFieldDefinition['fields'][number],
   ) {
     const target = { definition, field }
-    const validation = validateDefinitionDeletion(target)
+    const validation = validateFieldDeletion(target)
     setDeleteTarget(target)
     setDeleteError(validation.safe ? null : validation.reason)
   }
@@ -138,7 +138,7 @@ export function CustomFieldDefinitions() {
 
   async function confirmDelete() {
     if (!app) return
-    const validation = validateDefinitionDeletion(deleteTarget)
+    const validation = validateFieldDeletion(deleteTarget)
     if (!validation.safe || !deleteTarget) {
       setDeleteError(validation.reason ?? 'This custom field cannot be deleted safely.')
       return
@@ -147,7 +147,7 @@ export function CustomFieldDefinitions() {
     setDeleteError(null)
     setSuccessMessage(null)
     try {
-      await deleteCustomFieldDefinition(app.id, deleteTarget.definition.id)
+      await deleteCustomField(app.id, deleteTarget.field.id)
       const deletedName = customFieldDisplayName(deleteTarget.field)
       setDeleteTarget(null)
       setSuccessMessage(`Deleted custom field “${deletedName}”.`)
@@ -200,7 +200,7 @@ export function CustomFieldDefinitions() {
         </CardHeader>
         <CardContent>
           {appLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : !app ? <Alert><FileJson aria-hidden="true" /><AlertTitle>Set up the application first</AlertTitle><AlertDescription>Custom field definitions are enabled after the Patient Vault application above has been created.</AlertDescription></Alert> : error ? (error instanceof ApiError && error.unavailable ? <Alert><Info aria-hidden="true" /><AlertTitle>Custom fields aren&apos;t available here yet</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> : <Alert variant="destructive"><AlertTitle>Definitions unavailable</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>) : isLoading ? <div className="h-24 rounded-lg bg-muted/40" /> : count === 0 ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 p-6 text-center"><Braces className="text-muted-foreground" aria-hidden="true" /><p className="font-medium text-foreground">No custom fields yet</p><p className="max-w-md text-sm text-muted-foreground">Create a reusable field for demographics, aliases, contacts, addresses, documents, or external identities.</p></div> : <div className="flex flex-col gap-6">{results.filter(({ definitions }) => definitions.length > 0).map(({ section, definitions }) => <div key={section.key} className="flex flex-col gap-2"><h3 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">{section.label}</h3><ul className="flex flex-col gap-2">{definitions.map((definition) => definition.fields.map((field) => <li key={`${definition.id}-${field.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex min-w-0 flex-col gap-0.5"><span className="truncate text-sm font-medium text-foreground">{customFieldDisplayName(field)}</span><span className="font-mono text-xs text-muted-foreground">{field.fieldKey} · {field.fieldType}</span></div><Button type="button" variant="ghost" size="sm" disabled={deleting} onClick={() => requestDelete(definition, field)} aria-label={`Delete definition ${definition.name}`}><Trash2 data-icon="inline-start" aria-hidden="true" />Delete definition</Button></li>))}</ul></div>)}</div>}
-          {successMessage && <Alert className="mt-4" role="status"><AlertTitle>Definition deleted</AlertTitle><AlertDescription>{successMessage}</AlertDescription></Alert>}
+          {successMessage && <Alert className="mt-4" role="status"><AlertTitle>Custom field deleted</AlertTitle><AlertDescription>{successMessage}</AlertDescription></Alert>}
           {errorMessage && <Alert variant="destructive" className="mt-4"><AlertTitle>Custom field action failed</AlertTitle><AlertDescription>{errorMessage}</AlertDescription></Alert>}
         </CardContent>
         <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => { if (!nextOpen) closeDeleteDialog() }}>
@@ -208,15 +208,15 @@ export function CustomFieldDefinitions() {
             <DialogHeader>
               <DialogTitle>Delete custom field?</DialogTitle>
               <DialogDescription>
-                {deleteTarget && validateDefinitionDeletion(deleteTarget).safe
-                  ? `Delete “${customFieldDisplayName(deleteTarget.field)}”? Its owning definition contains only this field. Existing stored values may no longer be available. This action cannot be undone.`
+                {deleteTarget && validateFieldDeletion(deleteTarget).safe
+                  ? `Delete “${customFieldDisplayName(deleteTarget.field)}”? This removes the field and its stored values across all records. Other fields in the definition will remain. This action cannot be undone.`
                   : 'This field cannot be deleted safely.'}
               </DialogDescription>
             </DialogHeader>
             {deleteError && <Alert variant="destructive" role="alert"><AlertTitle>Custom field was not deleted</AlertTitle><AlertDescription>{deleteError}</AlertDescription></Alert>}
             <DialogFooter>
               <Button type="button" variant="outline" disabled={deleting} onClick={closeDeleteDialog}>Cancel</Button>
-              <Button type="button" variant="destructive" disabled={deleting || !validateDefinitionDeletion(deleteTarget).safe} aria-busy={deleting} onClick={() => void confirmDelete()}>
+              <Button type="button" variant="destructive" disabled={deleting || !validateFieldDeletion(deleteTarget).safe} aria-busy={deleting} onClick={() => void confirmDelete()}>
                 {deleting ? <><Loader2 className="size-4 animate-spin" data-icon="inline-start" aria-hidden="true" />Deleting…</> : <><Trash2 data-icon="inline-start" aria-hidden="true" />Delete field</>}
               </Button>
             </DialogFooter>
