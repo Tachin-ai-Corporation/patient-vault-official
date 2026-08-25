@@ -39,12 +39,27 @@ export function customFieldDisplayName(field: FieldLike) {
   return decodeCustomFieldDisplayName(field.displayName).displayName
 }
 
-export function resolveCustomFieldSection(definition: DefinitionLike, boClass: BoClassName) {
-  for (const field of definition.fields) {
-    const { sectionKey } = decodeCustomFieldDisplayName(field.displayName)
-    if (sectionKey) return CUSTOM_FIELD_SECTIONS.find((section) => section.key === sectionKey)
-  }
+export function resolveCustomFieldSectionForField(
+  definition: DefinitionLike,
+  field: FieldLike,
+  boClass: BoClassName,
+) {
+  const { sectionKey } = decodeCustomFieldDisplayName(field.displayName)
+  if (sectionKey) return CUSTOM_FIELD_SECTIONS.find((section) => section.key === sectionKey)
+
   const namedSection = CUSTOM_FIELD_SECTIONS.find((section) => definition.name.startsWith(`${section.label}:`))
   if (namedSection) return namedSection
+
   return CUSTOM_FIELD_SECTIONS.find((section) => section.key === (boClass === 'File' ? 'documents' : 'demographics'))
+}
+
+export function resolveCustomFieldSection(definition: DefinitionLike, boClass: BoClassName) {
+  const firstTaggedField = definition.fields.find(
+    (field) => decodeCustomFieldDisplayName(field.displayName).sectionKey,
+  )
+  return resolveCustomFieldSectionForField(
+    definition,
+    firstTaggedField ?? definition.fields[0] ?? { displayName: '' },
+    boClass,
+  )
 }

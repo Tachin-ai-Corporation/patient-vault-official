@@ -10,6 +10,7 @@ export {
   decodeCustomFieldDisplayName,
   encodeCustomFieldDisplayName,
   resolveCustomFieldSection,
+  resolveCustomFieldSectionForField,
   type BoClassName,
   type CustomFieldSection,
   type CustomFieldSectionKey,

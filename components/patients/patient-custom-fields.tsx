@@ -20,7 +20,7 @@ import {
   getInstanceCustomData,
   listCustomFieldDefinitions,
   resolveCustomDataType,
-  resolveCustomFieldSection,
+  resolveCustomFieldSectionForField,
   updateInstanceCustomData,
   type CustomFieldDefinition,
   type CustomFieldType,
@@ -59,28 +59,16 @@ function toInputValue(value: unknown, type: CustomFieldType): string {
   return String(value)
 }
 
-// Mirror of the API's key derivation so a just-created field can be located
-// before the definition list refetch resolves.
-function fieldKeyCandidate(name: string) {
-  const words = name.trim().replace(/[^a-zA-Z0-9]+/g, ' ').split(/\s+/).filter(Boolean)
-  return words
-    .map((word, index) => (index === 0 ? word.charAt(0).toLowerCase() + word.slice(1) : word.charAt(0).toUpperCase() + word.slice(1)))
-    .join('')
-    .toLowerCase()
-}
-
 function findFieldLocation(
   definitions: CustomFieldDefinition[],
   section: (typeof CUSTOM_FIELD_SECTIONS)[number],
   displayName: string,
 ) {
-  const expectedKey = fieldKeyCandidate(encodeCustomFieldDisplayName(section.key, displayName))
   for (const definition of definitions) {
-    if (resolveCustomFieldSection(definition, section.boClass)?.key !== section.key) continue
     const field = definition.fields.find(
       (item) =>
-        customFieldDisplayName(item).localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 ||
-        item.fieldKey.toLowerCase() === expectedKey,
+        resolveCustomFieldSectionForField(definition, item, section.boClass)?.key === section.key &&
+        customFieldDisplayName(item).localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0,
     )
     if (field) return { definition, field }
   }
@@ -175,9 +163,11 @@ export function PatientCustomFields({
 
   if (!section) return null
 
-  const sectionFields: ResolvedField[] = definitions
-    .filter((definition) => resolveCustomFieldSection(definition, section.boClass)?.key === section.key)
-    .flatMap((definition) => definition.fields)
+  const sectionFields: ResolvedField[] = definitions.flatMap((definition) =>
+    definition.fields.filter(
+      (field) => resolveCustomFieldSectionForField(definition, field, section.boClass)?.key === section.key,
+    ),
+  )
 
   async function saveValue(field: ResolvedField, rawValue: string) {
     if (!app) return

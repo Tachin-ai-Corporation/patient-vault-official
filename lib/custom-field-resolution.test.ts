@@ -38,6 +38,25 @@ test('only resolves a matching field after its generated key is usable', () => {
   assert.equal(findUsableCustomField([definition], 'demographics', 'Person', 'field 1')?.field.fieldKey, 'field1')
 })
 
+test('resolves the requested field section inside a mixed same-name definition', () => {
+  const contactField = {
+    ...field,
+    id: 3,
+    displayName: encodeCustomFieldDisplayName('contacts', 'field 1'),
+    fieldKey: 'contactField1',
+  }
+  const mixed = { ...definition, fields: [contactField, field] }
+
+  assert.equal(
+    findUsableCustomField([mixed], 'demographics', 'Person', 'field 1')?.field.fieldKey,
+    'field1',
+  )
+  assert.equal(
+    findUsableCustomField([mixed], 'contacts', 'Person', 'field 1')?.field.fieldKey,
+    'contactField1',
+  )
+})
+
 test('polls until a delayed generated field key appears', async () => {
   let reads = 0
   const incomplete = { ...definition, fields: [{ ...field, fieldKey: '' }] }

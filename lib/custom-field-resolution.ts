@@ -1,6 +1,6 @@
 import {
   customFieldDisplayName,
-  resolveCustomFieldSection,
+  resolveCustomFieldSectionForField,
   type BoClassName,
   type CustomFieldSectionKey,
   // @ts-expect-error Node's strip-types runner requires the runtime extension.
@@ -56,9 +56,9 @@ export function findUsableCustomField(
   displayName: string,
 ) {
   for (const definition of definitions) {
-    if (resolveCustomFieldSection(definition, boClass)?.key !== sectionKey) continue
     const field = definition.fields.find(
       (candidate) =>
+        resolveCustomFieldSectionForField(definition, candidate, boClass)?.key === sectionKey &&
         customFieldDisplayName(candidate).localeCompare(displayName, undefined, { sensitivity: 'accent' }) === 0 &&
         typeof candidate.fieldKey === 'string' &&
         candidate.fieldKey.trim().length > 0,
