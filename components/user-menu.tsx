@@ -19,13 +19,20 @@ export function UserMenu() {
       return
     }
     if (label === 'Sign out') {
-      // Invalidate every BO Core device session first, then clear this app's
-      // cookies and storage before navigating away.
-      await signOut()
-
-      // Force a fresh document load so no in-memory authenticated state can
-      // survive the transition back to the public home page.
-      window.location.href = '/'
+      try {
+        // Invalidate every BO Core device session first, then clear this app's
+        // cookies and storage before navigating away.
+        await signOut()
+      } catch (error) {
+        // A failure here must never strand the user in an authenticated-looking
+        // shell — fall through to the hard navigation regardless.
+        console.error('[v0] Error during sign out:', error)
+      } finally {
+        // Use replace() (not href) so a fresh document loads AND the current
+        // history entry is discarded — the user can't hit Back into a cached,
+        // half-authenticated state.
+        window.location.replace('/')
+      }
     }
   }
 
