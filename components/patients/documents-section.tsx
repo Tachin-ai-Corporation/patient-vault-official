@@ -138,6 +138,8 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
   // Attach modal + transient success toast.
   const [attachOpen, setAttachOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
   // Auto-dismiss the success toast.
   useEffect(() => {
@@ -173,14 +175,26 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
   // ---- Download: ALWAYS fetch a fresh downloadUrl (they expire in 15 min) --
   const download = useCallback(
     async (documentId: string) => {
+      setDownloadError(null)
+      setDownloadingId(documentId)
       try {
         const doc = await getDocument(patientId, documentId)
-        if (doc.downloadUrl) {
-          window.open(doc.downloadUrl, '_blank', 'noopener,noreferrer')
+        if (!doc.downloadUrl) {
+          throw new Error('BO Core did not return a download link for this document.')
         }
-      } catch {
-        // Surface nothing intrusive here; the list-level error banner covers
-        // persistent failures. A failed download is a transient action.
+        const link = window.document.createElement('a')
+        link.href = doc.downloadUrl
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        link.click()
+      } catch (error) {
+        setDownloadError(
+          error instanceof Error && error.message
+            ? error.message
+            : 'The document could not be downloaded. Please try again.',
+        )
+      } finally {
+        setDownloadingId(null)
       }
     },
     [patientId],
@@ -271,6 +285,15 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
         </div>
       </div>
 
+      {downloadError && (
+        <div role="alert" className="mb-4 flex items-start justify-between gap-3 rounded-input border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{downloadError}</span>
+          <Button variant="ghost" size="sm" className="shrink-0 text-destructive hover:text-destructive" onClick={() => setDownloadError(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       {/* Body: skeleton / error / empty / table */}
       {isLoading ? (
         <DocumentsSkeleton />
@@ -305,9 +328,19 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
                     <td className="py-2 pr-3">
                       <span className="flex min-w-0 items-center gap-2">
                         <KindIcon contentType={doc.contentType} />
-                        <span className="truncate text-foreground">
-                          {doc.name || '—'}
-                        </span>
+                        {isDeleted ? (
+                          <span className="truncate text-foreground">{doc.name || '—'}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="truncate text-left text-accent underline-offset-4 hover:underline disabled:cursor-wait disabled:opacity-60"
+                            disabled={downloadingId === doc.documentId}
+                            onClick={() => void download(doc.documentId)}
+                            aria-label={`Download ${doc.name || 'document'}`}
+                          >
+                            {downloadingId === doc.documentId ? 'Preparing download…' : doc.name || 'Download document'}
+                          </button>
+                        )}
                         {isDeleted && (
                           <span className="shrink-0 rounded-tag border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
                             deleted
@@ -441,10 +474,11 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
                 <div>
                   <Button
                     variant="outline"
-                    onClick={() => download(detail.documentId)}
+                    disabled={Boolean(detail.deleted) || downloadingId === detail.documentId}
+                    onClick={() => void download(detail.documentId)}
                   >
                     <Download className="h-4 w-4" data-icon="inline-start" />
-                    Download
+                    {detail.deleted ? 'Download unavailable' : downloadingId === detail.documentId ? 'Preparing…' : 'Download'}
                   </Button>
                 </div>
 
