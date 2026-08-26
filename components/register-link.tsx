@@ -6,7 +6,7 @@ import { withAuthParams } from '@/lib/auth-branding'
 
 // brandingId + the active light/dark mode are appended per render.
 const REGISTER_BASE =
-  'https://pv.demo.1health.io/register?openApp=Patient%20Vault'
+  'https://pv.demo.1health.io/register?openApp=Patient+Vault'
 
 /**
  * "Get Started" link to the hosted 1health registration screen.

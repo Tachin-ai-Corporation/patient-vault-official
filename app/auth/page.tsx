@@ -27,8 +27,8 @@ interface AuthError {
 // These are bases only — `withAuthParams` appends the Patient Vault brandingId
 // and the active light/dark mode so the hosted login screen matches this app.
 const LOGIN_BASES: Record<Environment, string> = {
-  demo: "https://pv.demo.1health.io/login?openApp=Patient%20Vault",
-  prod: "https://1health.app.1health.io/login?openApp=Patient%20Vault",
+  demo: "https://pv.demo.1health.io/login?openApp=Patient+Vault",
+  prod: "https://1health.app.1health.io/login?openApp=Patient+Vault",
 }
 
 function detectEnvironmentFromReferrer(): Environment | null {
