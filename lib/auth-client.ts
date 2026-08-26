@@ -258,7 +258,77 @@ export async function signOut(): Promise<void> {
     } catch {
       // Storage may be unavailable (private mode / SSR) — safe to ignore.
     }
+
+    // 4. Clear persistent, origin-scoped stores that cookies + web storage do
+    // NOT cover: IndexedDB, the Cache Storage API, and service workers. On demo
+    // the hosted 1health login SPA is served from this same origin and persists
+    // its session there (axios-based SPAs commonly keep tokens in IndexedDB), so
+    // a stale token survived sign-out and let the login page bootstrap an
+    // already-dead session (external-application 401 → logout 401 → oauth2/token
+    // 400 → "Something went wrong"), only recovering on a manual reload. Awaited
+    // so it finishes before the caller navigates away.
+    await clearPersistentOriginStorage()
   }
+}
+
+/**
+ * Best-effort teardown of the persistent, origin-scoped browser stores that a
+ * cookie/web-storage clear leaves behind. Every step is guarded and the whole
+ * thing is awaited via `Promise.allSettled`, so a single unsupported API or
+ * blocked handle can never hang or fail the logout flow.
+ */
+async function clearPersistentOriginStorage(): Promise<void> {
+  if (typeof window === "undefined") return
+
+  const tasks: Promise<unknown>[] = []
+
+  // IndexedDB — where axios/localforage SPAs commonly persist auth/session state.
+  try {
+    const factory = window.indexedDB as IDBFactory & {
+      databases?: () => Promise<Array<{ name?: string }>>
+    }
+    if (factory?.databases) {
+      const databases = await factory.databases()
+      for (const { name } of databases) {
+        if (!name) continue
+        tasks.push(
+          new Promise<void>((resolve) => {
+            const request = window.indexedDB.deleteDatabase(name)
+            // Resolve on every terminal state — including `blocked`, which fires
+            // when another tab holds the DB open — so logout never stalls.
+            request.onsuccess = request.onerror = request.onblocked = () => resolve()
+          }),
+        )
+      }
+    }
+  } catch {
+    // indexedDB.databases() is unsupported in some browsers — safe to ignore.
+  }
+
+  // Cache Storage API — service-worker / PWA response caches that could replay
+  // an authenticated shell.
+  try {
+    if (window.caches?.keys) {
+      const keys = await window.caches.keys()
+      for (const key of keys) tasks.push(window.caches.delete(key))
+    }
+  } catch {
+    // Cache Storage unavailable (non-secure context / SSR) — safe to ignore.
+  }
+
+  // Service workers — unregister so a cached SPA shell can't rehydrate identity
+  // or serve stale API responses after the session is gone.
+  try {
+    const container = navigator.serviceWorker
+    if (container?.getRegistrations) {
+      const registrations = await container.getRegistrations()
+      for (const registration of registrations) tasks.push(registration.unregister())
+    }
+  } catch {
+    // Service workers unsupported / blocked — safe to ignore.
+  }
+
+  await Promise.allSettled(tasks)
 }
 
 // ============================================================================

@@ -61,7 +61,7 @@ function domainVariants(host: string): string[] {
 
 const EXPIRED = "Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
 
-function buildExpiredCookies(host: string, secure: boolean): string[] {
+function buildExpiredCookies(host: string, secure: boolean, extraNames: string[] = []): string[] {
   const domains = domainVariants(host)
 
   // Cookie identity is determined by name, domain, and path. SameSite and Secure
@@ -70,8 +70,13 @@ function buildExpiredCookies(host: string, secure: boolean): string[] {
   // header limits, which previously caused the browser's /api/logout request to fail.
   const attributes = secure ? "SameSite=None; Secure" : "SameSite=Lax"
 
+  // Our own known session cookies PLUS whatever the request actually carries, so
+  // HttpOnly platform cookies we don't hardcode (e.g. 1health's own session) are
+  // expired too and can't silently re-bootstrap the hosted login page.
+  const names = new Set<string>([...SESSION_COOKIES, ...extraNames])
+
   const cookies: string[] = []
-  for (const name of SESSION_COOKIES) {
+  for (const name of names) {
     for (const domain of domains) {
       const domainPart = domain ? `; Domain=${domain}` : ""
       cookies.push(`${name}=; ${EXPIRED}${domainPart}; ${attributes}`)
@@ -86,6 +91,23 @@ function readCookie(req: Request, name: string): string | null {
   if (!header) return null
   const match = header.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
   return match ? decodeURIComponent(match[1]) : null
+}
+
+/**
+ * Every cookie name present on the incoming request. Sweeping these — not just
+ * our own known session cookies — is what lets logout clear the 1health
+ * platform's `HttpOnly` session cookie, which the client-side sweep can never
+ * see. That residual cookie is what made the hosted login page attempt a
+ * bootstrap against an already-invalidated session (401/401/400 → "Something
+ * went wrong") on the first visit after logout, only recovering on reload.
+ */
+function incomingCookieNames(req: Request): string[] {
+  const header = req.headers.get("cookie")
+  if (!header) return []
+  return header
+    .split(";")
+    .map((pair) => pair.split("=")[0]?.trim())
+    .filter((name): name is string => Boolean(name))
 }
 
 /**
@@ -139,7 +161,7 @@ async function handle(req: Request): Promise<NextResponse> {
     .trim() === "https"
 
   const res = NextResponse.json({ ok: true })
-  for (const cookie of buildExpiredCookies(host, secure)) {
+  for (const cookie of buildExpiredCookies(host, secure, incomingCookieNames(req))) {
     res.headers.append("Set-Cookie", cookie)
   }
   // Never let this response (or the navigation that follows it) be served from
