@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Eye, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
@@ -132,6 +133,14 @@ export function AliasesSection({ patientId }: { patientId: string }) {
         <Field label="Effective from" htmlFor="alias-from"><TextInput id="alias-from" type="date" value={draft.effectiveFrom ?? ''} onChange={(event) => setDraft({ ...draft, effectiveFrom: event.target.value })} /></Field>
         <Field label="Effective to" htmlFor="alias-to"><TextInput id="alias-to" type="date" value={draft.effectiveTo ?? ''} onChange={(event) => setDraft({ ...draft, effectiveTo: event.target.value })} /></Field>
       </div>
+      {editing && (
+        <PatientCustomFields
+          sectionKey="aliases"
+          patientId={patientId}
+          instanceId={editing.id}
+          allowDefinitionCreation={false}
+        />
+      )}
     </Modal>
 
     <Modal open={detail != null} onClose={() => setDetail(null)} title="Alias details" description="Fresh response from the alias item GET endpoint.">{detail && <dl className="divide-y divide-border">{[['Name', displayName(detail)], ['Alias', detail.alias], ['Type', detail.type], ['Effective from', detail.effectiveFrom], ['Effective to', detail.effectiveTo], ['Alias ID', detail.id]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-4 py-2"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-right font-mono text-sm text-foreground">{value || '—'}</dd></div>)}</dl>}</Modal>

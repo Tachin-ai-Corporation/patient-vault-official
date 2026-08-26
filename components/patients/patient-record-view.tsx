@@ -712,13 +712,15 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         patient={patient}
         onSave={handleSaveDemographics}
       />
-      <RelatedRecordModal
-        open={related != null}
-        kind={related ?? 'contact'}
-        initial={relatedInitial}
-        onClose={closeRelated}
-        onSave={handleSaveRelated}
-      />
+        <RelatedRecordModal
+          open={related != null}
+          kind={related ?? 'contact'}
+          initial={relatedInitial}
+          patientId={patient.id}
+          instanceId={relatedEditId}
+          onClose={closeRelated}
+          onSave={handleSaveRelated}
+        />
       <DeceasedModal
         open={deceasedOpen}
         // In edit mode, pre-fill from the loaded death record.

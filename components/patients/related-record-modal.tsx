@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
+import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
@@ -63,6 +64,8 @@ type RelatedRecordModalProps = {
   // When provided, the modal opens in edit mode: fields are pre-filled with the
   // existing record and the submit action reads as "Save" instead of "Add".
   initial?: RelatedValue | null
+  patientId: string
+  instanceId?: string | number | null
 }
 
 export function RelatedRecordModal({
@@ -71,6 +74,8 @@ export function RelatedRecordModal({
   onClose,
   onSave,
   initial = null,
+  patientId,
+  instanceId,
 }: RelatedRecordModalProps) {
   const isEdit = initial != null
   const [contact, setContact] = useState<ContactDraft>(EMPTY_CONTACT)
@@ -295,6 +300,14 @@ export function RelatedRecordModal({
             </Select>
           </Field>
         </div>
+      )}
+      {isEdit && instanceId != null && (
+        <PatientCustomFields
+          sectionKey={kind === 'contact' ? 'contacts' : 'addresses'}
+          patientId={patientId}
+          instanceId={instanceId}
+          allowDefinitionCreation={false}
+        />
       )}
     </Modal>
   )

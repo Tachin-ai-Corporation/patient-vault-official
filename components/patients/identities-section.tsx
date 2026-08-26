@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { CheckCircle2, Eye, Loader2, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
+import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, TextInput } from '@/components/ui/field'
@@ -14,6 +15,7 @@ import {
   addIdentifier,
   deleteIdentifier,
   getIdentifier,
+  identifierInstanceId,
   listIdentifiers,
   patchIdentifier,
   type IdentifierStatus,
@@ -384,6 +386,18 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
               {editorError}
             </div>
           )}
+          {editing && identifierInstanceId(editing) != null ? (
+            <PatientCustomFields
+              sectionKey="external-identities"
+              patientId={patientId}
+              instanceId={identifierInstanceId(editing)!}
+              allowDefinitionCreation={false}
+            />
+          ) : editing ? (
+            <div className="rounded-input border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              Custom field values are unavailable because this identity response did not include its record instance ID.
+            </div>
+          ) : null}
         </div>
       </Modal>
 
