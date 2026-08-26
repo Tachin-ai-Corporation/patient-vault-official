@@ -324,7 +324,7 @@ export function PatientCustomFields({
               <form onSubmit={addField}>
                 <DialogHeader>
                   <DialogTitle>Add custom field</DialogTitle>
-                  <DialogDescription>{definitionOnly ? `Define a reusable field for ${section.label.toLowerCase()}. Assign its value from an individual document’s details.` : `Define a reusable field for ${section.label.toLowerCase()} and save its value for this ${section.scope === 'record' ? 'record' : 'patient'}.`}</DialogDescription>
+                  <DialogDescription>{definitionOnly ? `Define a reusable field for ${section.label.toLowerCase()}. Assign its value while editing an individual record.` : `Define a reusable field for ${section.label.toLowerCase()} and save its value for this patient.`}</DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col gap-4 py-5">
                   <Field label="Field name" htmlFor={`${section.key}-field-name`}><TextInput id={`${section.key}-field-name`} name="displayName" required maxLength={80} /></Field>
@@ -343,7 +343,7 @@ export function PatientCustomFields({
       </div>
 
       {definitionOnly && (
-        <p className="text-xs leading-relaxed text-muted-foreground">These definitions are shared by all documents. Open a document&apos;s details to assign or edit its values.</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">These definitions are shared by all {section.label.toLowerCase()} records. Edit an individual record to assign or change its values.</p>
       )}
 
       {!canAdd ? (
@@ -354,7 +354,7 @@ export function PatientCustomFields({
             <div key={field.id} className="group flex items-start justify-between gap-2 rounded-lg bg-muted/30 px-3 py-2">
               <div className="min-w-0">
                 <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">{customFieldDisplayName(field)}<span className="font-mono text-[10px] uppercase tracking-wider opacity-70">{field.fieldType.toLowerCase()}</span></dt>
-                <dd className="mt-0.5 break-words text-sm text-foreground">{definitionOnly ? 'Set on individual documents' : formatValue(values[field.fieldKey])}</dd>
+                <dd className="mt-0.5 break-words text-sm text-foreground">{definitionOnly ? 'Set on individual records' : formatValue(values[field.fieldKey])}</dd>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 {!definitionOnly && <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${customFieldDisplayName(field)}`} onClick={() => { setMessage(null); setEditing(field) }}><Pencil className="size-3.5" aria-hidden="true" /></Button>}

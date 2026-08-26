@@ -7,6 +7,7 @@ import {
   encodeCustomFieldDisplayName,
   resolveCustomFieldSection,
   resolveCustomFieldSectionForField,
+  CUSTOM_FIELD_SECTIONS,
   // @ts-expect-error Node's strip-types runner requires the runtime extension.
 } from './custom-field-sections.ts'
 
@@ -45,10 +46,28 @@ test('legacy definition prefixes remain supported', () => {
   assert.equal(section?.key, 'contacts')
 })
 
+test('collection sections use their available-types keys and never Person', () => {
+  assert.deepEqual(
+    Object.fromEntries(CUSTOM_FIELD_SECTIONS.map(({ key, boClass, scope }) => [key, { boClass, scope }])),
+    {
+      demographics: { boClass: 'Person', scope: 'patient' },
+      contacts: { boClass: 'ContactPoint', scope: 'record' },
+      addresses: { boClass: 'Location', scope: 'record' },
+      aliases: { boClass: 'NameAlias', scope: 'record' },
+      'external-identities': { boClass: 'ExternalSystemMapping', scope: 'record' },
+      documents: { boClass: 'File', scope: 'record' },
+    },
+  )
+})
+
 test('untagged legacy definitions retain their BO-class fallback section', () => {
   assert.equal(
     resolveCustomFieldSection({ name: 'Legacy', fields: [{ displayName: 'Legacy' }] }, 'Person')?.key,
     'demographics',
+  )
+  assert.equal(
+    resolveCustomFieldSection({ name: 'Legacy alias', fields: [{ displayName: 'Legacy alias' }] }, 'NameAlias')?.key,
+    'aliases',
   )
   assert.equal(
     resolveCustomFieldSection({ name: 'Legacy file', fields: [{ displayName: 'Legacy file' }] }, 'File')?.key,
