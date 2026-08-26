@@ -1,11 +1,17 @@
-export type BoClassName = 'Person' | 'File'
+export type BoClassName =
+  | 'Person'
+  | 'NameAlias'
+  | 'ContactPoint'
+  | 'Location'
+  | 'ExternalSystemMapping'
+  | 'File'
 
 export const CUSTOM_FIELD_SECTIONS = [
   { key: 'demographics', label: 'Demographics', boClass: 'Person', scope: 'patient' },
-  { key: 'contacts', label: 'Contacts', boClass: 'Person', scope: 'patient' },
-  { key: 'addresses', label: 'Addresses', boClass: 'Person', scope: 'patient' },
-  { key: 'aliases', label: 'Aliases', boClass: 'Person', scope: 'patient' },
-  { key: 'external-identities', label: 'External identities', boClass: 'Person', scope: 'patient' },
+  { key: 'contacts', label: 'Contacts', boClass: 'ContactPoint', scope: 'record' },
+  { key: 'addresses', label: 'Addresses', boClass: 'Location', scope: 'record' },
+  { key: 'aliases', label: 'Aliases', boClass: 'NameAlias', scope: 'record' },
+  { key: 'external-identities', label: 'External identities', boClass: 'ExternalSystemMapping', scope: 'record' },
   { key: 'documents', label: 'Documents', boClass: 'File', scope: 'record' },
 ] as const satisfies ReadonlyArray<{ key: string; label: string; boClass: BoClassName; scope: 'patient' | 'record' }>
 
@@ -50,7 +56,7 @@ export function resolveCustomFieldSectionForField(
   const namedSection = CUSTOM_FIELD_SECTIONS.find((section) => definition.name.startsWith(`${section.label}:`))
   if (namedSection) return namedSection
 
-  return CUSTOM_FIELD_SECTIONS.find((section) => section.key === (boClass === 'File' ? 'documents' : 'demographics'))
+  return CUSTOM_FIELD_SECTIONS.find((section) => section.boClass === boClass)
 }
 
 export function resolveCustomFieldSection(definition: DefinitionLike, boClass: BoClassName) {
