@@ -640,6 +640,11 @@ export function deleteAlias(patientId: string, aliasId: string): Promise<{ id?: 
 export type IdentifierStatus = 'true' | 'false' | 'all'
 
 export interface PatientIdentifier {
+  id?: string | number | null
+  instance_id?: string | number | null
+  external_system_mapping_id?: string | number | null
+  externalSystemMappingId?: string | number | null
+  instanceId?: string | number | null
   organization_name?: string | null
   organization_id?: string | number | null
   external_system_name?: string | null
@@ -651,6 +656,20 @@ export interface PatientIdentifier {
   active_from?: string | null
   active_until?: string | null
   deletedAt?: string | null
+}
+
+export function identifierInstanceId(identifier: PatientIdentifier): number | null {
+  for (const candidate of [
+    identifier.id,
+    identifier.instance_id,
+    identifier.instanceId,
+    identifier.external_system_mapping_id,
+    identifier.externalSystemMappingId,
+  ]) {
+    const value = Number(candidate)
+    if (Number.isInteger(value) && value > 0) return value
+  }
+  return null
 }
 
 export interface PatientIdentifierInput {

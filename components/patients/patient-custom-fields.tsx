@@ -124,11 +124,13 @@ export function PatientCustomFields({
   patientId,
   instanceId,
   definitionOnly = false,
+  allowDefinitionCreation = true,
 }: {
   sectionKey: string
   patientId: string
   instanceId?: string | number
   definitionOnly?: boolean
+  allowDefinitionCreation?: boolean
 }) {
   const { currentEnv } = useSession()
   const [addOpen, setAddOpen] = useState(false)
@@ -317,7 +319,7 @@ export function PatientCustomFields({
           <Braces className="size-4 text-muted-foreground" aria-hidden="true" />
           <h4 className="text-sm font-medium text-foreground">Custom fields</h4>
         </div>
-        {canAdd && (
+        {canAdd && allowDefinitionCreation && (
           <Dialog open={addOpen} onOpenChange={(next) => { setAddOpen(next); if (!next) setMessage(null) }}>
             <DialogTrigger render={<Button type="button" size="sm" variant="outline"><Plus data-icon="inline-start" aria-hidden="true" />Add custom field</Button>} />
             <DialogContent>

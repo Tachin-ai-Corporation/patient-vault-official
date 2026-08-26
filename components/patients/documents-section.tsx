@@ -488,6 +488,7 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
                   sectionKey="documents"
                   patientId={patientId}
                   instanceId={detail.documentId}
+                  allowDefinitionCreation={false}
                 />
               </>
             )}
