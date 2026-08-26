@@ -32,12 +32,14 @@ test('Sandbox display label preserves staging compatibility contracts', () => {
 test('hosted login URLs use the Patient Vault tenant', () => {
   assert.equal(
     ENVIRONMENT_CONFIG.demo.loginUrl,
-    'https://pv.demo.1health.io/login?openApp=Patient%20Vault',
+    'https://pv.demo.1health.io/login?openApp=Patient+Vault',
   )
   assert.equal(
     ENVIRONMENT_CONFIG.prod.loginUrl,
-    'https://1health.app.1health.io/login?openApp=Patient%20Vault',
+    'https://1health.app.1health.io/login?openApp=Patient+Vault',
   )
+  assert.equal(ENVIRONMENT_CONFIG.demo.loginUrl.includes('Patient%20Vault'), false)
+  assert.equal(ENVIRONMENT_CONFIG.prod.loginUrl.includes('Patient%20Vault'), false)
 })
 
 test('connected base URL comes from the launched session, not UI environment state', () => {

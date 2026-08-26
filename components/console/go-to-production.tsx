@@ -38,7 +38,7 @@ export function GoToProduction() {
     productionAccountState === 'registered_signed_out'
   ) {
     const productionLoginUrl = withAuthParams(
-      'https://1health.app.1health.io/login?openApp=Patient%20Vault',
+      'https://1health.app.1health.io/login?openApp=Patient+Vault',
       theme,
     )
 

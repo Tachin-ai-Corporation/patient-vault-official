@@ -137,13 +137,13 @@ export function EnvironmentSelector({ brand = false }: { brand?: boolean }) {
   const { theme } = useTheme()
   const signInUrls: Record<ApiEnv, string> = {
     staging: withAuthParams(
-      'https://pv.demo.1health.io/login?openApp=Patient%20Vault',
+      'https://pv.demo.1health.io/login?openApp=Patient+Vault',
       theme,
     ),
     production: withAuthParams(
       productionAccountState === 'not_registered'
-        ? 'https://1health.app.1health.io/register?openApp=Patient%20Vault'
-        : 'https://1health.app.1health.io/login?openApp=Patient%20Vault',
+        ? 'https://1health.app.1health.io/register?openApp=Patient+Vault'
+        : 'https://1health.app.1health.io/login?openApp=Patient+Vault',
       theme,
     ),
   }
