@@ -47,6 +47,11 @@ test('an unknown resource remains visible exactly once in the final group', () =
   assert.equal(flattened.filter(({ slug }) => slug === unknown.slug).length, 1)
 })
 
+test('custom fields remain under Platform', () => {
+  assert.equal(resolveDocGroup(item('Custom Fields')), 'Platform')
+  assert.equal(resolveDocGroup(item('Custom Fields / Definition')), 'Platform')
+})
+
 test('Platform omits its landing backlink', () => {
   assert.equal(landingHrefForGroup('Store'), '/#store')
   assert.equal(landingHrefForGroup('Attach'), '/#attach')

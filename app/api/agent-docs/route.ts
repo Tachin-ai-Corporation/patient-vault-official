@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { loadDocs, type DocsEnvironment } from '@/lib/docs'
 
-const ENVIRONMENTS = new Set<DocsEnvironment>(['dev', 'demo', 'prod'])
+const ENVIRONMENTS = new Set<DocsEnvironment>(['demo', 'prod'])
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
