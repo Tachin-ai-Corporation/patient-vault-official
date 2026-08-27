@@ -34,6 +34,7 @@ import {
   type ContactDraft,
   type AddressDraft,
 } from '@/components/patients/related-record-modal'
+import type { CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { DeceasedModal } from '@/components/patients/deceased-modal'
 import type { DeceasedInput } from '@/lib/api/patient'
 
@@ -203,7 +204,7 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
   }
 
   // ---- Add / edit contact / address (POST or PATCH sub-resource) ------------
-  async function handleSaveRelated(value: RelatedValue) {
+  async function handleSaveRelated(value: RelatedValue, customFields?: CreateCustomFieldsHandle | null) {
     if (!patient || !related) return
     const editId = relatedEditId
     setBusy(true)
@@ -219,7 +220,9 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         if (editId) {
           await updatePatientContact(patient.id, editId, input)
         } else {
-          await addPatientContact(patient.id, input)
+          customFields?.validate()
+          const created = await addPatientContact(patient.id, input)
+          await customFields?.save(created.id)
         }
       } else {
         const a = value as AddressDraft
@@ -236,7 +239,9 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
         if (editId) {
           await updatePatientAddress(patient.id, editId, input)
         } else {
-          await addPatientAddress(patient.id, input)
+          customFields?.validate()
+          const created = await addPatientAddress(patient.id, input)
+          await customFields?.save(created.id)
         }
       }
       await mutate()

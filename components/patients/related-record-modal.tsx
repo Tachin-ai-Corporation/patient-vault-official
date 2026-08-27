@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
-import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
+import { CreateRecordCustomFields, PatientCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
@@ -60,7 +60,7 @@ type RelatedRecordModalProps = {
   onClose: () => void
   // May be async; the modal only closes once it resolves without throwing, so a
   // server-side rejection keeps the dialog open with the user's input intact.
-  onSave: (value: RelatedValue) => void | Promise<void>
+  onSave: (value: RelatedValue, customFields?: CreateCustomFieldsHandle | null) => void | Promise<void>
   // When provided, the modal opens in edit mode: fields are pre-filled with the
   // existing record and the submit action reads as "Save" instead of "Add".
   initial?: RelatedValue | null
@@ -84,6 +84,7 @@ export function RelatedRecordModal({
   // Server-side rejection (e.g. the API refusing to un-set the only primary
   // address). Shown inline inside the dialog since the dialog stays open.
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const createCustomFieldsRef = useRef<CreateCustomFieldsHandle>(null)
 
   useEffect(() => {
     if (!open) return
@@ -117,7 +118,8 @@ export function RelatedRecordModal({
 
     setSubmitError(null)
     try {
-      await onSave(kind === 'contact' ? contact : address)
+      if (!isEdit) createCustomFieldsRef.current?.validate()
+      await onSave(kind === 'contact' ? contact : address, isEdit ? null : createCustomFieldsRef.current)
       onClose()
     } catch (e) {
       // Surface the server rejection inline and keep the modal open so the user
@@ -300,6 +302,13 @@ export function RelatedRecordModal({
             </Select>
           </Field>
         </div>
+      )}
+      {!isEdit && (
+        <CreateRecordCustomFields
+          ref={createCustomFieldsRef}
+          sectionKey={kind === 'contact' ? 'contacts' : 'addresses'}
+          patientId={patientId}
+        />
       )}
       {isEdit && instanceId != null && (
         <PatientCustomFields

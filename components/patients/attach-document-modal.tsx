@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { CreateRecordCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { UploadCloud, Loader2, X, Plus, Check } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
@@ -70,6 +71,7 @@ export function AttachDocumentModal({
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const customFieldsRef = useRef<CreateCustomFieldsHandle>(null)
   const rowId = useRef(0)
 
   // Reset all state whenever the modal (re)opens.
@@ -129,6 +131,7 @@ export function AttachDocumentModal({
     setSubmitting(true)
     setSubmitError(null)
     try {
+      customFieldsRef.current?.validate()
       const data = await fileToBase64(file)
 
       // Collect filled metadata rows into an object; omit entirely when none.
@@ -146,6 +149,7 @@ export function AttachDocumentModal({
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       })
 
+      await customFieldsRef.current?.save(doc.documentId)
       onAttached(doc)
       onClose()
     } catch (e) {
@@ -341,6 +345,8 @@ export function AttachDocumentModal({
             </div>
           )}
         </div>
+
+        <CreateRecordCustomFields ref={customFieldsRef} sectionKey="files" patientId={patientId} disabled={submitting} />
 
         {submitError && (
           <p

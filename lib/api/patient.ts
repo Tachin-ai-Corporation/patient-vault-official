@@ -595,13 +595,13 @@ export async function listAliases(patientId: string): Promise<PatientAlias[]> {
 }
 
 export interface PatientAliasInput {
-  alias?: string
-  firstName?: string
-  lastName?: string
-  fullName?: string
+  alias?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  fullName?: string | null
   type: 'maiden' | 'nickname' | 'preferred' | 'previous' | 'legal_change' | 'alias'
-  effectiveFrom?: string
-  effectiveTo?: string
+  effectiveFrom?: string | null
+  effectiveTo?: string | null
 }
 
 function aliasPath(patientId: string, aliasId?: string) {

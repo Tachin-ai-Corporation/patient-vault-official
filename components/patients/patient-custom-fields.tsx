@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { forwardRef, useImperativeHandle, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { Braces, Info, Pencil, Plus } from 'lucide-react'
@@ -112,6 +112,110 @@ const inputTypeFor = (type: CustomFieldType) =>
   type === 'DATE' ? 'date' : type === 'TIMESTAMP' ? 'datetime-local' : type === 'INTEGER' || type === 'DECIMAL' ? 'number' : 'text'
 
 type ResolvedField = CustomFieldDefinition['fields'][number]
+
+export type CreateCustomFieldsHandle = {
+  validate: () => void
+  save: (instanceId: string | number) => Promise<void>
+  hasValues: () => boolean
+}
+
+/**
+ * Controlled custom-value inputs for a record that has not been created yet.
+ * The parent creates the BO record first, then calls `save` with its returned id.
+ */
+export const CreateRecordCustomFields = forwardRef<CreateCustomFieldsHandle, {
+  sectionKey: string
+  patientId: string
+  disabled?: boolean
+}>(function CreateRecordCustomFields({ sectionKey, patientId, disabled = false }, ref) {
+  const { currentEnv } = useSession()
+  const [rawValues, setRawValues] = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const section = CUSTOM_FIELD_SECTIONS.find((item) => item.key === sectionKey)
+  const userId = consoleApplicationUserId(currentEnv)
+  const appKey = userId ? (['console-application', currentEnv, userId] as const) : null
+  const { data: appData } = useSWR(appKey, () => getConsoleApplication(currentEnv), { revalidateOnFocus: false })
+  const app = appData?.application
+  const definitionsKey = app && section ? customFieldDefinitionsKey(currentEnv, app.id, section.boClass) : null
+  const { data: definitions = [] } = useSWR(
+    definitionsKey,
+    () => listCustomFieldDefinitions(app!.id, section!.boClass),
+    { revalidateOnFocus: false },
+  )
+  const fields: ResolvedField[] = section
+    ? definitions.flatMap((definition) => definition.fields.filter(
+        (field) => Boolean(field.fieldKey) && resolveCustomFieldSectionForField(definition, field, section.boClass)?.key === section.key,
+      ))
+    : []
+
+  function parsedValues() {
+    const nextErrors: Record<string, string> = {}
+    const payload: Record<string, unknown> = {}
+    for (const field of fields) {
+      const raw = rawValues[field.fieldKey] ?? ''
+      if (!raw.trim()) continue
+      try {
+        payload[field.fieldKey] = parseValue(raw, field.fieldType)
+      } catch (cause) {
+        nextErrors[field.fieldKey] = cause instanceof Error ? cause.message : 'The value is invalid.'
+      }
+    }
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length) throw new Error('Review the custom field values and try again.')
+    return payload
+  }
+
+  useImperativeHandle(ref, () => ({
+    hasValues: () => Object.values(rawValues).some((value) => value.trim() !== ''),
+    validate: () => { parsedValues() },
+    save: async (instanceId) => {
+      const payload = parsedValues()
+      if (!Object.keys(payload).length) return
+      const target = Number(instanceId)
+      if (!app || !Number.isFinite(target) || target <= 0) {
+        throw new Error('The record was created, but its custom values could not be saved because 1health did not return a usable record ID. Edit the new record to assign them.')
+      }
+      await updateInstanceCustomData(app.id, target, payload)
+    },
+  }), [app, fields, rawValues])
+
+  if (!app || !section || fields.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-3 border-t pt-4">
+      <div className="flex items-center gap-2">
+        <Braces className="size-4 text-muted-foreground" aria-hidden="true" />
+        <h4 className="text-sm font-medium text-foreground">Custom fields</h4>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {fields.map((field) => (
+          <Field key={field.id} label={`${customFieldDisplayName(field)} (${field.fieldType.toLowerCase()})`} htmlFor={`create-${sectionKey}-${field.fieldKey}`} error={errors[field.fieldKey]}>
+            {field.fieldType === 'JSON' ? (
+              <Textarea
+                id={`create-${sectionKey}-${field.fieldKey}`}
+                rows={3}
+                disabled={disabled}
+                value={rawValues[field.fieldKey] ?? ''}
+                onChange={(event) => setRawValues((current) => ({ ...current, [field.fieldKey]: event.target.value }))}
+                placeholder={'{"key":"value"}'}
+              />
+            ) : (
+              <TextInput
+                id={`create-${sectionKey}-${field.fieldKey}`}
+                type={inputTypeFor(field.fieldType)}
+                step={field.fieldType === 'DECIMAL' ? 'any' : undefined}
+                disabled={disabled}
+                invalid={Boolean(errors[field.fieldKey])}
+                value={rawValues[field.fieldKey] ?? ''}
+                onChange={(event) => setRawValues((current) => ({ ...current, [field.fieldKey]: event.target.value }))}
+              />
+            )}
+          </Field>
+        ))}
+      </div>
+    </div>
+  )
+})
 
 /**
  * Custom-field controls for one patient-record section. Values are bound to the
