@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import useSWR from 'swr'
 import { Eye, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
+import { CreateRecordCustomFields, PatientCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
@@ -40,6 +40,7 @@ export function AliasesSection({ patientId }: { patientId: string }) {
   const [pendingDelete, setPendingDelete] = useState<PatientAlias | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const createCustomFieldsRef = useRef<CreateCustomFieldsHandle>(null)
   const aliases = data ?? []
 
   function openAdd() {
@@ -85,8 +86,13 @@ export function AliasesSection({ patientId }: { patientId: string }) {
     setActionError(null)
     try {
       const body = clean(draft)
-      if (editing) await replaceAlias(patientId, String(editing.id), body)
-      else await addAlias(patientId, body)
+      if (editing) {
+        await replaceAlias(patientId, String(editing.id), body)
+      } else {
+        createCustomFieldsRef.current?.validate()
+        const created = await addAlias(patientId, body)
+        await createCustomFieldsRef.current?.save(created.id)
+      }
       setEditorOpen(false)
       await mutate()
     } catch (cause) { setActionError((cause as Error).message) } finally { setBusy(false) }
@@ -133,6 +139,9 @@ export function AliasesSection({ patientId }: { patientId: string }) {
         <Field label="Effective from" htmlFor="alias-from"><TextInput id="alias-from" type="date" value={draft.effectiveFrom ?? ''} onChange={(event) => setDraft({ ...draft, effectiveFrom: event.target.value })} /></Field>
         <Field label="Effective to" htmlFor="alias-to"><TextInput id="alias-to" type="date" value={draft.effectiveTo ?? ''} onChange={(event) => setDraft({ ...draft, effectiveTo: event.target.value })} /></Field>
       </div>
+      {!editing && (
+        <CreateRecordCustomFields ref={createCustomFieldsRef} sectionKey="aliases" patientId={patientId} disabled={busy} />
+      )}
       {editing && (
         <PatientCustomFields
           sectionKey="aliases"

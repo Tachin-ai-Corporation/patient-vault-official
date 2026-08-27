@@ -113,14 +113,14 @@ type SessionContextValue = {
   createPatientRecord: (input: Parameters<typeof createPatient>[0]) => Promise<Patient>
   updatePatient: (id: string, patch: Partial<Patient>) => Promise<void>
   deletePatient: (id: string) => Promise<void>
-  addPatientContact: (id: string, input: Parameters<typeof addContact>[1]) => Promise<void>
+  addPatientContact: (id: string, input: Parameters<typeof addContact>[1]) => ReturnType<typeof addContact>
   updatePatientContact: (
     id: string,
     contactId: string,
     input: Parameters<typeof updateContact>[2],
   ) => Promise<void>
   deletePatientContact: (id: string, contactId: string) => Promise<void>
-  addPatientAddress: (id: string, input: Parameters<typeof addAddress>[1]) => Promise<void>
+  addPatientAddress: (id: string, input: Parameters<typeof addAddress>[1]) => ReturnType<typeof addAddress>
   updatePatientAddress: (
     id: string,
     addressId: string,
@@ -413,9 +413,9 @@ function ResolvedSessionProvider({
   )
 
   const addPatientContact = useCallback(
-    async (id: string, input: Parameters<typeof addContact>[1]) => {
-      await addContact(id, input)
-    },
+  async (id: string, input: Parameters<typeof addContact>[1]) => {
+  return addContact(id, input)
+  },
     [],
   )
 
@@ -438,9 +438,9 @@ function ResolvedSessionProvider({
   )
 
   const addPatientAddress = useCallback(
-    async (id: string, input: Parameters<typeof addAddress>[1]) => {
-      await addAddress(id, input)
-    },
+  async (id: string, input: Parameters<typeof addAddress>[1]) => {
+  return addAddress(id, input)
+  },
     [],
   )
 

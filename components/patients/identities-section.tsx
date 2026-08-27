@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import useSWR from 'swr'
 import { CheckCircle2, Eye, Loader2, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
-import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
+import { CreateRecordCustomFields, PatientCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, TextInput } from '@/components/ui/field'
@@ -63,6 +63,7 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
   const [editorError, setEditorError] = useState<string | null>(null)
   const [editorErrorField, setEditorErrorField] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const createCustomFieldsRef = useRef<CreateCustomFieldsHandle>(null)
 
   const identifiers = data ?? []
   const summary = isLoading
@@ -176,7 +177,13 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
         const keys = authorityKeys(editing)
         await patchIdentifier(patientId, keys.organizationId, keys.externalSystemId, validation.body)
       } else {
-        await addIdentifier(patientId, validation.body)
+        createCustomFieldsRef.current?.validate()
+        const created = await addIdentifier(patientId, validation.body)
+        const instanceId = identifierInstanceId(created)
+        if (createCustomFieldsRef.current?.hasValues() && instanceId == null) {
+          throw new Error('The identity was created, but its custom values could not be saved because 1health did not return a record instance ID. Edit the new identity to assign them.')
+        }
+        if (instanceId != null) await createCustomFieldsRef.current?.save(instanceId)
       }
 
       const success = editing ? 'External identity updated.' : 'External identity added.'
@@ -385,6 +392,9 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
             <div id="identity-editor-error" role="alert" aria-live="assertive" className="rounded-input border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {editorError}
             </div>
+          )}
+          {!editing && (
+            <CreateRecordCustomFields ref={createCustomFieldsRef} sectionKey="external-identities" patientId={patientId} disabled={busy} />
           )}
           {editing && identifierInstanceId(editing) != null ? (
             <PatientCustomFields
