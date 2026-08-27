@@ -1,6 +1,7 @@
 'use client'
 
-import { apiRequest } from '@/lib/api/client'
+import { ApiError, apiRequest } from '@/lib/api/client'
+import { isCustomDataCapabilityMissing } from '@/lib/custom-field-capability'
 import type { BoClassName } from '@/lib/custom-field-sections'
 import { normalizeCustomFieldDefinitions } from '@/lib/custom-field-resolution'
 
@@ -22,8 +23,22 @@ export interface AvailableCustomDataType {
   name: string
 }
 
-export function getAvailableCustomDataTypes() {
-  return apiRequest<AvailableCustomDataType[]>('/v3/custom-data/available-types')
+export const CUSTOM_DATA_NOT_DEPLOYED_MESSAGE =
+  'Custom fields are not deployed in this environment yet. Your export JSON is valid and can be imported after the custom-data API is deployed.'
+
+export function classifyAvailableTypesError(cause: unknown): unknown {
+  if (cause instanceof ApiError && isCustomDataCapabilityMissing(cause.status)) {
+    return new ApiError(CUSTOM_DATA_NOT_DEPLOYED_MESSAGE, 404, true)
+  }
+  return cause
+}
+
+export async function getAvailableCustomDataTypes() {
+  try {
+    return await apiRequest<AvailableCustomDataType[]>('/v3/custom-data/available-types')
+  } catch (cause) {
+    throw classifyAvailableTypesError(cause)
+  }
 }
 
 export function resolveCustomDataType(types: AvailableCustomDataType[], typeKey: BoClassName) {
