@@ -217,10 +217,11 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
           label: c.label || undefined,
           isPrimary: c.isPrimary,
         }
+        customFields?.validate()
         if (editId) {
           await updatePatientContact(patient.id, editId, input)
+          await customFields?.save()
         } else {
-          customFields?.validate()
           const created = await addPatientContact(patient.id, input)
           await customFields?.save(created.id)
         }
@@ -236,10 +237,11 @@ export function PatientRecordView({ patientId }: { patientId: string }) {
           use: a.use,
           primary: a.primary,
         }
+        customFields?.validate()
         if (editId) {
           await updatePatientAddress(patient.id, editId, input)
+          await customFields?.save()
         } else {
-          customFields?.validate()
           const created = await addPatientAddress(patient.id, input)
           await customFields?.save(created.id)
         }
