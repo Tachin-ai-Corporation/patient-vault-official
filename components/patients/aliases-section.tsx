@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import useSWR from 'swr'
 import { Eye, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { CreateRecordCustomFields, PatientCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
+import { CreateRecordCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
@@ -31,6 +31,12 @@ function cleanText(value?: string | null) {
 function cleanDate(value?: string | null) {
   if (!value || value.startsWith('1970-01-01')) return ''
   return value.slice(0, 10)
+}
+
+function editableEffectiveFrom(value?: string | null) {
+  const normalized = cleanDate(value)
+  const apiDefaultToday = new Date().toISOString().slice(0, 10)
+  return normalized === apiDefaultToday ? '' : normalized
 }
 
 function displayName(item: PatientAlias) {
@@ -81,7 +87,7 @@ export function AliasesSection({ patientId }: { patientId: string }) {
       setDraft({
         type: TYPES.includes(fresh.type as PatientAliasInput['type']) ? fresh.type as PatientAliasInput['type'] : 'alias',
         alias: cleanText(fresh.alias), firstName: cleanText(fresh.firstName), lastName: cleanText(fresh.lastName),
-        fullName: cleanText(fresh.fullName), effectiveFrom: cleanDate(fresh.effectiveFrom), effectiveTo: cleanDate(fresh.effectiveTo),
+        fullName: cleanText(fresh.fullName), effectiveFrom: editableEffectiveFrom(fresh.effectiveFrom), effectiveTo: cleanDate(fresh.effectiveTo),
       })
       setEditorError(null)
       setEditorOpen(true)
@@ -110,10 +116,11 @@ export function AliasesSection({ patientId }: { patientId: string }) {
     setEditorError(null)
     try {
       const body = clean(draft)
+      createCustomFieldsRef.current?.validate()
       if (editing) {
         await replaceAlias(patientId, String(editing.id), body)
+        await createCustomFieldsRef.current?.save()
       } else {
-        createCustomFieldsRef.current?.validate()
         const created = await addAlias(patientId, body)
         await createCustomFieldsRef.current?.save(created.id)
       }
@@ -148,7 +155,7 @@ export function AliasesSection({ patientId }: { patientId: string }) {
         : error ? <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{(error as Error).message}</p><Button variant="outline" size="sm" onClick={() => mutate()}><RefreshCw className="h-3.5 w-3.5" />Retry</Button></div>
         : aliases.length === 0 ? <div className="rounded-input border border-dashed border-border px-4 py-8 text-center"><p className="text-sm font-medium text-foreground">No aliases on file</p><p className="mt-1 text-sm text-muted-foreground">Add a nickname, maiden name, preferred name, or previous legal name.</p></div>
         : <div className="divide-y divide-border">{aliases.map((item) => <article key={item.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium text-foreground">{displayName(item)}</span><span className="rounded-tag bg-muted px-2 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">{item.type || 'alias'}</span></div>{cleanText(item.alias) && cleanText(item.alias) !== displayName(item) && <p className="mt-1 text-xs text-muted-foreground">Alias: {cleanText(item.alias)}</p>}<p className="mt-1 text-xs text-muted-foreground">Effective from: {cleanDate(item.effectiveFrom) || '—'} · Effective to: {cleanDate(item.effectiveTo) || '—'}</p></div>
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium text-foreground">{displayName(item)}</span><span className="rounded-tag bg-muted px-2 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">{item.type || 'alias'}</span></div>{cleanText(item.alias) && cleanText(item.alias) !== displayName(item) && <p className="mt-1 text-xs text-muted-foreground">Alias: {cleanText(item.alias)}</p>}<p className="mt-1 text-xs text-muted-foreground">Effective from: {editableEffectiveFrom(item.effectiveFrom) || '—'} · Effective to: {cleanDate(item.effectiveTo) || '—'}</p></div>
           <div className="flex shrink-0 items-center gap-1"><Button variant="ghost" size="icon-sm" onClick={() => view(item)} disabled={busy} aria-label={`View ${displayName(item)}`}><Eye className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon-sm" onClick={() => openEdit(item)} disabled={busy} aria-label={`Edit ${displayName(item)}`}><Pencil className="h-3.5 w-3.5" /></Button>{!cleanDate(item.effectiveTo) && <Button variant="ghost" size="sm" onClick={() => endToday(item)} disabled={busy}>End today</Button>}<Button variant="ghost" size="icon-sm" onClick={() => setPendingDelete(item)} disabled={busy} aria-label={`Deactivate ${displayName(item)}`} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></div>
         </article>)}</div>}
     </RecordSectionCard>
@@ -164,20 +171,17 @@ export function AliasesSection({ patientId }: { patientId: string }) {
         <Field label="Effective from" htmlFor="alias-from"><TextInput id="alias-from" type="date" value={draft.effectiveFrom ?? ''} onChange={(event) => setDraft({ ...draft, effectiveFrom: event.target.value })} /></Field>
         <Field label="Effective to" htmlFor="alias-to"><TextInput id="alias-to" type="date" value={draft.effectiveTo ?? ''} onChange={(event) => setDraft({ ...draft, effectiveTo: event.target.value })} /></Field>
       </div>
-      {!editing && (
-        <CreateRecordCustomFields ref={createCustomFieldsRef} sectionKey="aliases" patientId={patientId} disabled={busy} />
-      )}
-      {editing && (
-        <PatientCustomFields
-          sectionKey="aliases"
-          patientId={patientId}
-          instanceId={editing.id}
-          allowDefinitionCreation={false}
-        />
-      )}
+      <CreateRecordCustomFields
+        key={editing ? `alias-${editing.id}` : 'alias-new'}
+        ref={createCustomFieldsRef}
+        sectionKey="aliases"
+        patientId={patientId}
+        instanceId={editing?.id}
+        disabled={busy}
+      />
     </Modal>
 
-    <Modal open={detail != null} onClose={() => setDetail(null)} title="Alias details" description="Fresh response from the alias item GET endpoint.">{detail && <dl className="divide-y divide-border">{[['Name', displayName(detail)], ['Alias', cleanText(detail.alias)], ['Type', detail.type], ['Effective from', cleanDate(detail.effectiveFrom)], ['Effective to', cleanDate(detail.effectiveTo)], ['Alias ID', detail.id]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-4 py-2"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-right font-mono text-sm text-foreground">{value || '—'}</dd></div>)}</dl>}</Modal>
+    <Modal open={detail != null} onClose={() => setDetail(null)} title="Alias details" description="Fresh response from the alias item GET endpoint.">{detail && <dl className="divide-y divide-border">{[['Name', displayName(detail)], ['Alias', cleanText(detail.alias)], ['Type', detail.type], ['Effective from', editableEffectiveFrom(detail.effectiveFrom)], ['Effective to', cleanDate(detail.effectiveTo)], ['Alias ID', detail.id]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-4 py-2"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-right font-mono text-sm text-foreground">{value || '—'}</dd></div>)}</dl>}</Modal>
     <Modal open={pendingDelete != null} onClose={() => setPendingDelete(null)} title="Deactivate alias" description="DELETE soft-deletes this alias while preserving its audit history." footer={<><Button variant="ghost" onClick={() => setPendingDelete(null)}>Cancel</Button><Button onClick={confirmDelete} disabled={busy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{busy ? 'Deactivating…' : 'Deactivate alias'}</Button></>}><p className="text-sm text-foreground">{pendingDelete ? displayName(pendingDelete) : ''}</p></Modal>
   </>
 }

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import useSWR from 'swr'
 import { CheckCircle2, Eye, Loader2, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
-import { CreateRecordCustomFields, PatientCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
+import { CreateRecordCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { Button } from '@/components/ui/button'
 import { Field, TextInput } from '@/components/ui/field'
@@ -173,11 +173,12 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
     setEditorErrorField(null)
     setActionError(null)
     try {
+      createCustomFieldsRef.current?.validate()
       if (editing) {
         const keys = authorityKeys(editing)
         await patchIdentifier(patientId, keys.organizationId, keys.externalSystemId, validation.body)
+        await createCustomFieldsRef.current?.save()
       } else {
-        createCustomFieldsRef.current?.validate()
         const created = await addIdentifier(patientId, validation.body)
         const instanceId = identifierInstanceId(created)
         if (createCustomFieldsRef.current?.hasValues() && instanceId == null) {
@@ -393,17 +394,17 @@ export function IdentitiesSection({ patientId }: { patientId: string }) {
               {editorError}
             </div>
           )}
-          {!editing && (
-            <CreateRecordCustomFields ref={createCustomFieldsRef} sectionKey="external-identities" patientId={patientId} disabled={busy} />
-          )}
-          {editing && identifierInstanceId(editing) != null ? (
-            <PatientCustomFields
+          {(!editing || identifierInstanceId(editing) != null) && (
+            <CreateRecordCustomFields
+              key={editing ? `identity-${identifierInstanceId(editing)}` : 'identity-new'}
+              ref={createCustomFieldsRef}
               sectionKey="external-identities"
               patientId={patientId}
-              instanceId={identifierInstanceId(editing)!}
-              allowDefinitionCreation={false}
+              instanceId={editing ? identifierInstanceId(editing)! : undefined}
+              disabled={busy}
             />
-          ) : editing ? (
+          )}
+          {editing && identifierInstanceId(editing) == null ? (
             <div className="rounded-input border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
               Custom field values are unavailable because this identity response did not include its record instance ID.
             </div>

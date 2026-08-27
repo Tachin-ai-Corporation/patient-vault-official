@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import {
   MoreVertical,
@@ -36,7 +36,7 @@ import {
 import { RecordSectionCard } from '@/components/patients/record-section-card'
 import { AttachDocumentModal } from '@/components/patients/attach-document-modal'
 import { AttachApiSurface } from '@/components/patients/attach-api-surface'
-import { PatientCustomFields } from '@/components/patients/patient-custom-fields'
+import { CreateRecordCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import {
   listDocuments,
   getDocument,
@@ -130,6 +130,9 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
   const [detail, setDetail] = useState<DocumentDTO | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [customFieldMessage, setCustomFieldMessage] = useState<string | null>(null)
+  const [savingCustomFields, setSavingCustomFields] = useState(false)
+  const customFieldsRef = useRef<CreateCustomFieldsHandle>(null)
 
   // Delete confirmation state.
   const [pendingDelete, setPendingDelete] = useState<DocumentDTO | null>(null)
@@ -171,6 +174,20 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
     },
     [patientId],
   )
+
+  async function saveDocumentCustomFields() {
+    setSavingCustomFields(true)
+    setCustomFieldMessage(null)
+    try {
+      customFieldsRef.current?.validate()
+      await customFieldsRef.current?.save()
+      setCustomFieldMessage('Custom fields saved.')
+    } catch (error) {
+      setCustomFieldMessage((error as Error).message || 'Unable to save custom fields.')
+    } finally {
+      setSavingCustomFields(false)
+    }
+  }
 
   // ---- Download: ALWAYS fetch a fresh downloadUrl (they expire in 15 min) --
   const download = useCallback(
@@ -484,12 +501,22 @@ export function DocumentsSection({ patientId }: { patientId: string }) {
 
                 {/* Custom fields are bound to this document's File instance,
                     not the patient — values belong to the individual record. */}
-                <PatientCustomFields
+                <CreateRecordCustomFields
+                  key={`document-${detail.documentId}`}
+                  ref={customFieldsRef}
                   sectionKey="documents"
                   patientId={patientId}
                   instanceId={detail.documentId}
-                  allowDefinitionCreation={false}
+                  disabled={savingCustomFields}
                 />
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={() => void saveDocumentCustomFields()} disabled={savingCustomFields}>
+                    {savingCustomFields ? 'Saving…' : 'Save custom fields'}
+                  </Button>
+                  {customFieldMessage && (
+                    <p className="text-sm text-muted-foreground" role="status">{customFieldMessage}</p>
+                  )}
+                </div>
               </>
             )}
           </div>

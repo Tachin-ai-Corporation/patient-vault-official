@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useImperativeHandle, useState, type FormEvent } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { Braces, Info, Pencil, Plus } from 'lucide-react'
@@ -115,7 +115,7 @@ type ResolvedField = CustomFieldDefinition['fields'][number]
 
 export type CreateCustomFieldsHandle = {
   validate: () => void
-  save: (instanceId: string | number) => Promise<void>
+  save: (instanceId?: string | number) => Promise<void>
   hasValues: () => boolean
 }
 
@@ -126,8 +126,9 @@ export type CreateCustomFieldsHandle = {
 export const CreateRecordCustomFields = forwardRef<CreateCustomFieldsHandle, {
   sectionKey: string
   patientId: string
+  instanceId?: string | number
   disabled?: boolean
-}>(function CreateRecordCustomFields({ sectionKey, patientId, disabled = false }, ref) {
+}>(function CreateRecordCustomFields({ sectionKey, patientId, instanceId, disabled = false }, ref) {
   const { currentEnv } = useSession()
   const [rawValues, setRawValues] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -142,18 +143,41 @@ export const CreateRecordCustomFields = forwardRef<CreateCustomFieldsHandle, {
     () => listCustomFieldDefinitions(app!.id, section!.boClass),
     { revalidateOnFocus: false },
   )
+  const targetInstance = Number(instanceId)
+  const valuesKey = app && section && Number.isFinite(targetInstance) && targetInstance > 0
+    ? customFieldValuesKey(currentEnv, app.id, section.boClass, targetInstance)
+    : null
+  const { data: existingValues, mutate: mutateExistingValues } = useSWR(
+    valuesKey,
+    () => getInstanceCustomData(app!.id, targetInstance),
+    { revalidateOnFocus: false },
+  )
   const fields: ResolvedField[] = section
     ? definitions.flatMap((definition) => definition.fields.filter(
         (field) => Boolean(field.fieldKey) && resolveCustomFieldSectionForField(definition, field, section.boClass)?.key === section.key,
       ))
     : []
 
+  const fieldSignature = fields.map((field) => `${field.fieldKey}:${field.fieldType}`).join('|')
+
+  useEffect(() => {
+    if (instanceId == null || existingValues == null) return
+    setRawValues(Object.fromEntries(fields.map((field) => [
+      field.fieldKey,
+      toInputValue(existingValues[field.fieldKey], field.fieldType),
+    ])))
+    setErrors({})
+  }, [existingValues, instanceId, definitionsKey, fieldSignature])
+
   function parsedValues() {
     const nextErrors: Record<string, string> = {}
     const payload: Record<string, unknown> = {}
     for (const field of fields) {
       const raw = rawValues[field.fieldKey] ?? ''
-      if (!raw.trim()) continue
+      if (!raw.trim()) {
+        if (instanceId != null) payload[field.fieldKey] = null
+        continue
+      }
       try {
         payload[field.fieldKey] = parseValue(raw, field.fieldType)
       } catch (cause) {
@@ -168,16 +192,17 @@ export const CreateRecordCustomFields = forwardRef<CreateCustomFieldsHandle, {
   useImperativeHandle(ref, () => ({
     hasValues: () => Object.values(rawValues).some((value) => value.trim() !== ''),
     validate: () => { parsedValues() },
-    save: async (instanceId) => {
+    save: async (saveInstanceId) => {
       const payload = parsedValues()
       if (!Object.keys(payload).length) return
-      const target = Number(instanceId)
+      const target = Number(saveInstanceId ?? instanceId)
       if (!app || !Number.isFinite(target) || target <= 0) {
         throw new Error('The record was created, but its custom values could not be saved because 1health did not return a usable record ID. Edit the new record to assign them.')
       }
-      await updateInstanceCustomData(app.id, target, payload)
+      const next = await updateInstanceCustomData(app.id, target, payload)
+      if (instanceId != null) await mutateExistingValues(next, false)
     },
-  }), [app, fields, rawValues])
+  }), [app, fields, rawValues, instanceId, mutateExistingValues])
 
   if (!app || !section || fields.length === 0) return null
 

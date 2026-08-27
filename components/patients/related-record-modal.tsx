@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
-import { CreateRecordCustomFields, PatientCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
+import { CreateRecordCustomFields, type CreateCustomFieldsHandle } from '@/components/patients/patient-custom-fields'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Field, Select, TextInput } from '@/components/ui/field'
@@ -118,8 +118,8 @@ export function RelatedRecordModal({
 
     setSubmitError(null)
     try {
-      if (!isEdit) createCustomFieldsRef.current?.validate()
-      await onSave(kind === 'contact' ? contact : address, isEdit ? null : createCustomFieldsRef.current)
+      createCustomFieldsRef.current?.validate()
+      await onSave(kind === 'contact' ? contact : address, createCustomFieldsRef.current)
       onClose()
     } catch (e) {
       // Surface the server rejection inline and keep the modal open so the user
@@ -303,21 +303,13 @@ export function RelatedRecordModal({
           </Field>
         </div>
       )}
-      {!isEdit && (
-        <CreateRecordCustomFields
-          ref={createCustomFieldsRef}
-          sectionKey={kind === 'contact' ? 'contacts' : 'addresses'}
-          patientId={patientId}
-        />
-      )}
-      {isEdit && instanceId != null && (
-        <PatientCustomFields
-          sectionKey={kind === 'contact' ? 'contacts' : 'addresses'}
-          patientId={patientId}
-          instanceId={instanceId}
-          allowDefinitionCreation={false}
-        />
-      )}
+      <CreateRecordCustomFields
+        key={isEdit ? `${kind}-${instanceId}` : `${kind}-new`}
+        ref={createCustomFieldsRef}
+        sectionKey={kind === 'contact' ? 'contacts' : 'addresses'}
+        patientId={patientId}
+        instanceId={isEdit ? instanceId ?? undefined : undefined}
+      />
     </Modal>
   )
 }
