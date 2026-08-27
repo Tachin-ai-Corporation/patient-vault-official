@@ -23,6 +23,7 @@ const GROUP_BY_TITLE: Record<string, DocGroup> = {
   Find: 'Find',
   'Health Grid / Patient': 'Platform',
   'User / Myself': 'Platform',
+  'Custom Fields': 'Platform',
 }
 
 export function isDocGroup(value: unknown): value is DocGroup {
