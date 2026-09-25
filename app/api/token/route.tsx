@@ -1,6 +1,6 @@
 // app/api/token/route.ts
 import { NextResponse } from "next/server"
-import { createDecipheriv, createHmac } from "crypto"
+import { createDecipheriv, createHash, createHmac } from "crypto"
 import { cookies } from "next/headers"
 import { markProductionRegistered } from "@/lib/production-registration"
 
@@ -109,6 +109,15 @@ function deriveKey(value: string): Buffer {
 }
 
 /**
+ * Non-reversible identifier for a secret, safe to log. Lets an engineer confirm
+ * which key the app holds by comparing against the same hash of the platform's
+ * secret, without ever exposing the secret itself.
+ */
+function keyFingerprint(secret: string): string {
+  return createHash("sha256").update(secret, "utf8").digest("hex").slice(0, 12)
+}
+
+/**
  * AES-256-GCM decrypt helper
  */
 function decryptAesGcm({
@@ -208,28 +217,53 @@ export async function POST(req: Request) {
     let baseUrl = ""
     let decryptedString = ""
 
-    for (const candidate of ["prod", "demo"] as const) {
+    const attempts: { environment: Environment; configured: boolean; fingerprint?: string }[] = []
+
+    candidateLoop: for (const candidate of ["prod", "demo"] as const) {
       const config = getEnvConfig(candidate)
-      if (!config.secretKey) continue
-      try {
-        decryptedString = decryptAesGcm({
-          iv,
-          tag,
-          encryptedData,
-          key: deriveKey(config.secretKey),
-        })
-        environment = candidate
-        secretKey = config.secretKey
-        baseUrl = config.baseUrl
-        break
-      } catch {
-        // Try the other environment key.
+      if (!config.secretKey) {
+        attempts.push({ environment: candidate, configured: false })
+        continue
+      }
+      attempts.push({ environment: candidate, configured: true, fingerprint: keyFingerprint(config.secretKey) })
+      // Secrets pasted into env settings often carry a trailing newline or space,
+      // which silently changes the derived AES key.
+      const secretVariants = Array.from(new Set([config.secretKey, config.secretKey.trim()]))
+      for (const variant of secretVariants) {
+        try {
+          decryptedString = decryptAesGcm({
+            iv,
+            tag,
+            encryptedData,
+            key: deriveKey(variant),
+          })
+          environment = candidate
+          secretKey = variant
+          baseUrl = config.baseUrl
+          if (variant !== config.secretKey) {
+            console.warn(`[lpl-auth] ${candidate} secret matched only after trimming whitespace; fix the stored env var.`)
+          }
+          break candidateLoop
+        } catch {
+          // Try the next variant or environment key.
+        }
       }
     }
 
     if (!environment || !secretKey) {
+      const missing = attempts.filter((a) => !a.configured).map((a) => a.environment)
+      console.error("[lpl-auth] LPL decryption failed", {
+        lplBytes: lpl.length,
+        attempts,
+      })
       return NextResponse.json(
-        { error: "Invalid LPL: decryption failed for both production and demo.", retryable: false },
+        {
+          error:
+            missing.length > 0
+              ? `Invalid LPL: decryption failed. Secret key not configured for: ${missing.join(", ")}.`
+              : "Invalid LPL: it was not encrypted with this app's production or demo secret key.",
+          retryable: false,
+        },
         { status: 400 },
       )
     }
