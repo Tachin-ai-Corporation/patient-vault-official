@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { LandingHeader } from '@/components/landing-header'
 import { connectedSessionEnvironment } from '@/lib/session-environments'
 import { Hero } from '@/components/hero'
@@ -99,7 +100,7 @@ const jsonLdArticle = {
 export default async function PatientVaultPage({
   searchParams,
 }: {
-  searchParams: Promise<{ returnTo?: string }>
+  searchParams: Promise<{ returnTo?: string; lpl?: string }>
 }) {
   // Either environment slot is sufficient to enter the console. The client
   // session provider validates expiry and falls back to the other valid slot.
@@ -107,6 +108,17 @@ export default async function PatientVaultPage({
   const initialEnvironment = connectedSessionEnvironment(
     (name) => cookieStore.get(name)?.value ?? null,
   )
+
+  // 1health's registration/login flow redirects back to this root route with a
+  // one-time launch payload (`?lpl=`) rather than to `/auth`. Hand it off to the
+  // /auth route, which decrypts the payload, sets the session cookies, and drops
+  // the developer into the authenticated console. `+` characters in the token
+  // are re-encoded so they survive the redirect instead of decoding to spaces.
+  const lpl = typeof params.lpl === 'string' ? params.lpl.trim() : ''
+  if (!initialEnvironment && lpl) {
+    redirect(`/auth?lpl=${encodeURIComponent(lpl.replace(/ /g, '+'))}`)
+  }
+
   const returnTo = validateLoginIntent(params.returnTo)
   if (!initialEnvironment && returnTo) {
     return <SessionLoginRedirect returnTo={returnTo} />
