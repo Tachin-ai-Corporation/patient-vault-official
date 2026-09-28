@@ -49,8 +49,10 @@ export function resolveBranding(
 export const SANDBOX_BRANDING_ID = '805f90f6-2b22-4e55-8a0c-7c33df804ce5'
 export const PRODUCTION_BRANDING_ID = 'b82f4b43-5657-429e-a7ca-bbf7ccace278'
 
+const PRODUCTION_AUTH_HOSTS = new Set(['app.1health.io', '1health.app.1health.io'])
+
 export function brandingIdForUrl(url: string): string {
-  return new URL(url).hostname === '1health.app.1health.io'
+  return PRODUCTION_AUTH_HOSTS.has(new URL(url).hostname)
     ? PRODUCTION_BRANDING_ID
     : SANDBOX_BRANDING_ID
 }
