@@ -14,7 +14,7 @@ import { PRODUCTION_BRANDING_ID, withAuthParams } from '@/lib/auth-branding'
 import { useSession } from '@/lib/session-context'
 
 function buildRegistrationUrl(mode: 'dark' | 'light'): string {
-  const registrationUrl = new URL('/register', 'https://1health.app.1health.io')
+  const registrationUrl = new URL('/register', 'https://app.1health.io')
   const parameters = new URLSearchParams({
     openApp: 'Patient Vault',
     brandingId: PRODUCTION_BRANDING_ID,
