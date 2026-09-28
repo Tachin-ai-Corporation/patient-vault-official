@@ -82,7 +82,6 @@ export type SessionUser = {
 export type Environment = 'development' | 'production'
 export type ApiEnv = 'staging' | 'production'
 export type ProductionAccountState =
-  | 'not_registered'
   | 'registered_signed_out'
   | 'active_session'
 
@@ -260,20 +259,11 @@ function ResolvedSessionProvider({
     () => ({ demo: hasEnvironmentSession('demo'), prod: hasEnvironmentSession('prod') }),
     [activeEnvironment, sessionVersion],
   )
-  const { data: productionRegistration } = useSWR<{ registered: boolean }>(
-    environmentSessions.demo ? '/api/production-registration' : null,
-    async (url: string) => {
-      const response = await fetch(url)
-      if (!response.ok) throw new Error('Failed to load production registration state')
-      return response.json()
-    },
-    { revalidateOnFocus: false, revalidateOnReconnect: false },
-  )
+  // Registration provisions production and sandbox together, so every
+  // developer has a production account; only the session may be missing.
   const productionAccountState: ProductionAccountState = environmentSessions.prod
     ? 'active_session'
-    : productionRegistration?.registered
-      ? 'registered_signed_out'
-      : 'not_registered'
+    : 'registered_signed_out'
 
   const searchParams = useSearchParams()
   const dcpParam = searchParams.get('dcp')

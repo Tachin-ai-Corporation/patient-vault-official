@@ -130,7 +130,6 @@ export function EnvironmentSelector({ brand = false }: { brand?: boolean }) {
     currentProject,
     currentEnv,
     environmentSessions,
-    productionAccountState,
     setActiveEnvironment,
   } = useSession()
   const [open, setOpen] = useState(false)
@@ -141,9 +140,7 @@ export function EnvironmentSelector({ brand = false }: { brand?: boolean }) {
       theme,
     ),
     production: withAuthParams(
-      productionAccountState === 'not_registered'
-        ? 'https://app.1health.io/register?openApp=Patient+Vault'
-        : 'https://1health.app.1health.io/login?openApp=Patient+Vault',
+      'https://1health.app.1health.io/login?openApp=Patient+Vault',
       theme,
     ),
   }
@@ -200,11 +197,7 @@ export function EnvironmentSelector({ brand = false }: { brand?: boolean }) {
                   selected={selected}
                   available={environmentSessions[id === 'production' ? 'prod' : 'demo']}
                   signInUrl={signInUrls[id]}
-                  actionLabel={
-                    id === 'production' && productionAccountState === 'not_registered'
-                      ? 'Create production account'
-                      : `Sign in to ${environment.name}`
-                  }
+                  actionLabel={`Sign in to ${environment.name}`}
                   onSelect={() => {
                     void setActiveEnvironment(id === 'production' ? 'prod' : 'demo')
                     setOpen(false)

@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowRight, LockKeyhole, ShieldCheck } from 'lucide-react'
+import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -10,75 +10,12 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useTheme } from '@/components/theme-provider'
-import { PRODUCTION_BRANDING_ID, withAuthParams } from '@/lib/auth-branding'
+import { withAuthParams } from '@/lib/auth-branding'
 import { useSession } from '@/lib/session-context'
-
-function buildRegistrationUrl(mode: 'dark' | 'light'): string {
-  const registrationUrl = new URL('/register', 'https://app.1health.io')
-  const parameters = new URLSearchParams({
-    openApp: 'Patient Vault',
-    brandingId: PRODUCTION_BRANDING_ID,
-    mode,
-    rf: 'developer',
-  })
-  registrationUrl.search = parameters.toString()
-  return registrationUrl.toString()
-}
 
 export function GoToProduction() {
   const { theme } = useTheme()
-  const { currentEnv, productionAccountState } = useSession()
-
-  function createProductionAccount() {
-    window.location.assign(buildRegistrationUrl(theme))
-  }
-
-  if (
-    currentEnv === 'staging' &&
-    productionAccountState === 'registered_signed_out'
-  ) {
-    const productionLoginUrl = withAuthParams(
-      'https://1health.app.1health.io/login?openApp=Patient+Vault',
-      theme,
-    )
-
-    return (
-      <section aria-labelledby="production-account-exists-title">
-        <Card className="border-primary/30 bg-primary/5 shadow-none">
-          <CardHeader className="gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <ShieldCheck aria-hidden="true" />
-            </div>
-            <CardTitle
-              id="production-account-exists-title"
-              className="text-xl text-balance"
-            >
-              Your production account is ready
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="max-w-3xl text-sm leading-relaxed text-foreground text-pretty">
-              A production account is already associated with this Sandbox
-              account. Sign in to production to start a separate production
-              session, then use the environment menu to switch between them.
-            </p>
-            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground text-pretty">
-              Sandbox and production data remain completely separate.
-            </p>
-          </CardContent>
-          <CardFooter className="justify-end border-t">
-            <Button
-              type="button"
-              onClick={() => window.location.assign(productionLoginUrl)}
-            >
-              Sign in to production
-              <ArrowRight data-icon="inline-end" aria-hidden="true" />
-            </Button>
-          </CardFooter>
-        </Card>
-      </section>
-    )
-  }
+  const { currentEnv } = useSession()
 
   if (currentEnv === 'production') {
     return (
@@ -106,56 +43,45 @@ export function GoToProduction() {
     )
   }
 
+  const productionLoginUrl = withAuthParams(
+    'https://1health.app.1health.io/login?openApp=Patient+Vault',
+    theme,
+  )
+
   return (
-    <section aria-labelledby="going-to-production-title">
+    <section aria-labelledby="production-account-ready-title">
       <Card className="border-primary/30 bg-primary/5 shadow-none">
         <CardHeader className="gap-3">
           <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <ShieldCheck aria-hidden="true" />
           </div>
           <CardTitle
-            id="going-to-production-title"
+            id="production-account-ready-title"
             className="text-xl text-balance"
           >
-            Going to production
+            Your production account is ready
           </CardTitle>
         </CardHeader>
-
-        <CardContent className="flex flex-col gap-5">
+        <CardContent className="flex flex-col gap-3">
+          <p className="max-w-3xl text-sm leading-relaxed text-foreground text-pretty">
+            Your production account was created alongside this Sandbox account.
+            Sign in to production to start a separate production session, then
+            use the environment menu to switch between them.
+          </p>
           <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground text-pretty">
             Sandbox and production are completely separate systems, firewalled
-            from each other because patient data is regulated. Nothing transfers
-            automatically between them, including records, documents, settings,
-            or other data.
-          </p>
-
-          <div className="flex items-start gap-3 rounded-lg border border-border bg-background p-4">
-            <LockKeyhole
-              className="mt-0.5 size-5 shrink-0 text-primary"
-              aria-hidden="true"
-            />
-            <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-foreground">
-                A separate production account
-              </h3>
-              <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-                Create your production account separately using the same email
-                address. At your first production login, the 1health platform
-                will present the business associate agreement for review and
-                acceptance.
-              </p>
-            </div>
-          </div>
-
-          <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground text-pretty">
-            Patient Vault production availability is opening soon. Production
-            accounts created now will have access as soon as it lands.
+            from each other because patient data is regulated. Nothing
+            transfers automatically between them. At your first production
+            login, the 1health platform will present the business associate
+            agreement for review and acceptance.
           </p>
         </CardContent>
-
         <CardFooter className="justify-end border-t">
-          <Button type="button" onClick={createProductionAccount}>
-            Create production account
+          <Button
+            type="button"
+            onClick={() => window.location.assign(productionLoginUrl)}
+          >
+            Sign in to production
             <ArrowRight data-icon="inline-end" aria-hidden="true" />
           </Button>
         </CardFooter>
