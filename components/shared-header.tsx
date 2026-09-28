@@ -10,7 +10,7 @@ import { useTheme } from '@/components/theme-provider'
 import { withAuthParams } from '@/lib/auth-branding'
 import { cn } from '@/lib/utils'
 
-const REGISTER_BASE = 'https://pv.demo.1health.io/register?openApp=Patient+Vault'
+const REGISTER_BASE = 'https://app.1health.io/register?openApp=Patient+Vault'
 const LOGIN_BASE = 'https://pv.demo.1health.io/login?openApp=Patient+Vault'
 
 function BrandMark() {
