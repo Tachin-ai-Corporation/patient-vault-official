@@ -31,11 +31,12 @@ export function GoToProduction() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm leading-relaxed text-foreground text-pretty">
-              Your production account is active. Patient Vault production access
-              is not yet enabled.
+              Your production account is active and Patient Vault production
+              access is provisioned.
             </p>
             <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-              The API will become available on this account when it ships.
+              Production handles regulated patient data and is fully separate
+              from Sandbox. Use the environment menu to switch between them.
             </p>
           </CardContent>
         </Card>
