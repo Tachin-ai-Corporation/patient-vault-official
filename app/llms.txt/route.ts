@@ -61,10 +61,8 @@ ${endpointLines()}
 - Reads on existing patients always work, even past the free tier.
 
 ## Limits & pricing
-- Sandbox: free. Full API, MCP, docs, and synthetic test data.
-- Production: starting at $2.40 per patient per year, $1 at scale. No seat fee, no platform minimum.
-- First 1,000 production patients free (startups); first 25,000 free (accelerator/incubator programs).
-- 1 GB attached data per patient included.
+- Free: first 1,000 patients, forever, no card.
+- $1 per patient per year after 1,000. 1 GB attached data per patient included.
 - Files: any type, virus-scanned, 50 MB each.
 
 ## Data portability

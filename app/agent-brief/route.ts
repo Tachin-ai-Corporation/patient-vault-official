@@ -84,7 +84,7 @@ export async function GET() {
     },
     limits: {
       freeTier: 'First 1,000 patients are free forever, no card required.',
-      pricing: 'Sandbox free. Production from $2.40 per patient per year, $1 at scale. First 1,000 production patients free (25,000 for accelerator/incubator programs).',
+      pricing: '$1 per patient per year after 1,000.',
       storage: '1 GB attached data per patient included.',
       files: 'Any type, virus-scanned, 50 MB max each.',
     },
